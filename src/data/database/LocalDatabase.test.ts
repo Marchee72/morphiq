@@ -1,0 +1,266 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { db, UserProfileRepository, MeasurementRepository, FoodLogRepository, WorkoutLogRepository, MessageRepository } from './LocalDatabase';
+
+describe('Dexie Database Repositories', () => {
+  const profileRepo = new UserProfileRepository();
+  const measurementRepo = new MeasurementRepository();
+  const foodRepo = new FoodLogRepository();
+  const workoutRepo = new WorkoutLogRepository();
+  const messageRepo = new MessageRepository();
+
+  beforeEach(async () => {
+    // Clear database before each test
+    await db.userProfiles.clear();
+    await db.measurements.clear();
+    await db.foodLogs.clear();
+    await db.workoutLogs.clear();
+    await db.messages.clear();
+  });
+
+  it('should create and retrieve a user profile', async () => {
+    const profileId = await profileRepo.create({
+      name: 'John Doe',
+      gender: 'male',
+      age: 30,
+      height: 180,
+      createdAt: new Date(),
+    });
+
+    expect(profileId).toBeDefined();
+
+    const profile = await profileRepo.get(profileId);
+    expect(profile).toBeDefined();
+    expect(profile?.name).toBe('John Doe');
+    expect(profile?.gender).toBe('male');
+    expect(profile?.age).toBe(30);
+    expect(profile?.height).toBe(180);
+  });
+
+  it('should update user profiles', async () => {
+    const profileId = await profileRepo.create({
+      name: 'Jane Doe',
+      gender: 'female',
+      age: 28,
+      height: 165,
+      createdAt: new Date(),
+    });
+
+    const profile = await profileRepo.get(profileId);
+    expect(profile).toBeDefined();
+
+    profile!.name = 'Jane Smith';
+    profile!.age = 29;
+    await profileRepo.update(profile!);
+
+    const updatedProfile = await profileRepo.get(profileId);
+    expect(updatedProfile?.name).toBe('Jane Smith');
+    expect(updatedProfile?.age).toBe(29);
+  });
+
+  it('should list all profiles', async () => {
+    await profileRepo.create({ name: 'A', gender: 'male', age: 20, height: 170, createdAt: new Date() });
+    await profileRepo.create({ name: 'B', gender: 'female', age: 30, height: 160, createdAt: new Date() });
+
+    const all = await profileRepo.getAll();
+    expect(all.length).toBe(2);
+    expect(all.map(p => p.name)).toContain('A');
+    expect(all.map(p => p.name)).toContain('B');
+  });
+
+  it('should save and query body composition measurements', async () => {
+    const pId = '1';
+    
+    const mId1 = await measurementRepo.save({
+      profileId: pId,
+      timestamp: new Date(2026, 4, 1),
+      weight: 70,
+      impedance: 500,
+      bmi: 22.8,
+      bmr: 1600,
+      bodyFat: 15,
+      bodyWater: 58,
+      boneMass: 3.2,
+      muscleMass: 55,
+      visceralFat: 4,
+      metabolicAge: 24,
+      protein: 19,
+      bodyType: 4,
+    });
+
+    const mId2 = await measurementRepo.save({
+      profileId: pId,
+      timestamp: new Date(2026, 4, 2),
+      weight: 69.5,
+      impedance: 498,
+      bmi: 22.6,
+      bmr: 1595,
+      bodyFat: 14.8,
+      bodyWater: 58.2,
+      boneMass: 3.2,
+      muscleMass: 55.1,
+      visceralFat: 4,
+      metabolicAge: 24,
+      protein: 19.1,
+      bodyType: 4,
+    });
+
+    expect(mId1).toBeDefined();
+    expect(mId2).toBeDefined();
+
+    const all = await measurementRepo.getAll(pId);
+    expect(all.length).toBe(2);
+    expect(all[0].weight).toBe(70);
+    expect(all[1].weight).toBe(69.5);
+
+    const latest = await measurementRepo.getLatest(pId);
+    expect(latest?.weight).toBe(69.5);
+  });
+
+  it('should add, list, and filter food logs by date', async () => {
+    const pId = '1';
+    const date = new Date(2026, 4, 24);
+
+    await foodRepo.add({
+      profileId: pId,
+      timestamp: date,
+      mealType: 'breakfast',
+      description: 'Oatmeal',
+      calories: 350,
+      protein: 15,
+      carbs: 60,
+      fat: 5,
+    });
+
+    await foodRepo.add({
+      profileId: pId,
+      timestamp: new Date(2026, 4, 25), // different date
+      mealType: 'lunch',
+      description: 'Chicken Salad',
+      calories: 450,
+      protein: 35,
+      carbs: 10,
+      fat: 15,
+    });
+
+    const all = await foodRepo.getAll(pId);
+    expect(all.length).toBe(2);
+
+    const filtered = await foodRepo.getAll(pId, date);
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].description).toBe('Oatmeal');
+  });
+
+  it('should add and list workout logs', async () => {
+    const pId = '1';
+    const date = new Date(2026, 4, 24);
+
+    await workoutRepo.add({
+      profileId: pId,
+      timestamp: date,
+      type: 'Strength',
+      duration: 45,
+      description: 'Push Day',
+      caloriesBurned: 300,
+    });
+
+    const all = await workoutRepo.getAll(pId);
+    expect(all.length).toBe(1);
+    expect(all[0].type).toBe('Strength');
+  });
+
+  it('should add, get, and clear messages logs', async () => {
+    const pId = '1';
+
+    await messageRepo.add({
+      profileId: pId,
+      timestamp: new Date(),
+      sender: 'user',
+      content: 'hello coach',
+    });
+
+    await messageRepo.add({
+      profileId: pId,
+      timestamp: new Date(),
+      sender: 'assistant',
+      content: 'hello, how can I help you today?',
+    });
+
+    const chat = await messageRepo.getAll(pId);
+    expect(chat.length).toBe(2);
+    expect(chat[0].sender).toBe('user');
+    expect(chat[1].sender).toBe('assistant');
+
+    await messageRepo.clear(pId);
+    const emptyChat = await messageRepo.getAll(pId);
+    expect(emptyChat.length).toBe(0);
+  });
+
+  it('should perform cascade deletion when deleting a profile', async () => {
+    const pId = await profileRepo.create({
+      name: 'Cascaded User',
+      gender: 'male',
+      age: 20,
+      height: 180,
+      createdAt: new Date(),
+    });
+
+    await measurementRepo.save({
+      profileId: pId,
+      timestamp: new Date(),
+      weight: 80,
+      impedance: 500,
+      bmi: 24.7,
+      bmr: 1800,
+      bodyFat: 18,
+      bodyWater: 56,
+      boneMass: 3.4,
+      muscleMass: 62,
+      visceralFat: 5,
+      metabolicAge: 20,
+      protein: 18.5,
+      bodyType: 4,
+    });
+
+    await foodRepo.add({
+      profileId: pId,
+      timestamp: new Date(),
+      mealType: 'breakfast',
+      description: 'Egg',
+      calories: 80,
+      protein: 6,
+      carbs: 0,
+      fat: 5,
+    });
+
+    await workoutRepo.add({
+      profileId: pId,
+      timestamp: new Date(),
+      type: 'Gym',
+      duration: 30,
+      description: 'Run',
+    });
+
+    await messageRepo.add({
+      profileId: pId,
+      timestamp: new Date(),
+      sender: 'user',
+      content: 'ping',
+    });
+
+    // Verify all records exist
+    expect((await measurementRepo.getAll(pId)).length).toBe(1);
+    expect((await foodRepo.getAll(pId)).length).toBe(1);
+    expect((await workoutRepo.getAll(pId)).length).toBe(1);
+    expect((await messageRepo.getAll(pId)).length).toBe(1);
+
+    // Delete the profile
+    await profileRepo.delete(pId);
+
+    // Verify all related records are deleted
+    expect(await profileRepo.get(pId)).toBeUndefined();
+    expect((await measurementRepo.getAll(pId)).length).toBe(0);
+    expect((await foodRepo.getAll(pId)).length).toBe(0);
+    expect((await workoutRepo.getAll(pId)).length).toBe(0);
+    expect((await messageRepo.getAll(pId)).length).toBe(0);
+  });
+});
