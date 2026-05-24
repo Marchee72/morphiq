@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GeminiCoach } from './GeminiCoach';
-import { AgentContext } from '../../core/interfaces/IAgent';
+import type { AgentContext } from '../../core/interfaces/IAgent';
 
 describe('GeminiCoach', () => {
   const coach = new GeminiCoach();

@@ -1,4 +1,4 @@
-import { Measurement } from '../../core/entities/Measurement';
+import type { Measurement } from '../../core/entities/Measurement';
 
 export class BiaCalculator {
   // Clamp value to boundaries
@@ -13,7 +13,7 @@ export class BiaCalculator {
     weight: number,
     height: number,
     age: number,
-    gender: 'male' | 'female',
+    _gender: 'male' | 'female',
     impedance: number
   ): number {
     let lbm = (height * 9.058 / 100) * (height / 100);

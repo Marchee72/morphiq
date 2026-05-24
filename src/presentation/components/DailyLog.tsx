@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../state/store';
-import { Plus, Trash2, ArrowLeft, ArrowRight, Activity, Coffee, Award, Apple } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, ArrowRight, Activity, Apple } from 'lucide-react';
 
 export const DailyLog: React.FC = () => {
   const {

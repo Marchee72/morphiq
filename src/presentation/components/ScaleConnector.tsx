@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore } from '../state/store';
-import { Bluetooth, Activity, AlertCircle, RefreshCw, Zap } from 'lucide-react';
+import { Bluetooth, Activity, AlertCircle, Zap } from 'lucide-react';
 
 export const ScaleConnector: React.FC = () => {
   const {

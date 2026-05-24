@@ -1,4 +1,4 @@
-import { ICoachAgentService, AgentContext } from '../../core/interfaces/IAgent';
+import type { ICoachAgentService, AgentContext } from '../../core/interfaces/IAgent';
 
 export class GeminiCoach implements ICoachAgentService {
   private formatPrompt(context: AgentContext, userMessage: string): string {

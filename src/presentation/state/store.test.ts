@@ -50,7 +50,7 @@ describe('Zustand store state management', () => {
   it('should save scale measurements and calculate BIA report', async () => {
     // 1. Create a profile
     const store = useStore.getState();
-    const pId = await store.createProfile({
+    await store.createProfile({
       name: 'Clark Kent',
       gender: 'male',
       age: 30,

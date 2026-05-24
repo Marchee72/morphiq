@@ -1,4 +1,4 @@
-import { IBluetoothScaleAdapter, IScaleData } from '../../core/interfaces/IBluetooth';
+import type { IBluetoothScaleAdapter, IScaleData } from '../../core/interfaces/IBluetooth';
 
 export class WebBluetoothScaleAdapter implements IBluetoothScaleAdapter {
   private device: BluetoothDevice | null = null;
@@ -164,7 +164,7 @@ export class MockScaleAdapter implements IBluetoothScaleAdapter {
 
   async startScanning(
     onDataReceived: (data: IScaleData) => void,
-    onError: (error: any) => void
+    _onError: (error: any) => void
   ): Promise<void> {
     let seconds = 0;
     let weight = 60 + Math.random() * 20; // Random starting weight

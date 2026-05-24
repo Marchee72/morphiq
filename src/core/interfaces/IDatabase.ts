@@ -1,8 +1,8 @@
-import { UserProfile } from '../entities/UserProfile';
-import { Measurement } from '../entities/Measurement';
-import { FoodLog } from '../entities/FoodLog';
-import { WorkoutLog } from '../entities/WorkoutLog';
-import { Message } from '../entities/Message';
+import type { UserProfile } from '../entities/UserProfile';
+import type { Measurement } from '../entities/Measurement';
+import type { FoodLog } from '../entities/FoodLog';
+import type { WorkoutLog } from '../entities/WorkoutLog';
+import type { Message } from '../entities/Message';
 
 export interface IUserProfileRepository {
   create(profile: UserProfile): Promise<string>;

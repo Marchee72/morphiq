@@ -1,7 +1,7 @@
 import React from 'react';
 import { useStore } from '../state/store';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Calendar, Trash2, TrendingDown, TrendingUp, Award, Thermometer, User } from 'lucide-react';
+import { Calendar, Trash2, TrendingDown, TrendingUp, Award, User } from 'lucide-react';
 import { BiaCalculator } from '../../data/calculation/BiaCalculator';
 
 export const AnalyticsDashboard: React.FC = () => {

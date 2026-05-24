@@ -1,16 +1,18 @@
-import Dexie, { Table } from 'dexie';
-import { UserProfile } from '../../core/entities/UserProfile';
-import { Measurement } from '../../core/entities/Measurement';
-import { FoodLog } from '../../core/entities/FoodLog';
-import { WorkoutLog } from '../../core/entities/WorkoutLog';
-import { Message } from '../../core/entities/Message';
-import {
+import Dexie from 'dexie';
+import type { Table } from 'dexie';
+import type { UserProfile } from '../../core/entities/UserProfile';
+import type { Measurement } from '../../core/entities/Measurement';
+import type { FoodLog } from '../../core/entities/FoodLog';
+import type { WorkoutLog } from '../../core/entities/WorkoutLog';
+import type { Message } from '../../core/entities/Message';
+import type {
   IUserProfileRepository,
   IMeasurementRepository,
   IFoodLogRepository,
   IWorkoutLogRepository,
   IMessageRepository,
 } from '../../core/interfaces/IDatabase';
+
 
 export class DexieDatabase extends Dexie {
   userProfiles!: Table<UserProfile, number>;

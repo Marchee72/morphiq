@@ -8,7 +8,6 @@ export const ProfileSettings: React.FC = () => {
     activeProfile,
     setActiveProfile,
     createProfile,
-    updateProfile,
     deleteProfile,
     apiKey,
     setApiKey,
