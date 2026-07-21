@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Sheet } from '../../ui/primitives/Sheet';
 import { Chip } from '../../ui/primitives/Chip';
 import { Button } from '../../ui/primitives/Button';
-import type { FoodLog } from '../../../core/entities/FoodLog';
+import type { FoodLog } from '../../core/entities/FoodLog';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 type MealType = typeof MEAL_TYPES[number];

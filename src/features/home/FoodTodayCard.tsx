@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card } from '../../ui/primitives/Card';
 import { Button } from '../../ui/primitives/Button';
-import type { FoodLog } from '../../../core/entities/FoodLog';
+import type { FoodLog } from '../../core/entities/FoodLog';
 
 export interface FoodTodayCardProps { logs: FoodLog[]; onDelete: (id: string) => void; onAdd: () => void; }
 
