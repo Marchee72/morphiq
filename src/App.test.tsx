@@ -1,0 +1,53 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import App from './App';
+import { useStore } from './presentation/state/store';
+import { db } from './data/database/LocalDatabase';
+
+const initialState = useStore.getState();
+
+async function seedProfile() {
+  await db.userProfiles.add({ name: 'Alex', gender: 'male', birthDate: new Date('1995-01-01'), height: 180, createdAt: new Date() });
+}
+
+describe('App shell', () => {
+  beforeEach(async () => {
+    useStore.setState(initialState, true);
+    await Promise.all(db.tables.map(t => t.clear()));
+  });
+
+  it('shows onboarding when no profiles exist', async () => {
+    render(<App />);
+    expect(await screen.findByText('Create your profile')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Main navigation' })).not.toBeInTheDocument();
+  });
+
+  it('renders four tabs with Home active', async () => {
+    await seedProfile();
+    render(<App />);
+    for (const tab of ['Home', 'Gym', 'Exercises', 'Coach']) {
+      expect(await screen.findByRole('button', { name: tab })).toBeInTheDocument();
+    }
+    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument();
+  });
+
+  it('switches to Gym placeholder', async () => {
+    await seedProfile();
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Gym' }));
+    expect(await screen.findByText(/arriving in slice 3/i)).toBeInTheDocument();
+  });
+
+  it('opens Settings from gear and switches profile', async () => {
+    await seedProfile();
+    await db.userProfiles.add({ name: 'Sam', gender: 'female', birthDate: new Date('1992-05-10'), height: 168, createdAt: new Date() });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Sam'));
+    await waitFor(() => {
+      expect(useStore.getState().activeProfile?.name).toBe('Sam');
+    });
+  });
+});
