@@ -115,6 +115,7 @@ interface StoreState {
   
   addMeasurementFromScale: () => Promise<void>;
   saveWeightOnly: (customWeight?: number) => Promise<void>;
+  addManualMeasurement: (weightKg: number) => Promise<void>;
   deleteMeasurement: (id: string) => Promise<void>;
   
   addFoodLog: (log: Omit<FoodLog, 'profileId' | 'timestamp'>) => Promise<void>;
@@ -397,6 +398,26 @@ export const useStore = create<StoreState>((set, get) => ({
     const history = await measurementRepo.getAll(profile.id!);
     set({ measurements: history, scanSuccess: { weight, impedance: 0 } });
     get().stopScaleScan();
+  },
+
+  addManualMeasurement: async (weightKg) => {
+    const profile = get().activeProfile;
+    if (!profile?.id) return;
+    if (!Number.isFinite(weightKg) || weightKg < 15 || weightKg > 400) return;
+
+    const bmi = weightKg / Math.pow(profile.height / 100, 2);
+    const age = getAge(profile.birthDate);
+    const bmr = profile.gender === 'male'
+      ? 66.47 + 13.75 * weightKg + 5.003 * profile.height - 6.755 * age
+      : 655.1 + 9.563 * weightKg + 1.85 * profile.height - 4.676 * age;
+
+    await measurementRepo.save({
+      profileId: profile.id, timestamp: new Date(), weight: weightKg,
+      impedance: 0, bmi: Number(bmi.toFixed(2)), bmr: Number(bmr.toFixed(2)),
+      bodyFat: 0, bodyWater: 0, boneMass: 0, muscleMass: 0,
+      visceralFat: 0, metabolicAge: 0, protein: 0, bodyType: 4,
+    });
+    set({ measurements: await measurementRepo.getAll(profile.id) });
   },
 
   deleteMeasurement: async (id) => {
