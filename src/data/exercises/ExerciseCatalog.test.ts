@@ -7,13 +7,15 @@ const fixture: Exercise[] = [
   { id: '0043', name: 'barbell full squat', category: 'upper legs', equipment: 'barbell', target: 'glutes', muscleGroup: 'quadriceps', secondaryMuscles: ['hamstrings'], instructionSteps: ['Brace.', 'Squat.'], image: 'images/0043-x.jpg', gifUrl: 'videos/0043-x.gif', attribution: '© Gym visual' },
   { id: '0652', name: 'pull-up', category: 'back', equipment: 'body weight', target: 'lats', muscleGroup: 'biceps', secondaryMuscles: ['forearms'], instructionSteps: ['Hang.', 'Pull.'], image: 'images/0652-x.jpg', gifUrl: 'videos/0652-x.gif', attribution: '© Gym visual' },
   { id: '0334', name: 'dumbbell lateral raise', category: 'shoulders', equipment: 'dumbbell', target: 'delts', muscleGroup: 'traps', secondaryMuscles: [], instructionSteps: ['Raise.'], image: 'images/0334-x.jpg', gifUrl: 'videos/0334-x.gif', attribution: '© Gym visual' },
+  { id: '9001', name: 'incline barbell press', category: 'chest', equipment: 'barbell', target: 'pectorals', muscleGroup: 'triceps', secondaryMuscles: [], instructionSteps: ['Press.'], image: 'images/9001-x.jpg', gifUrl: 'videos/9001-x.gif', attribution: '© Gym visual' },
+  { id: '9002', name: 'incline press', category: 'chest', equipment: 'barbell', target: 'pectorals', muscleGroup: 'triceps', secondaryMuscles: [], instructionSteps: ['Press.'], image: 'images/9002-x.jpg', gifUrl: 'videos/9002-x.gif', attribution: '© Gym visual' },
 ];
 
 describe('ExerciseCatalog', () => {
   const catalog = new ExerciseCatalog(fixture);
 
   it('reports the catalog size', () => {
-    expect(catalog.size).toBe(4);
+    expect(catalog.size).toBe(6);
   });
 
   it('finds exercises by case-insensitive name substring', () => {
@@ -27,13 +29,13 @@ describe('ExerciseCatalog', () => {
 
   it('ranks name-prefix matches before other name matches before field matches', () => {
     const results = catalog.search('barbell');
-    expect(results.map(e => e.id)).toEqual(['0025', '0043']);
+    expect(results.map(e => e.id)).toEqual(['0025', '0043', '9001', '9002']);
   });
 
   it('filters by category and equipment', () => {
     expect(catalog.search('', { category: 'back' }).map(e => e.id)).toEqual(['0652']);
-    expect(catalog.search('', { equipment: 'barbell' })).toHaveLength(2);
-    expect(catalog.search('barbell', { category: 'chest' }).map(e => e.id)).toEqual(['0025']);
+    expect(catalog.search('', { equipment: 'barbell' })).toHaveLength(4);
+    expect(catalog.search('barbell', { category: 'chest' }).map(e => e.id)).toEqual(['0025', '9001', '9002']);
   });
 
   it('returns all exercises for an empty query without filters, alphabetically', () => {
@@ -54,5 +56,13 @@ describe('ExerciseCatalog', () => {
       categories: ['back', 'chest', 'shoulders', 'upper legs'],
       equipment: ['barbell', 'body weight', 'dumbbell'],
     });
+  });
+
+  it('getExerciseCatalog memoizes a single instance backed by the vendored dataset', async () => {
+    const { getExerciseCatalog } = await import('./ExerciseCatalog');
+    const [a, b] = await Promise.all([getExerciseCatalog(), getExerciseCatalog()]);
+    expect(a).toBe(b);
+    expect(a.size).toBe(1324);
+    expect(a.getById('0025')?.name).toBe('barbell bench press');
   });
 });

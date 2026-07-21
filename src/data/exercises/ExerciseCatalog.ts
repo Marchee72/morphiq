@@ -75,6 +75,10 @@ export function getExerciseCatalog(): Promise<ExerciseCatalog> {
   if (!catalogPromise) {
     catalogPromise = import('./exercises.json').then(
       mod => new ExerciseCatalog(mod.default as Exercise[]),
+      err => {
+        catalogPromise = null;
+        throw err;
+      },
     );
   }
   return catalogPromise;
