@@ -1,0 +1,191 @@
+/* src/ui/ui.css — One UI primitive styles (tokens from tokens.css) */
+
+.ui-card {
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-card);
+  padding: var(--ui-space-4);
+  box-shadow: var(--ui-card-shadow);
+}
+
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 12px 24px;
+  border-radius: var(--ui-radius-pill);
+  font-family: var(--ui-font);
+  font-size: var(--ui-text-body);
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: transform var(--ui-motion-fast), opacity var(--ui-motion-fast), background-color var(--ui-motion-fast);
+}
+.ui-btn:active:not(:disabled) { transform: scale(0.97); opacity: 0.9; }
+.ui-btn:disabled { opacity: 0.45; cursor: default; }
+.ui-btn-filled { background: var(--ui-primary); color: var(--ui-on-primary); }
+.ui-btn-tonal { background: var(--ui-tonal); color: var(--ui-on-tonal); }
+.ui-btn-outlined { background: transparent; color: var(--ui-primary); border: 1.5px solid var(--ui-outline-strong); }
+
+.ui-icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--ui-radius-pill);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--ui-motion-fast), transform var(--ui-motion-fast);
+}
+.ui-icon-btn:active { transform: scale(0.94); }
+
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--ui-radius-pill);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--ui-font);
+  background: var(--ui-surface-dim);
+  color: var(--ui-text-secondary);
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--ui-motion-fast), color var(--ui-motion-fast), transform var(--ui-motion-fast);
+}
+.ui-chip:active { transform: scale(0.96); }
+.ui-chip-selected { background: var(--ui-text-primary); color: var(--ui-bg); }
+
+.ui-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 4px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ui-text-primary);
+  font-family: var(--ui-font);
+  font-size: var(--ui-text-body);
+  font-weight: 600;
+}
+.ui-list-item-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  background: var(--ui-tonal);
+  color: var(--ui-on-tonal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.ui-list-item-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ui-list-item-sub { font-size: 12.5px; font-weight: 500; color: var(--ui-text-secondary); }
+.ui-list-item-trailing { margin-left: auto; color: var(--ui-text-secondary); flex-shrink: 0; }
+
+.ui-appbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 12px;
+  background: var(--ui-bg);
+  transition: padding var(--ui-motion);
+}
+.ui-appbar-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ui-appbar-overline { font-size: 13px; font-weight: 600; color: var(--ui-text-secondary); }
+.ui-appbar-title {
+  font-size: var(--ui-text-display);
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.1;
+  color: var(--ui-text-primary);
+  transition: font-size var(--ui-motion);
+}
+.ui-appbar.collapsed { padding-top: 12px; }
+.ui-appbar.collapsed .ui-appbar-title { font-size: var(--ui-text-title); }
+.ui-appbar-actions { display: flex; align-items: center; gap: 8px; padding-bottom: 2px; }
+
+.ui-bottomnav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  background: var(--ui-surface);
+  border-top: 1px solid var(--ui-outline);
+  padding: 6px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+}
+.ui-bottomnav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ui-text-secondary);
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 0 2px;
+}
+.ui-bottomnav-pill {
+  width: 52px;
+  height: 30px;
+  border-radius: var(--ui-radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--ui-motion), color var(--ui-motion);
+}
+.ui-bottomnav-item.active { color: var(--ui-text-primary); }
+.ui-bottomnav-item.active .ui-bottomnav-pill { background: var(--ui-tonal); color: var(--ui-on-tonal); }
+
+.ui-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--ui-scrim);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: ui-fade-in 0.2s ease-out;
+}
+.ui-sheet {
+  width: 100%;
+  max-width: 640px;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--ui-surface);
+  border-radius: var(--ui-radius-sheet) var(--ui-radius-sheet) 0 0;
+  padding: 12px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  animation: ui-sheet-up var(--ui-motion);
+}
+.ui-sheet-handle { width: 36px; height: 4px; border-radius: 999px; background: var(--ui-outline-strong); margin: 0 auto 12px; }
+.ui-sheet-title { font-size: var(--ui-text-headline); font-weight: 800; letter-spacing: -0.3px; margin-bottom: 12px; color: var(--ui-text-primary); }
+
+.ui-ring-wrap { position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.ui-ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+.ui-ring-center strong { font-size: 15px; font-weight: 800; color: var(--ui-text-primary); line-height: 1; }
+.ui-ring-center small { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ui-text-secondary); }
+
+.ui-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 32px 16px; text-align: center; color: var(--ui-text-secondary); }
+.ui-empty-icon { width: 56px; height: 56px; border-radius: 20px; background: var(--ui-tonal); color: var(--ui-on-tonal); display: flex; align-items: center; justify-content: center; }
+.ui-empty-title { font-size: var(--ui-text-body); font-weight: 700; color: var(--ui-text-primary); }
+
+@keyframes ui-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-sheet-up { from { transform: translateY(24px); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }

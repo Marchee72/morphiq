@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './ui/tokens.css'
+import './ui/ui.css'
 import App from './App.tsx'
 const API_URL = (import.meta.env?.VITE_API_URL as string) || 'http://localhost:3000';
 
