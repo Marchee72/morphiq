@@ -430,50 +430,6 @@ app.get('/api/profiles/:profileId/exercises/sets', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/profiles/:profileId/exercises', async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      'SELECT * FROM user_exercises WHERE "profileId" = $1 ORDER BY "lastUsed" DESC',
-      [req.params.profileId]
-    );
-    res.json(rows.map(r => ({ ...r, id: r.id.toString() })));
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.post('/api/exercises', async (req, res) => {
-  const e = req.body;
-  try {
-    // Check if already exists for this profile
-    const { rows: existing } = await pool.query(
-      'SELECT id FROM user_exercises WHERE "profileId" = $1 AND LOWER(name) = LOWER($2)',
-      [e.profileId, e.name]
-    );
-    if (existing.length > 0) {
-      const id = existing[0].id;
-      const { rows } = await pool.query(
-        `UPDATE user_exercises SET "machineDetails"=$1, "lastUsed"=$2
-         WHERE id=$3 RETURNING *`,
-        [e.machineDetails, e.lastUsed || new Date(), id]
-      );
-      res.json({ ...rows[0], id: rows[0].id.toString() });
-    } else {
-      const { rows } = await pool.query(
-        `INSERT INTO user_exercises ("profileId", name, "machineDetails", "lastUsed")
-         VALUES ($1,$2,$3,$4) RETURNING *`,
-        [e.profileId, e.name, e.machineDetails, e.lastUsed || new Date()]
-      );
-      res.status(201).json({ ...rows[0], id: rows[0].id.toString() });
-    }
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.delete('/api/exercises/:id', async (req, res) => {
-  try {
-    await pool.query('DELETE FROM user_exercises WHERE id = $1', [req.params.id]);
-    res.status(204).end();
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 app.delete('/api/workouts/:workoutLogId/sets', async (req, res) => {
   try {
     await pool.query('DELETE FROM workout_sets WHERE "workoutLogId" = $1', [req.params.workoutLogId]);

@@ -48,14 +48,6 @@ export interface IWorkoutSetRepository {
   deleteForWorkout(workoutLogId: string): Promise<void>;
 }
 
-import type { UserExercise } from '../entities/UserExercise';
-
-export interface IUserExerciseRepository {
-  save(exercise: UserExercise): Promise<string>;
-  getAll(profileId: string): Promise<UserExercise[]>;
-  delete(id: string): Promise<void>;
-}
-
 import type { FavoriteExercise } from '../entities/FavoriteExercise';
 
 export interface IFavoriteExerciseRepository {

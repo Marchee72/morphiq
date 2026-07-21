@@ -6,7 +6,6 @@ import type { FoodLog } from '../../core/entities/FoodLog';
 import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { Message } from '../../core/entities/Message';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
-import type { UserExercise } from '../../core/entities/UserExercise';
 import type { FavoriteExercise } from '../../core/entities/FavoriteExercise';
 import type {
   IUserProfileRepository,
@@ -15,7 +14,6 @@ import type {
   IWorkoutLogRepository,
   IMessageRepository,
   IWorkoutSetRepository,
-  IUserExerciseRepository,
   IFavoriteExerciseRepository,
 } from '../../core/interfaces/IDatabase';
 
@@ -27,7 +25,6 @@ export class DexieDatabase extends Dexie {
   workoutLogs!: Table<WorkoutLog, number>;
   messages!: Table<Message, number>;
   workoutSets!: Table<WorkoutSet, number>;
-  userExercises!: Table<UserExercise, number>;
   favoriteExercises!: Table<FavoriteExercise, number>;
 
   constructor() {
@@ -66,6 +63,16 @@ export class DexieDatabase extends Dexie {
       userExercises: '++id, profileId, name',
       favoriteExercises: '++id, profileId, exerciseId, addedAt',
     });
+    this.version(5).stores({
+      userProfiles: '++id, name, gender, birthDate, height, createdAt',
+      measurements: '++id, profileId, timestamp, weight, impedance',
+      foodLogs: '++id, profileId, timestamp, mealType',
+      workoutLogs: '++id, profileId, timestamp, type',
+      messages: '++id, profileId, timestamp, sender',
+      workoutSets: '++id, workoutLogId, profileId, exerciseName, exerciseId, timestamp',
+      userExercises: null,
+      favoriteExercises: '++id, profileId, exerciseId, addedAt',
+    });
   }
 }
 
@@ -102,14 +109,13 @@ export class UserProfileRepository implements IUserProfileRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await db.transaction('rw', [db.userProfiles, db.measurements, db.foodLogs, db.workoutLogs, db.messages, db.workoutSets, db.userExercises, db.favoriteExercises], async () => {
+    await db.transaction('rw', [db.userProfiles, db.measurements, db.foodLogs, db.workoutLogs, db.messages, db.workoutSets, db.favoriteExercises], async () => {
       await db.userProfiles.delete(Number(id));
       await db.measurements.where('profileId').equals(id).delete();
       await db.foodLogs.where('profileId').equals(id).delete();
       await db.workoutLogs.where('profileId').equals(id).delete();
       await db.messages.where('profileId').equals(id).delete();
       await db.workoutSets.where('profileId').equals(id).delete();
-      await db.userExercises.where('profileId').equals(id).delete();
       await db.favoriteExercises.where('profileId').equals(id).delete();
     });
   }
@@ -284,43 +290,6 @@ export class MessageRepository implements IMessageRepository {
 
   async clear(profileId: string): Promise<void> {
     await db.messages.where('profileId').equals(profileId).delete();
-  }
-}
-
-export class UserExerciseRepository implements IUserExerciseRepository {
-  async save(exercise: UserExercise): Promise<string> {
-    const existing = await db.userExercises
-      .where('profileId')
-      .equals(exercise.profileId)
-      .filter(e => e.name.toLowerCase() === exercise.name.toLowerCase())
-      .first();
-
-    if (existing && existing.id) {
-      await db.userExercises.update(Number(existing.id), {
-        machineDetails: exercise.machineDetails,
-        lastUsed: exercise.lastUsed || new Date(),
-      });
-      return existing.id.toString();
-    } else {
-      const id = await db.userExercises.add({
-        ...exercise,
-        lastUsed: exercise.lastUsed || new Date(),
-      });
-      return id.toString();
-    }
-  }
-
-  async getAll(profileId: string): Promise<UserExercise[]> {
-    const records = await db.userExercises
-      .where('profileId')
-      .equals(profileId)
-      .toArray();
-    records.sort((a, b) => b.lastUsed.getTime() - a.lastUsed.getTime());
-    return records.map(r => ({ ...r, id: r.id?.toString() }));
-  }
-
-  async delete(id: string): Promise<void> {
-    await db.userExercises.delete(Number(id));
   }
 }
 

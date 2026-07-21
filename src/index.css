@@ -1,154 +1,38 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
-
-:root {
-  /* Aura Dark Theme Color Palette */
-  --bg-primary: #0b0c10;
-  --bg-secondary: rgba(18, 20, 26, 0.7);
-  --bg-card: rgba(26, 29, 38, 0.45);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-glow: rgba(192, 132, 252, 0.2);
-
-  --color-text-primary: #f3f4f6;
-  --color-text-secondary: #9ca3af;
-  --color-text-muted: #6b7280;
-
-  /* Accent Glows (Harmonious HSL) */
-  --accent-purple: #c084fc;
-  --accent-purple-glow: rgba(192, 132, 252, 0.4);
-  --accent-teal: #2dd4bf;
-  --accent-teal-glow: rgba(45, 212, 191, 0.3);
-  --accent-rose: #fb7185;
-  
-  --shadow-premium: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
+/* MorphIQ global styles — One UI era.
+   Design tokens: ./ui/tokens.css · Primitive styles: ./ui/ui.css */
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
+html, body { height: 100%; }
+
 body {
-  background-color: var(--bg-primary);
-  background-image: 
-    radial-gradient(at 10% 10%, rgba(192, 132, 252, 0.08) 0px, transparent 50%),
-    radial-gradient(at 90% 90%, rgba(45, 212, 191, 0.06) 0px, transparent 50%);
-  color: var(--color-text-primary);
-  font-family: var(--font-family);
-  min-height: 100vh;
-  overflow-x: hidden;
+  background: var(--ui-bg);
+  color: var(--ui-text-primary);
+  font-family: var(--ui-font);
+  font-size: var(--ui-text-body);
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color var(--ui-motion-fast), color var(--ui-motion-fast);
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
 }
 
-/* Glassmorphism card styles */
-.glass-panel {
-  background: var(--bg-card);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  box-shadow: var(--shadow-premium);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+button, input, select, textarea { font-family: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--ui-primary);
+  outline-offset: 2px;
 }
 
-.glass-panel:hover {
-  border-color: rgba(192, 132, 252, 0.25);
-  box-shadow: 0 10px 40px 0 rgba(192, 132, 252, 0.08), var(--shadow-premium);
-}
-
-/* Scrollbar styles */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--bg-primary);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(192, 132, 252, 0.4);
-}
-
-/* Button & interactive animations */
-button {
-  font-family: var(--font-family);
-}
-
-.glow-btn {
-  background: linear-gradient(135deg, var(--accent-purple), #a855f7);
-  color: #000;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  border-radius: 8px;
-  padding: 10px 20px;
-  transition: all 0.3s ease;
-  box-shadow: 0 0 15px var(--accent-purple-glow);
-}
-
-.glow-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 25px rgba(192, 132, 252, 0.7);
-}
-
-.glow-btn:active {
-  transform: translateY(0);
-}
-
-/* Animation utilities */
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 15px rgba(45, 212, 191, 0.3);
-    border-color: rgba(45, 212, 191, 0.2);
-  }
-  50% {
-    box-shadow: 0 0 30px rgba(45, 212, 191, 0.6);
-    border-color: rgba(45, 212, 191, 0.5);
-  }
-}
-
-.pulse-border {
-  animation: pulse-glow 2s infinite ease-in-out;
-}
-
-/* Typography styles */
-h1 {
-  font-weight: 700;
-  letter-spacing: -0.03em;
-}
-
-h2 {
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-/* Custom scrollbar and general tweaks */
-input, select, textarea {
-  font-family: var(--font-family);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-color);
-  color: var(--color-text-primary);
-  border-radius: 8px;
-  padding: 8px 12px;
-  outline: none;
-  transition: all 0.2s ease;
-}
-
-input:focus, select:focus, textarea:focus {
-  border-color: var(--accent-purple);
-  box-shadow: 0 0 10px rgba(192, 132, 252, 0.15);
-}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--ui-outline-strong); border-radius: 999px; }

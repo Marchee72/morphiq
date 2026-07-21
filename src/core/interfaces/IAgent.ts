@@ -3,6 +3,7 @@ import type { Measurement } from '../entities/Measurement';
 import type { FoodLog } from '../entities/FoodLog';
 import type { WorkoutLog } from '../entities/WorkoutLog';
 import type { Message } from '../entities/Message';
+import type { WorkoutSet } from '../entities/WorkoutSet';
 
 export interface AgentContext {
   profile: UserProfile;
@@ -11,6 +12,7 @@ export interface AgentContext {
   recentFoodLogs: FoodLog[];
   recentWorkoutLogs: WorkoutLog[];
   chatHistory: Message[];
+  recentWorkoutSets?: WorkoutSet[];
 }
 
 export interface ICoachAgentService {

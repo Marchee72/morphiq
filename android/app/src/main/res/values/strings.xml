@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MorphIQ</string>
+    <string name="title_activity_main">MorphIQ</string>
+    <string name="package_name">com.morphiq.app</string>
+    <string name="custom_url_scheme">com.morphiq.app</string>
+    <string name="privacy_policy_url">https://morphiq.app/privacy</string>
+</resources>

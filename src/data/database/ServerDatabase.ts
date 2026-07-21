@@ -4,7 +4,6 @@ import type { FoodLog } from '../../core/entities/FoodLog';
 import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { Message } from '../../core/entities/Message';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
-import type { UserExercise } from '../../core/entities/UserExercise';
 import type { FavoriteExercise } from '../../core/entities/FavoriteExercise';
 import type {
   IUserProfileRepository,
@@ -13,7 +12,6 @@ import type {
   IWorkoutLogRepository,
   IMessageRepository,
   IWorkoutSetRepository,
-  IUserExerciseRepository,
   IFavoriteExerciseRepository,
 } from '../../core/interfaces/IDatabase';
 
@@ -277,31 +275,6 @@ export class ServerWorkoutSetRepository implements IWorkoutSetRepository {
 
 function parseFavoriteExercise(raw: Record<string, unknown>): FavoriteExercise {
   return { ...raw, id: String(raw.id), addedAt: new Date(raw.addedAt as string) } as FavoriteExercise;
-}
-
-export class ServerUserExerciseRepository implements IUserExerciseRepository {
-  async save(exercise: UserExercise): Promise<string> {
-    const result = await api<{ id: string }>('/api/exercises', {
-      method: 'POST',
-      body: JSON.stringify(exercise),
-    });
-    return result.id;
-  }
-
-  async getAll(profileId: string): Promise<UserExercise[]> {
-    const rows = await api<Record<string, unknown>[]>(
-      `/api/profiles/${profileId}/exercises`
-    );
-    return rows.map(r => ({
-      ...r,
-      id: String(r.id),
-      lastUsed: new Date(r.lastUsed as string),
-    } as UserExercise));
-  }
-
-  async delete(id: string): Promise<void> {
-    await api(`/api/exercises/${id}`, { method: 'DELETE' });
-  }
 }
 
 // ─── Favorite Exercise Repository ─────────────────────────────────────────────

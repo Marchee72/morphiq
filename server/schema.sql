@@ -93,14 +93,6 @@ ALTER TABLE workout_logs ADD COLUMN IF NOT EXISTS "externalId" TEXT;
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS "trainingProfile" TEXT;
 ALTER TABLE workout_sets ADD COLUMN IF NOT EXISTS "notes" TEXT;
 
-CREATE TABLE IF NOT EXISTS user_exercises (
-  id SERIAL PRIMARY KEY,
-  "profileId" TEXT NOT NULL,
-  name TEXT NOT NULL,
-  "machineDetails" TEXT,
-  "lastUsed" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- Alter workout_sets table for nullable reps/weight and optional cardio fields:
 ALTER TABLE workout_sets ALTER COLUMN reps DROP NOT NULL;
 ALTER TABLE workout_sets ALTER COLUMN weight DROP NOT NULL;
@@ -120,4 +112,6 @@ CREATE TABLE IF NOT EXISTS exercise_favorites (
 );
 
 ALTER TABLE workout_sets ADD COLUMN IF NOT EXISTS "exerciseId" TEXT;
+
+DROP TABLE IF EXISTS user_exercises;
 

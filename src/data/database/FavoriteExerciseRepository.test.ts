@@ -29,6 +29,10 @@ describe('FavoriteExerciseRepository (Dexie v4)', () => {
     expect(typeof all[0].id).toBe('string');
   });
 
+  it('drops the legacy userExercises table at v5', () => {
+    expect(db.tables.map(t => t.name)).not.toContain('userExercises');
+  });
+
   it('removes a favorite by profileId + exerciseId only', async () => {
     await repo.add({ profileId: 'p1', exerciseId: '0025', addedAt: new Date() });
     await repo.add({ profileId: 'p2', exerciseId: '0025', addedAt: new Date() });

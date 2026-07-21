@@ -27,7 +27,6 @@ describe('Dexie Database Repositories', () => {
     await db.workoutLogs.clear();
     await db.messages.clear();
     await db.workoutSets.clear();
-    await db.userExercises.clear();
     await db.favoriteExercises.clear();
   });
 

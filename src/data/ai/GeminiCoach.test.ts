@@ -1,14 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GeminiCoach } from './GeminiCoach';
+import { DeepSeekCoach } from './GeminiCoach';
 import type { AgentContext } from '../../core/interfaces/IAgent';
 
-describe('GeminiCoach', () => {
-  const coach = new GeminiCoach();
+describe('DeepSeekCoach', () => {
+  const coach = new DeepSeekCoach();
   const mockContext: AgentContext = {
     profile: {
       name: 'Bruce Wayne',
       gender: 'male',
-      age: 35,
+      birthDate: new Date('1991-05-24'),
       height: 188,
       targetWeight: 95,
       createdAt: new Date(),
@@ -60,7 +60,7 @@ describe('GeminiCoach', () => {
 
   it('should return API key warning if key is empty', async () => {
     const response = await coach.generateResponse(mockContext, 'hello', '');
-    expect(response).toContain('Please enter a valid Gemini API Key');
+    expect(response).toContain('No API key configured. Set VITE_LLM_API_KEY');
   });
 
   it('should format prompts correctly and call mock fetch', async () => {
@@ -68,14 +68,10 @@ describe('GeminiCoach', () => {
       return Promise.resolve({
         ok: true,
         json: () => Promise.resolve({
-          candidates: [
+          choices: [
             {
-              content: {
-                parts: [
-                  {
-                    text: 'Mocked response from AI Coach: Keep training hard!'
-                  }
-                ]
+              message: {
+                content: 'Mocked response from AI Coach: Keep training hard!'
               }
             }
           ]
@@ -88,15 +84,20 @@ describe('GeminiCoach', () => {
     const response = await coach.generateResponse(mockContext, 'how is my weight?', 'test-api-key');
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch.mock.calls[0][0]).toContain('key=test-api-key');
+    expect(mockFetch.mock.calls[0][0]).toBe('https://api.deepseek.com/v1/chat/completions');
+    expect(mockFetch.mock.calls[0][1].headers.Authorization).toBe('Bearer test-api-key');
     
-    // Verify prompt content was generated correctly
     const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
-    const promptText = requestBody.contents[0].parts[0].text;
-    expect(promptText).toContain('Bruce Wayne');
-    expect(promptText).toContain('Protein Shake');
-    expect(promptText).toContain('Heavy squats');
-    expect(promptText).toContain('how is my weight?');
+    expect(requestBody.model).toBe('deepseek-v4-flash');
+    
+    const systemPromptText = requestBody.messages[0].content;
+    expect(systemPromptText).toContain('Bruce Wayne');
+    expect(systemPromptText).toContain('Protein Shake');
+    expect(systemPromptText).toContain('Heavy squats');
+    expect(systemPromptText).toContain('MorphIQ');
+
+    const userPromptText = requestBody.messages[1].content;
+    expect(userPromptText).toContain('how is my weight?');
 
     expect(response).toBe('Mocked response from AI Coach: Keep training hard!');
   });
