@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { db, UserProfileRepository, MeasurementRepository, FoodLogRepository, WorkoutLogRepository, MessageRepository } from './LocalDatabase';
+import {
+  db,
+  UserProfileRepository,
+  MeasurementRepository,
+  FoodLogRepository,
+  WorkoutLogRepository,
+  MessageRepository,
+  WorkoutSetRepository,
+  FavoriteExerciseRepository,
+} from './LocalDatabase';
 
 describe('Dexie Database Repositories', () => {
   const profileRepo = new UserProfileRepository();
@@ -7,6 +16,8 @@ describe('Dexie Database Repositories', () => {
   const foodRepo = new FoodLogRepository();
   const workoutRepo = new WorkoutLogRepository();
   const messageRepo = new MessageRepository();
+  const workoutSetRepo = new WorkoutSetRepository();
+  const favRepo = new FavoriteExerciseRepository();
 
   beforeEach(async () => {
     // Clear database before each test
@@ -15,13 +26,16 @@ describe('Dexie Database Repositories', () => {
     await db.foodLogs.clear();
     await db.workoutLogs.clear();
     await db.messages.clear();
+    await db.workoutSets.clear();
+    await db.userExercises.clear();
+    await db.favoriteExercises.clear();
   });
 
   it('should create and retrieve a user profile', async () => {
     const profileId = await profileRepo.create({
       name: 'John Doe',
       gender: 'male',
-      age: 30,
+      birthDate: new Date('1996-05-24'),
       height: 180,
       createdAt: new Date(),
     });
@@ -32,7 +46,7 @@ describe('Dexie Database Repositories', () => {
     expect(profile).toBeDefined();
     expect(profile?.name).toBe('John Doe');
     expect(profile?.gender).toBe('male');
-    expect(profile?.age).toBe(30);
+    expect(profile?.birthDate.toISOString().split('T')[0]).toBe('1996-05-24');
     expect(profile?.height).toBe(180);
   });
 
@@ -40,7 +54,7 @@ describe('Dexie Database Repositories', () => {
     const profileId = await profileRepo.create({
       name: 'Jane Doe',
       gender: 'female',
-      age: 28,
+      birthDate: new Date('1998-05-24'),
       height: 165,
       createdAt: new Date(),
     });
@@ -49,17 +63,17 @@ describe('Dexie Database Repositories', () => {
     expect(profile).toBeDefined();
 
     profile!.name = 'Jane Smith';
-    profile!.age = 29;
+    profile!.birthDate = new Date('1997-05-24');
     await profileRepo.update(profile!);
 
     const updatedProfile = await profileRepo.get(profileId);
     expect(updatedProfile?.name).toBe('Jane Smith');
-    expect(updatedProfile?.age).toBe(29);
+    expect(updatedProfile?.birthDate.toISOString().split('T')[0]).toBe('1997-05-24');
   });
 
   it('should list all profiles', async () => {
-    await profileRepo.create({ name: 'A', gender: 'male', age: 20, height: 170, createdAt: new Date() });
-    await profileRepo.create({ name: 'B', gender: 'female', age: 30, height: 160, createdAt: new Date() });
+    await profileRepo.create({ name: 'A', gender: 'male', birthDate: new Date('2006-05-24'), height: 170, createdAt: new Date() });
+    await profileRepo.create({ name: 'B', gender: 'female', birthDate: new Date('1996-05-24'), height: 160, createdAt: new Date() });
 
     const all = await profileRepo.getAll();
     expect(all.length).toBe(2);
@@ -199,7 +213,7 @@ describe('Dexie Database Repositories', () => {
     const pId = await profileRepo.create({
       name: 'Cascaded User',
       gender: 'male',
-      age: 20,
+      birthDate: new Date('2006-05-24'),
       height: 180,
       createdAt: new Date(),
     });
@@ -253,6 +267,25 @@ describe('Dexie Database Repositories', () => {
     expect((await workoutRepo.getAll(pId)).length).toBe(1);
     expect((await messageRepo.getAll(pId)).length).toBe(1);
 
+    await workoutSetRepo.add({
+      workoutLogId: 'w1',
+      profileId: pId,
+      exerciseName: 'Bench Press',
+      setNumber: 1,
+      weight: 60,
+      reps: 10,
+      timestamp: new Date(),
+    });
+
+    // Verify all records exist
+    expect((await measurementRepo.getAll(pId)).length).toBe(1);
+    expect((await foodRepo.getAll(pId)).length).toBe(1);
+    expect((await workoutRepo.getAll(pId)).length).toBe(1);
+    expect((await messageRepo.getAll(pId)).length).toBe(1);
+    expect((await workoutSetRepo.getForWorkout('w1')).length).toBe(1);
+
+    await favRepo.add({ profileId: pId, exerciseId: '0025', addedAt: new Date() });
+
     // Delete the profile
     await profileRepo.delete(pId);
 
@@ -262,5 +295,76 @@ describe('Dexie Database Repositories', () => {
     expect((await foodRepo.getAll(pId)).length).toBe(0);
     expect((await workoutRepo.getAll(pId)).length).toBe(0);
     expect((await messageRepo.getAll(pId)).length).toBe(0);
+    expect((await workoutSetRepo.getForWorkout('w1')).length).toBe(0);
+    expect((await favRepo.getAll(pId)).length).toBe(0);
+  });
+
+  it('should add, retrieve, and delete workout sets with stats', async () => {
+    const pId = '1';
+    const wId = '100';
+
+    const sId1 = await workoutSetRepo.add({
+      workoutLogId: wId,
+      profileId: pId,
+      exerciseName: 'Squat',
+      setNumber: 1,
+      weight: 100,
+      reps: 5,
+      timestamp: new Date(),
+    });
+
+    const sId2 = await workoutSetRepo.add({
+      workoutLogId: wId,
+      profileId: pId,
+      exerciseName: 'Squat',
+      setNumber: 2,
+      weight: 110,
+      reps: 5,
+      timestamp: new Date(),
+    });
+
+    expect(sId1).toBeDefined();
+    expect(sId2).toBeDefined();
+
+    const sets = await workoutSetRepo.getForWorkout(wId);
+    expect(sets.length).toBe(2);
+    expect(sets[0].weight).toBe(100);
+    expect(sets[1].weight).toBe(110);
+
+    const squatSets = await workoutSetRepo.getForExercise(pId, 'Squat');
+    expect(squatSets.length).toBe(2);
+
+    await workoutSetRepo.delete(sId1);
+    const afterDelete = await workoutSetRepo.getForWorkout(wId);
+    expect(afterDelete.length).toBe(1);
+    expect(afterDelete[0].weight).toBe(110);
+  });
+
+  it('should cascade delete workout sets when deleting a workout log', async () => {
+    const pId = '1';
+    const wId = await workoutRepo.add({
+      profileId: pId,
+      timestamp: new Date(),
+      type: 'Gym',
+      duration: 60,
+      description: 'Leg day',
+    });
+
+    await workoutSetRepo.add({
+      workoutLogId: wId,
+      profileId: pId,
+      exerciseName: 'Deadlift',
+      setNumber: 1,
+      weight: 140,
+      reps: 5,
+      timestamp: new Date(),
+    });
+
+    expect((await workoutSetRepo.getForWorkout(wId)).length).toBe(1);
+
+    await workoutRepo.delete(wId);
+
+    expect((await workoutRepo.getAll(pId)).length).toBe(0);
+    expect((await workoutSetRepo.getForWorkout(wId)).length).toBe(0);
   });
 });

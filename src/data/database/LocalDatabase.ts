@@ -102,13 +102,14 @@ export class UserProfileRepository implements IUserProfileRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await db.transaction('rw', [db.userProfiles, db.measurements, db.foodLogs, db.workoutLogs, db.messages, db.workoutSets, db.favoriteExercises], async () => {
+    await db.transaction('rw', [db.userProfiles, db.measurements, db.foodLogs, db.workoutLogs, db.messages, db.workoutSets, db.userExercises, db.favoriteExercises], async () => {
       await db.userProfiles.delete(Number(id));
       await db.measurements.where('profileId').equals(id).delete();
       await db.foodLogs.where('profileId').equals(id).delete();
       await db.workoutLogs.where('profileId').equals(id).delete();
       await db.messages.where('profileId').equals(id).delete();
       await db.workoutSets.where('profileId').equals(id).delete();
+      await db.userExercises.where('profileId').equals(id).delete();
       await db.favoriteExercises.where('profileId').equals(id).delete();
     });
   }
