@@ -6,7 +6,6 @@ import type { FoodLog } from '../../core/entities/FoodLog';
 import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { Message } from '../../core/entities/Message';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
-import type { UserExercise } from '../../core/entities/UserExercise';
 import {
   UserProfileRepository,
   MeasurementRepository,
@@ -14,7 +13,6 @@ import {
   WorkoutLogRepository,
   MessageRepository,
   WorkoutSetRepository,
-  UserExerciseRepository,
   FavoriteExerciseRepository,
 } from '../../data/database/LocalDatabase';
 import {
@@ -24,13 +22,8 @@ import {
   ServerWorkoutLogRepository,
   ServerMessageRepository,
   ServerWorkoutSetRepository,
-  ServerUserExerciseRepository,
   ServerFavoriteExerciseRepository,
 } from '../../data/database/ServerDatabase';
-import { WebBluetoothScaleAdapter, MockScaleAdapter } from '../../data/bluetooth/WebBluetoothScale';
-import { CapacitorBleAdapter } from '../../data/bluetooth/CapacitorBleAdapter';
-import { CapacitorHealthProvider } from '../../data/health/CapacitorHealthProvider';
-import { WebHealthProvider } from '../../data/health/WebHealthProvider';
 import { DeepSeekCoach, chatCompletion, buildProviderFromEnv } from '../../data/ai/GeminiCoach';
 
 import { Capacitor } from '@capacitor/core';
@@ -43,24 +36,10 @@ const foodRepo = isServer ? new ServerFoodLogRepository() : new FoodLogRepositor
 const workoutRepo = isServer ? new ServerWorkoutLogRepository() : new WorkoutLogRepository();
 const messageRepo = isServer ? new ServerMessageRepository() : new MessageRepository();
 const workoutSetRepo = isServer ? new ServerWorkoutSetRepository() : new WorkoutSetRepository();
-const userExerciseRepo = isServer ? new ServerUserExerciseRepository() : new UserExerciseRepository();
 const favoriteRepo = isServer ? new ServerFavoriteExerciseRepository() : new FavoriteExerciseRepository();
-
-// Bluetooth adapters — auto-select based on platform
-// Android WebView does NOT support the Web Bluetooth API; use native Capacitor plugin instead.
-const bleAdapter = Capacitor.isNativePlatform()
-  ? new CapacitorBleAdapter()
-  : new WebBluetoothScaleAdapter();
-const mockAdapter = new MockScaleAdapter();
 
 // AI Coach adapter
 const aiCoach = new DeepSeekCoach();
-
-// Health provider helper
-const getHealthProvider = () => {
-  const provider = new CapacitorHealthProvider();
-  return provider.isAvailable() ? provider : new WebHealthProvider();
-};
 
 interface StoreState {
   profiles: UserProfile[];
@@ -70,51 +49,32 @@ interface StoreState {
   workoutLogs: WorkoutLog[];
   workoutHistory: WorkoutLog[];
   chatHistory: Message[];
-  userExercises: UserExercise[];
   favoriteExerciseIds: string[];
   activeWorkoutSets: Record<string, WorkoutSet[]>;
   exerciseStats: Record<string, { maxWeight: number; avgWeight: number; avgReps: number } | null>;
-  
-  // Scale scanning state
-  isScanning: boolean;
-  scaleError: string | null;
-  scaleWeight: number;
-  scaleImpedance: number;
-  scaleStabilized: boolean;
-  scaleImpedancePresent: boolean;
-  scaleLastStabilizedWeight: number;
-
-  // Transient success state (used by ScaleConnector to show save confirmation)
-  scanSuccess: { weight: number; impedance: number } | null;
 
   // Configuration
   selectedDate: Date;
-  isSimulator: boolean;
   apiKey: string;
   isAiLoading: boolean;
-  debugLogs: string[];
   selectedWorkoutForCoach: WorkoutLog | null;
   activeCoachSubTab: 'chat' | 'routine' | 'history';
-  activeTab: 'dashboard' | 'logs' | 'workout' | 'coach' | 'settings';
+  activeTab: 'home' | 'gym' | 'exercises' | 'coach' | 'settings';
   activeWorkout: WorkoutLog | null;
   isGymModeOpen: boolean;
 
   // Actions
-  setActiveTab: (tab: 'dashboard' | 'logs' | 'workout' | 'coach' | 'settings') => void;
+  setActiveTab: (tab: 'home' | 'gym' | 'exercises' | 'coach' | 'settings') => void;
   setSelectedWorkoutForCoach: (workout: WorkoutLog | null) => void;
   setActiveCoachSubTab: (tab: 'chat' | 'routine' | 'history') => void;
   setActiveWorkout: (workout: WorkoutLog | null) => void;
   setIsGymModeOpen: (open: boolean) => void;
-  addDebugLog: (log: string) => void;
-  clearDebugLogs: () => void;
   loadProfiles: () => Promise<void>;
   setActiveProfile: (id: string) => Promise<void>;
   createProfile: (profile: Omit<UserProfile, 'createdAt'>) => Promise<string>;
   updateProfile: (profile: UserProfile) => Promise<void>;
   deleteProfile: (id: string) => Promise<void>;
   
-  addMeasurementFromScale: () => Promise<void>;
-  saveWeightOnly: (customWeight?: number) => Promise<void>;
   addManualMeasurement: (weightKg: number) => Promise<void>;
   deleteMeasurement: (id: string) => Promise<void>;
   
@@ -136,7 +96,6 @@ interface StoreState {
   
   sendChatMessage: (content: string) => Promise<void>;
   clearChat: () => Promise<void>;
-  saveUserExercise: (exercise: Omit<UserExercise, 'id' | 'profileId' | 'lastUsed'>) => Promise<void>;
   loadFavorites: () => Promise<void>;
   toggleFavorite: (exerciseId: string) => Promise<void>;
   linkPendingRoutineToWorkout: (workoutLogId: string) => Promise<void>;
@@ -146,13 +105,8 @@ interface StoreState {
   scheduleMonthlyReminder: () => Promise<void>;
   cancelMonthlyReminder: () => Promise<void>;
   
-  startScaleScan: () => Promise<void>;
-  stopScaleScan: () => Promise<void>;
-  setSimulator: (active: boolean) => void;
   setApiKey: (key: string) => void;
   setSelectedDate: (date: Date) => Promise<void>;
-  confirmAndSaveScaleMeasurement: () => Promise<void>;
-  discardScaleMeasurement: () => Promise<void>;
 }
 
 export const useStore = create<StoreState>((set, get) => ({
@@ -163,14 +117,12 @@ export const useStore = create<StoreState>((set, get) => ({
   workoutLogs: [],
   workoutHistory: [],
   chatHistory: [],
-  userExercises: [],
   favoriteExerciseIds: [],
   activeWorkoutSets: {},
   exerciseStats: {},
-  debugLogs: [],
   selectedWorkoutForCoach: null,
   activeCoachSubTab: 'chat',
-  activeTab: 'dashboard',
+  activeTab: 'home',
   activeWorkout: null,
   isGymModeOpen: false,
 
@@ -180,32 +132,7 @@ export const useStore = create<StoreState>((set, get) => ({
   setActiveWorkout: (workout) => set({ activeWorkout: workout }),
   setIsGymModeOpen: (open) => set({ isGymModeOpen: open }),
 
-  addDebugLog: (log) => {
-    const timestamp = new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-    set((state) => ({ debugLogs: [`[${timestamp}] ${log}`, ...state.debugLogs].slice(0, 100) }));
-  },
-  clearDebugLogs: () => {
-    set({ debugLogs: [] });
-  },
-  
-  isScanning: false,
-  scaleError: null,
-  scaleWeight: 0,
-  scaleImpedance: 0,
-  scaleStabilized: false,
-  scaleImpedancePresent: false,
-  scaleLastStabilizedWeight: 0,
-
-  scanSuccess: null,
-
   selectedDate: new Date(),
-  isSimulator: typeof localStorage !== 'undefined'
-    ? localStorage.getItem('morphiq_is_simulator') === 'true'
-      ? true
-      : localStorage.getItem('morphiq_is_simulator') === 'false'
-        ? false
-        : !localStorage.getItem('morphiq_scale_device_id')
-    : true,
   apiKey: (import.meta.env?.VITE_DEEPSEEK_API_KEY as string) || '',
   isAiLoading: false,
 
@@ -219,7 +146,7 @@ export const useStore = create<StoreState>((set, get) => ({
         await get().setActiveProfile(list[0].id!);
       }
     } else {
-      set({ activeProfile: null, measurements: [], foodLogs: [], workoutLogs: [], workoutHistory: [], chatHistory: [], userExercises: [], favoriteExerciseIds: [], activeWorkoutSets: {}, exerciseStats: {} });
+      set({ activeProfile: null, measurements: [], foodLogs: [], workoutLogs: [], workoutHistory: [], chatHistory: [], favoriteExerciseIds: [], activeWorkoutSets: {}, exerciseStats: {} });
     }
   },
 
@@ -253,7 +180,6 @@ export const useStore = create<StoreState>((set, get) => ({
       const workoutHist = await workoutRepo.getRange(id, start, end);
       
       const chat = await messageRepo.getAll(id);
-      const exercises = await userExerciseRepo.getAll(id);
 
       const workoutSets: Record<string, WorkoutSet[]> = {};
       const pendingSets = await workoutSetRepo.getForWorkout('pending');
@@ -289,7 +215,6 @@ export const useStore = create<StoreState>((set, get) => ({
         workoutLogs: workouts,
         workoutHistory: workoutHist,
         chatHistory: chat,
-        userExercises: exercises,
         activeWorkoutSets: workoutSets,
         activeWorkout,
       });
@@ -321,83 +246,6 @@ export const useStore = create<StoreState>((set, get) => ({
       set({ activeProfile: null });
     }
     await get().loadProfiles();
-  },
-
-  addMeasurementFromScale: async () => {
-    const profile = get().activeProfile;
-    if (!profile) return;
-    const weight = get().scaleWeight;
-    
-    const bmi = weight / Math.pow(profile.height / 100, 2);
-    const age = getAge(profile.birthDate);
-    const bmr = profile.gender === 'male'
-      ? 66.47 + 13.75 * weight + 5.003 * profile.height - 6.755 * age
-      : 655.1 + 9.563 * weight + 1.85 * profile.height - 4.676 * age;
-
-    const measurement: Measurement = {
-      profileId: profile.id!,
-      timestamp: new Date(),
-      weight,
-      impedance: 0,
-      bmi: Number(bmi.toFixed(2)),
-      bmr: Number(bmr.toFixed(2)),
-      bodyFat: 0,
-      bodyWater: 0,
-      boneMass: 0,
-      muscleMass: 0,
-      visceralFat: 0,
-      metabolicAge: 0,
-      protein: 0,
-      bodyType: 4,
-    };
-
-    await measurementRepo.save(measurement);
-    
-    // Refresh history
-    const history = await measurementRepo.getAll(profile.id!);
-    set({ measurements: history, scanSuccess: { weight, impedance: 0 } });
-
-    // Stop scanning
-    get().stopScaleScan();
-  },
-
-  saveWeightOnly: async (customWeight) => {
-    const profile = get().activeProfile;
-    if (!profile) return;
-    
-    let weight = customWeight !== undefined ? customWeight : get().scaleWeight;
-    if (weight < 15.0) {
-      weight = get().scaleLastStabilizedWeight;
-    }
-    if (weight < 15.0) return;
-
-    const bmi = weight / Math.pow(profile.height / 100, 2);
-    const age = getAge(profile.birthDate);
-    const bmr = profile.gender === 'male'
-      ? 66.47 + 13.75 * weight + 5.003 * profile.height - 6.755 * age
-      : 655.1 + 9.563 * weight + 1.85 * profile.height - 4.676 * age;
-
-    const measurement: Measurement = {
-      profileId: profile.id!,
-      timestamp: new Date(),
-      weight,
-      impedance: 0,
-      bmi: Number(bmi.toFixed(2)),
-      bmr: Number(bmr.toFixed(2)),
-      bodyFat: 0,
-      bodyWater: 0,
-      boneMass: 0,
-      muscleMass: 0,
-      visceralFat: 0,
-      metabolicAge: 0,
-      protein: 0,
-      bodyType: 4,
-    };
-
-    await measurementRepo.save(measurement);
-    const history = await measurementRepo.getAll(profile.id!);
-    set({ measurements: history, scanSuccess: { weight, impedance: 0 } });
-    get().stopScaleScan();
   },
 
   addManualMeasurement: async (weightKg) => {
@@ -543,150 +391,6 @@ export const useStore = create<StoreState>((set, get) => ({
     if (profile) {
       await messageRepo.clear(profile.id!);
       set({ chatHistory: [] });
-    }
-  },
-
-  startScaleScan: async () => {
-    set({
-      isScanning: true,
-      scaleError: null,
-      scaleWeight: 0,
-      scaleImpedance: 0,
-      scaleStabilized: false,
-      scaleImpedancePresent: false,
-      scaleLastStabilizedWeight: 0,
-      scanSuccess: null
-    });
-    const adapter = get().isSimulator ? mockAdapter : bleAdapter;
-
-    try {
-      await adapter.startScanning(
-        (data) => {
-          const isSpam = data.weight < 15.0;
-
-          set((state) => {
-            let currentStabilized = state.scaleStabilized;
-            let currentLastStabilizedWeight = state.scaleLastStabilizedWeight;
-            let currentImpedance = state.scaleImpedance;
-            let currentImpedancePresent = state.scaleImpedancePresent;
-
-            // If the live weight is non-zero (>= 5.0 kg) and differs significantly from the last stabilized weight,
-            // reset the stabilized state because it's a new or fluctuating reading.
-            if (data.weight >= 5.0 && currentLastStabilizedWeight > 0) {
-              const diff = Math.abs(data.weight - currentLastStabilizedWeight);
-              if (diff > 2.0) {
-                currentStabilized = false;
-                currentLastStabilizedWeight = 0;
-                currentImpedance = 0;
-                currentImpedancePresent = false;
-              }
-            }
-
-            const nextStabilized = (data.stabilized && !isSpam) || currentStabilized;
-            const nextLastStabilizedWeight = (data.stabilized && !isSpam) ? data.weight : currentLastStabilizedWeight;
-            
-            // Keep the non-zero impedance if we already got one during this scan session
-            const nextImpedance = (data.impedance > 0 && !isSpam) ? data.impedance : currentImpedance;
-            const nextImpedancePresent = (data.impedancePresent && !isSpam) || currentImpedancePresent || nextImpedance > 0;
-
-            return {
-              scaleWeight: data.weight,
-              scaleImpedance: nextImpedance,
-              scaleStabilized: nextStabilized,
-              scaleImpedancePresent: nextImpedancePresent,
-              scaleLastStabilizedWeight: nextLastStabilizedWeight,
-            };
-          });
-        },
-        (err) => {
-          set({ scaleError: err.message || 'Bluetooth connection failed.', isScanning: false });
-        }
-      );
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : 'Failed to start Bluetooth.';
-      set({ scaleError: errMsg, isScanning: false });
-    }
-  },
-
-  stopScaleScan: async () => {
-    const adapter = get().isSimulator ? mockAdapter : bleAdapter;
-    await adapter.stopScanning();
-    set({ isScanning: false });
-  },
-
-  confirmAndSaveScaleMeasurement: async () => {
-    const profile = get().activeProfile;
-    if (!profile) return;
-
-    const weight = get().scaleLastStabilizedWeight > 0 ? get().scaleLastStabilizedWeight : get().scaleWeight;
-    if (weight < 15.0) return; // spam protection
-
-    const impedance = get().scaleImpedance;
-    const age = getAge(profile.birthDate);
-
-    const bmi = weight / Math.pow(profile.height / 100, 2);
-    const bmr = profile.gender === 'male'
-      ? 66.47 + 13.75 * weight + 5.003 * profile.height - 6.755 * age
-      : 655.1 + 9.563 * weight + 1.85 * profile.height - 4.676 * age;
-
-    const measurement: Measurement = {
-      profileId: profile.id!,
-      timestamp: new Date(),
-      weight,
-      impedance: 0,
-      bmi: Number(bmi.toFixed(2)),
-      bmr: Number(bmr.toFixed(2)),
-      bodyFat: 0,
-      bodyWater: 0,
-      boneMass: 0,
-      muscleMass: 0,
-      visceralFat: 0,
-      metabolicAge: 0,
-      protein: 0,
-      bodyType: 4,
-    };
-
-    await measurementRepo.save(measurement);
-
-    // Export to Health Connect / Samsung Health
-    const healthProvider = getHealthProvider();
-    if (healthProvider.exportBodyComposition) {
-      try {
-        await healthProvider.exportBodyComposition(measurement);
-      } catch (err) {
-        console.error('Failed to export body composition:', err);
-      }
-    }
-
-    const history = await measurementRepo.getAll(profile.id!);
-    set({
-      measurements: history,
-      scanSuccess: { weight, impedance }
-    });
-
-    await get().stopScaleScan();
-  },
-
-  discardScaleMeasurement: async () => {
-    await get().stopScaleScan();
-    set({
-      scaleWeight: 0,
-      scaleImpedance: 0,
-      scaleStabilized: false,
-      scaleImpedancePresent: false,
-      scaleLastStabilizedWeight: 0,
-      scanSuccess: null,
-      scaleError: null
-    });
-  },
-
-  setSimulator: (active) => {
-    get().stopScaleScan();
-    set({ isSimulator: active });
-    try {
-      localStorage.setItem('morphiq_is_simulator', active ? 'true' : 'false');
-    } catch (err) {
-      void err;
     }
   },
 
@@ -974,18 +678,6 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
     } finally {
       set({ isAiLoading: false });
     }
-  },
-
-  saveUserExercise: async (exerciseData) => {
-    const profile = get().activeProfile;
-    if (!profile) return;
-    await userExerciseRepo.save({
-      ...exerciseData,
-      profileId: profile.id!,
-      lastUsed: new Date(),
-    });
-    const exercises = await userExerciseRepo.getAll(profile.id!);
-    set({ userExercises: exercises });
   },
 
   loadFavorites: async () => {
