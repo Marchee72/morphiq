@@ -140,7 +140,7 @@ export function DataBackupSheet({ open, onClose, onExport, onImport, onClear }: 
                 </p>
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setShowConfirmClear(true)} style={{ color: '#ff6666' }}>
+            <Button variant="tonal" size="sm" onClick={() => setShowConfirmClear(true)} style={{ color: '#ff6666' }}>
               Restablecer base de datos
             </Button>
           </Card>
@@ -154,7 +154,7 @@ export function DataBackupSheet({ open, onClose, onExport, onImport, onClear }: 
               Esta acción eliminará permanentemente todos tus registros del perfil activo y no se puede deshacer.
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Button variant="ghost" size="sm" style={{ flex: 1, color: '#ffffff' }} onClick={() => setShowConfirmClear(false)}>
+              <Button variant="tonal" size="sm" style={{ flex: 1, color: '#ffffff' }} onClick={() => setShowConfirmClear(false)}>
                 Cancelar
               </Button>
               <Button variant="filled" size="sm" style={{ flex: 1, background: '#d32f2f', color: '#ffffff' }} onClick={handleClearData} disabled={isLoading}>
@@ -164,7 +164,7 @@ export function DataBackupSheet({ open, onClose, onExport, onImport, onClear }: 
           </Card>
         )}
 
-        <Button variant="ghost" onClick={onClose} style={{ marginTop: 8 }}>
+        <Button variant="tonal" onClick={onClose} style={{ marginTop: 8 }}>
           Cerrar
         </Button>
       </div>

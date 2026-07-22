@@ -7,12 +7,21 @@ export interface AppBarProps {
 }
 
 const COLLAPSE_THRESHOLD = 24;
+const EXPAND_THRESHOLD = 24;
 
 export const AppBar: React.FC<AppBarProps> = ({ title, overline, actions }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setCollapsed(window.scrollY > COLLAPSE_THRESHOLD);
+    const onScroll = () => {
+      const y = window.scrollY;
+      setCollapsed(prev => {
+        if (!prev && y > COLLAPSE_THRESHOLD) return true;
+        if (prev && y < EXPAND_THRESHOLD) return false;
+        return prev;
+      });
+    };
+
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);

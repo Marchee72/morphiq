@@ -4,6 +4,7 @@ import './index.css'
 import './ui/tokens.css'
 import './ui/ui.css'
 import App from './App.tsx'
+import { ThemeProvider } from './ui/ThemeProvider'
 const API_URL = (import.meta.env?.VITE_API_URL as string) || 'http://localhost:3000';
 
 function sendErrorToServer(level: string, message: string, stack?: string) {
@@ -46,8 +47,43 @@ console.error = (...args) => {
   sendErrorToServer('CLIENT_CONSOLE_ERROR', `console.error: ${message}`, stack);
 };
 
+// Global mobile keyboard detection
+window.addEventListener('focusin', (e) => {
+  const target = e.target as HTMLElement | null;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    document.body.classList.add('keyboard-open');
+  }
+});
+
+window.addEventListener('focusout', (e) => {
+  const target = e.target as HTMLElement | null;
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    setTimeout(() => {
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA' && !active.isContentEditable)) {
+        document.body.classList.remove('keyboard-open');
+      }
+    }, 100);
+  }
+});
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    if (window.visualViewport && window.visualViewport.height < window.innerHeight * 0.75) {
+      document.body.classList.add('keyboard-open');
+    } else {
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA' && !active.isContentEditable)) {
+        document.body.classList.remove('keyboard-open');
+      }
+    }
+  });
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </StrictMode>,
 )

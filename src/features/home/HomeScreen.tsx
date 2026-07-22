@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Settings, Activity, Flame, Beef, Dumbbell, CalendarCheck, UtensilsCrossed, Scale, Trophy } from 'lucide-react';
 import { useStore } from '../../presentation/state/store';
 import { AppBar } from '../../ui/primitives/AppBar';
@@ -15,6 +15,7 @@ import { SleepRecoveryCard } from './SleepRecoveryCard';
 import { BodyGoalProgressCard } from './BodyGoalProgressCard';
 import { AddFoodSheet } from './AddFoodSheet';
 import { LogWeightSheet } from './LogWeightSheet';
+import { ActiveWorkoutBanner } from './ActiveWorkoutBanner';
 import { CapacitorHealthProvider } from '../../data/health/CapacitorHealthProvider';
 import { WebHealthProvider } from '../../data/health/WebHealthProvider';
 
@@ -43,12 +44,14 @@ export interface HomeScreenProps {
   onOpenSettings: () => void;
   onOpenFoodSheet?: () => void;
   onOpenWeightSheet?: () => void;
+  quickAddButton?: React.ReactNode;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onOpenSettings,
   onOpenFoodSheet,
   onOpenWeightSheet,
+  quickAddButton,
 }) => {
   const { activeProfile, measurements, foodLogs, workoutHistory, addFoodLog, deleteFoodLog, addManualMeasurement, importMeasurements } = useStore();
   const [category, setCategory] = useState<Category>('activity');
@@ -56,6 +59,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [wtOpen, setWtOpen] = useState(false);
   const [syncSt, setSyncSt] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [syncMsg, setSyncMsg] = useState<string>();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const openFood = onOpenFoodSheet || (() => setFoodOpen(true));
   const openWeight = onOpenWeightSheet || (() => setWtOpen(true));
@@ -142,7 +149,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       <AppBar
         title="Today"
         overline={activeProfile ? `${greet()}, ${activeProfile.name} · ${todayDMY()}` : todayDMY()}
-        actions={<button className="ui-icon-btn" aria-label="Settings" onClick={onOpenSettings}><Settings size={22} /></button>}
+        actions={
+          <>
+            {quickAddButton}
+            <button className="ui-icon-btn" aria-label="Settings" onClick={onOpenSettings}><Settings size={22} /></button>
+          </>
+        }
       />
 
       {/* Top category toolbar (Samsung Health style) */}
@@ -151,6 +163,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '0 16px 140px' }}>
+        {/* Active Workout Banner if session in progress */}
+        <ActiveWorkoutBanner />
+
         {/* AI Energy Score — always visible at top */}
         <EnergyScore score={energyScore} breakdown={energyBreakdown} />
 

@@ -166,7 +166,7 @@ export function ProfileEditSheet({ open, onClose, profile, onSave }: ProfileEdit
         </div>
 
         <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-          <Button variant="ghost" style={{ flex: 1 }} type="button" onClick={onClose}>
+          <Button variant="tonal" style={{ flex: 1 }} type="button" onClick={onClose}>
             Cancelar
           </Button>
           <Button variant="filled" style={{ flex: 1 }} type="submit" disabled={isSaving}>

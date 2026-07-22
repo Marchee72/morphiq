@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Check, Edit3, Activity, Sun, Moon, Monitor, Database, Sparkles, Trash2, ShieldCheck, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Check, Edit3, Activity, Sun, Moon, Monitor, Database, Sparkles, Trash2, ShieldCheck, RefreshCw, Dumbbell } from 'lucide-react';
 import { useStore } from '../../presentation/state/store';
 import { AppBar } from '../../ui/primitives/AppBar';
 import { Card } from '../../ui/primitives/Card';
@@ -8,6 +8,7 @@ import { Button } from '../../ui/primitives/Button';
 import { Chip } from '../../ui/primitives/Chip';
 import { ProfileEditSheet } from './ProfileEditSheet';
 import { DataBackupSheet } from './DataBackupSheet';
+import { GymEquipmentSheet } from './GymEquipmentSheet';
 import { CapacitorHealthProvider } from '../../data/health/CapacitorHealthProvider';
 import { WebHealthProvider } from '../../data/health/WebHealthProvider';
 
@@ -30,9 +31,14 @@ export const SettingsScreen: React.FC = () => {
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
+  const [isEquipmentOpen, setIsEquipmentOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [demoMsg, setDemoMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   const handleManualHealthSync = async () => {
     if (!activeProfile) return;
@@ -97,7 +103,7 @@ export const SettingsScreen: React.FC = () => {
               PERFIL ACTIVO
             </span>
             {activeProfile && (
-              <Button variant="ghost" size="sm" onClick={() => setIsEditOpen(true)}>
+              <Button variant="tonal" size="sm" onClick={() => setIsEditOpen(true)}>
                 <Edit3 size={14} /> Editar
               </Button>
             )}
@@ -179,7 +185,37 @@ export const SettingsScreen: React.FC = () => {
           </div>
         </Card>
 
-        {/* 4. Data Backup & Demo Data Section */}
+        {/* 4. Gym Equipment Section */}
+        <Card padding="md" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ui-text-secondary)' }}>
+            EQUIPAMIENTO DE GIMNASIO
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{
+              width: 38, height: 38, borderRadius: 14,
+              background: 'var(--ui-tonal)', color: 'var(--ui-on-tonal)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <Dumbbell size={18} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ui-text-primary)' }}>
+                Mi Equipamiento
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ui-text-secondary)' }}>
+                {activeProfile?.availableEquipment && activeProfile.availableEquipment.length > 0
+                  ? `${activeProfile.availableEquipment.length} equipos configurados`
+                  : 'Sin configurar (se usan todos)'
+                }
+              </div>
+            </div>
+            <Button variant="tonal" size="sm" onClick={() => setIsEquipmentOpen(true)}>
+              Configurar
+            </Button>
+          </div>
+        </Card>
+
+        {/* 5. Data Backup & Demo Data Section */}
         <Card padding="md" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--ui-text-secondary)' }}>
             DATOS Y RESPALDOS
@@ -225,6 +261,17 @@ export const SettingsScreen: React.FC = () => {
         onExport={exportBackupData}
         onImport={importBackupData}
         onClear={clearDatabaseData}
+      />
+
+      <GymEquipmentSheet
+        open={isEquipmentOpen}
+        onClose={() => setIsEquipmentOpen(false)}
+        selected={activeProfile?.availableEquipment ?? []}
+        onSave={async (equipment) => {
+          if (activeProfile) {
+            await updateProfile({ ...activeProfile, availableEquipment: equipment });
+          }
+        }}
       />
     </>
   );

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { LayoutDashboard, Dumbbell, LibraryBig, Sparkles, Scale, UtensilsCrossed } from 'lucide-react';
+import { LayoutDashboard, Dumbbell, LibraryBig, Sparkles, Plus } from 'lucide-react';
+import { App as CapApp } from '@capacitor/app';
 import { useStore } from './presentation/state/store';
+import { handleGlobalBack } from './presentation/state/backHandler';
 import { BottomNav } from './ui/primitives/BottomNav';
-import { QuickAdd } from './ui/primitives/QuickAdd';
+import { QuickAddSheet, buildQuickAddActions } from './ui/primitives/QuickAdd';
 import { HomeScreen } from './features/home/HomeScreen';
 import { GymScreen } from './features/gym/GymScreen';
 import { ExerciseLibraryScreen } from './features/exercises/ExerciseLibraryScreen';
@@ -16,10 +18,10 @@ import { WebHealthProvider } from './data/health/WebHealthProvider';
 import { FloatingWorkoutBar } from './features/gym/FloatingWorkoutBar';
 
 const NAV_ITEMS = [
-  { id: 'home', label: 'Home', icon: <LayoutDashboard size={20} /> },
-  { id: 'gym', label: 'Gym', icon: <Dumbbell size={20} /> },
-  { id: 'exercises', label: 'Exercises', icon: <LibraryBig size={20} /> },
-  { id: 'coach', label: 'Coach', icon: <Sparkles size={20} /> },
+  { id: 'home', label: 'Home', icon: <LayoutDashboard size={22} /> },
+  { id: 'gym', label: 'Gym', icon: <Dumbbell size={22} /> },
+  { id: 'exercises', label: 'Exercises', icon: <LibraryBig size={22} /> },
+  { id: 'coach', label: 'Coach', icon: <Sparkles size={22} /> },
 ] as const;
 
 type TabId = (typeof NAV_ITEMS)[number]['id'];
@@ -30,6 +32,7 @@ function App() {
   const [splashExiting, setSplashExiting] = useState(false);
   const [foodOpen, setFoodOpen] = useState(false);
   const [wtOpen, setWtOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
 
   useEffect(() => {
     loadProfiles();
@@ -40,6 +43,35 @@ function App() {
       clearTimeout(timerRemove);
     };
   }, [loadProfiles]);
+
+  // Handle native Android hardware back button and swipe back gesture
+  useEffect(() => {
+    const handleBack = () => {
+      // 1. Try closing open modal/sheet from the stack
+      const handled = handleGlobalBack();
+      if (handled) return;
+
+      // 2. If no open modal was handled, check active tab
+      const { activeTab: currentTab, setActiveTab: setTab } = useStore.getState();
+      if (currentTab !== 'home') {
+        setTab('home');
+      } else {
+        CapApp.minimizeApp();
+      }
+    };
+
+    const listener = CapApp.addListener('backButton', handleBack);
+    window.addEventListener('popstate', handleBack);
+
+    return () => {
+      listener.then(l => l.remove());
+      window.removeEventListener('popstate', handleBack);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [activeTab]);
 
   useEffect(() => {
     if (!activeProfile) return;
@@ -63,11 +95,11 @@ function App() {
     autoSync();
   }, [activeProfile]);
 
-  const quickAddActions = [
-    { id: 'weight', label: 'Log weight', icon: <Scale size={16} />, onClick: () => setWtOpen(true) },
-    { id: 'food', label: 'Add food', icon: <UtensilsCrossed size={16} />, onClick: () => setFoodOpen(true) },
-    { id: 'workout', label: 'Start workout', icon: <Dumbbell size={16} />, onClick: () => startActiveSession('Strength Training') },
-  ];
+  const quickAddActions = buildQuickAddActions({
+    onLogWeight: () => setWtOpen(true),
+    onAddFood: () => setFoodOpen(true),
+    onStartWorkout: () => startActiveSession('Strength Training'),
+  });
 
   const splash = showSplash && (
     <div
@@ -112,6 +144,16 @@ function App() {
             onOpenSettings={() => setActiveTab('settings')}
             onOpenFoodSheet={() => setFoodOpen(true)}
             onOpenWeightSheet={() => setWtOpen(true)}
+            quickAddButton={
+              <button
+                type="button"
+                className="ui-icon-btn"
+                aria-label="Quick add"
+                onClick={() => setQuickAddOpen(true)}
+              >
+                <Plus size={20} />
+              </button>
+            }
           />
         )}
         {activeTab === 'gym' && <GymScreen />}
@@ -125,7 +167,7 @@ function App() {
         activeId={activeTab}
         onSelect={id => setActiveTab(id as TabId)}
       />
-      <QuickAdd actions={quickAddActions} />
+      <QuickAddSheet open={quickAddOpen} onClose={() => setQuickAddOpen(false)} actions={quickAddActions} />
       <AddFoodSheet open={foodOpen} onClose={() => setFoodOpen(false)} onSubmit={e => addFoodLog(e)} />
       <LogWeightSheet open={wtOpen} onClose={() => setWtOpen(false)} onSubmit={w => addManualMeasurement(w)} />
     </>

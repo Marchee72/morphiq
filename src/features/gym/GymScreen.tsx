@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
-import { Dumbbell, Trophy, Play, Calendar } from 'lucide-react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Dumbbell, Trophy, Play, Calendar, Settings, BookOpen, Trash2 } from 'lucide-react';
 import { AppBar } from '../../ui/primitives/AppBar';
+import { GymEquipmentSheet } from '../settings/GymEquipmentSheet';
 import { Card } from '../../ui/primitives/Card';
 import { Button } from '../../ui/primitives/Button';
 import { Chip } from '../../ui/primitives/Chip';
@@ -25,10 +26,60 @@ function sameDay(a: Date, b: Date): boolean {
 }
 
 export const GymScreen: React.FC = () => {
-  const { workoutHistory, activeWorkoutSets, deleteWorkoutLog, activeSession, isGymModeOpen, setIsGymModeOpen, startActiveSession } = useStore();
+  const {
+    workoutHistory,
+    activeWorkoutSets,
+    deleteWorkoutLog,
+    activeSession,
+    isGymModeOpen,
+    setIsGymModeOpen,
+    startActiveSession,
+    savedRoutines,
+    startActiveSessionWithRoutine,
+    deleteRoutineTemplate,
+  } = useStore();
 
   const [filter, setFilter] = useState<HistoryFilter>('7d');
   const [dateQuery, setDateQuery] = useState('');
+  const [isEquipmentOpen, setIsEquipmentOpen] = useState(false);
+  const [showAllPrs, setShowAllPrs] = useState(false);
+  const { activeProfile, updateProfile } = useStore();
+
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  const [activeSeconds, setActiveSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!activeSession) return;
+    const updateSecs = () => {
+      const elapsed = Math.floor((new Date().getTime() - new Date(activeSession.startTime).getTime()) / 1000);
+      setActiveSeconds(Math.max(0, elapsed));
+    };
+    updateSecs();
+    const interval = setInterval(updateSecs, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession]);
+
+  const activeSessionStats = useMemo(() => {
+    if (!activeSession) return null;
+    const totalVolume = activeSession.sets.reduce((sum, s) => sum + ((s.weight || 0) * (s.reps || 0)), 0);
+    const exMap = new Map<string, number>();
+    activeSession.sets.forEach(s => {
+      const name = s.exerciseName || 'Ejercicio';
+      exMap.set(name, (exMap.get(name) || 0) + 1);
+    });
+    const exerciseSummary = Array.from(exMap.entries()).map(([name, count]) => ({ name, count }));
+    return { totalVolume, exerciseSummary };
+  }, [activeSession]);
+
+  const formatTimer = (totalSecs: number) => {
+    const m = Math.floor(totalSecs / 60);
+    const s = totalSecs % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
 
   // Compute Weekly Stats
   const weeklyStats = useMemo(() => {
@@ -68,6 +119,10 @@ export const GymScreen: React.FC = () => {
     }));
   }, [activeWorkoutSets]);
 
+  const displayedPrs = useMemo(() => {
+    return showAllPrs ? personalBests : personalBests.slice(0, 4);
+  }, [showAllPrs, personalBests]);
+
   // Filtered history based on selected filter + date search
   const filteredHistory = useMemo(() => {
     let list = workoutHistory;
@@ -104,52 +159,226 @@ export const GymScreen: React.FC = () => {
 
   return (
     <>
-      <AppBar title="Gym" overline="Workout Hub & Tracking" />
+      <AppBar
+        title="Gym"
+        overline="Workout Hub & Tracking"
+        actions={
+          <button
+            type="button"
+            className="ui-icon-btn"
+            onClick={() => setIsEquipmentOpen(true)}
+            aria-label="Configurar equipamiento"
+            title="Equipamiento"
+          >
+            <Settings size={20} />
+          </button>
+        }
+      />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '0 16px 120px' }}>
-        {/* Active Session / Start Session Hero Card — flat tonal surface, One UI */}
-        <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-            <div style={{ minWidth: 0 }}>
-              <span style={{
-                display: 'inline-block',
-                fontSize: 11,
-                fontWeight: 800,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-                padding: '3px 10px',
-                borderRadius: 'var(--ui-radius-pill)',
-                background: activeSession ? 'var(--ui-success-bg)' : 'var(--ui-tonal)',
-                color: activeSession ? 'var(--ui-success)' : 'var(--ui-on-tonal)',
-              }}>
-                {activeSession ? 'In progress' : 'Live Workout Tracker'}
-              </span>
-              <h2 style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.5px', margin: '8px 0 0 0', color: 'var(--ui-text-primary)' }}>
-                {activeSession ? `${activeSession.workoutType}` : 'Ready to train?'}
-              </h2>
-              <p style={{ fontSize: 13, color: 'var(--ui-text-secondary)', margin: '4px 0 0 0' }}>
-                {activeSession ? `${activeSession.sets.length} sets logged in current session` : 'Track sets, reps, and exercise notes in real-time.'}
-              </p>
+        {/* Active Session / Start Session Hero Card — One UI 9 Premium design */}
+        <Card style={activeSession ? { border: '1px solid var(--ui-outline-strong)', boxShadow: '0 6px 20px rgba(0, 0, 0, 0.12)' } : undefined}>
+          {activeSession ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Header Badge & Timer */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  padding: '3px 10px',
+                  borderRadius: 'var(--ui-radius-pill)',
+                  background: 'var(--ui-success-bg)',
+                  color: 'var(--ui-success)',
+                }}>
+                  <span className="ui-live-dot" />
+                  Sesión en progreso
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 800, fontFamily: 'monospace', color: 'var(--ui-primary)' }}>
+                  ⏱ {formatTimer(activeSeconds)}
+                </span>
+              </div>
+
+              {/* Title & Stats */}
+              <div>
+                <h2 style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.5px', margin: 0, color: 'var(--ui-text-primary)' }}>
+                  {activeSession.workoutType || 'Strength Training'}
+                </h2>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ui-text-secondary)' }}>
+                    🏋️ {activeSession.sets.length} series registradas
+                  </span>
+                  {activeSessionStats && activeSessionStats.totalVolume > 0 && (
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ui-text-secondary)' }}>
+                      💪 {activeSessionStats.totalVolume.toLocaleString()} kg volumen
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Logged Exercise Chips */}
+              {activeSessionStats && activeSessionStats.exerciseSummary.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 4 }}>
+                  {activeSessionStats.exerciseSummary.map(ex => (
+                    <span
+                      key={ex.name}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: '4px 10px',
+                        borderRadius: 'var(--ui-radius-pill)',
+                        background: 'var(--ui-surface-variant)',
+                        color: 'var(--ui-text-primary)',
+                      }}
+                    >
+                      {ex.name} ({ex.count} sets)
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Resume Button */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 4 }}>
+                <Button
+                  variant="filled"
+                  onClick={() => setIsGymModeOpen(true)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Play size={18} fill="currentColor" /> Abrir Tracker en Vivo
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <span style={{
+                    display: 'inline-block',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    padding: '3px 10px',
+                    borderRadius: 'var(--ui-radius-pill)',
+                    background: 'var(--ui-tonal)',
+                    color: 'var(--ui-on-tonal)',
+                  }}>
+                    Live Workout Tracker
+                  </span>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.5px', margin: '8px 0 0 0', color: 'var(--ui-text-primary)' }}>
+                    ¿Listo para entrenar?
+                  </h2>
+                  <p style={{ fontSize: 13, color: 'var(--ui-text-secondary)', margin: '4px 0 0 0' }}>
+                    Registra series, repeticiones, peso y notas en tiempo real con temporizador automático.
+                  </p>
+                </div>
+
+                <div style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 16,
+                  background: 'var(--ui-tonal)',
+                  color: 'var(--ui-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <Dumbbell size={22} />
+                </div>
+              </div>
+
+              {/* Quick Launch Buttons */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 4 }}>
+                <Button
+                  variant="filled"
+                  size="sm"
+                  onClick={() => startActiveSession('Entrenamiento de Fuerza')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Play size={14} fill="currentColor" /> Fuerza
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  onClick={() => startActiveSession('HIIT / Cardio')}
+                >
+                  ⚡ HIIT / Cardio
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  onClick={() => startActiveSession('Calistenia')}
+                >
+                  🤸 Calistenia
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Saved Routines Section */}
+        {savedRoutines.length > 0 && (
+
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ui-text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <BookOpen size={15} style={{ color: 'var(--ui-primary)' }} /> Rutinas Guardadas ({savedRoutines.length})
             </div>
 
-            <Button
-              variant={activeSession ? 'tonal' : 'filled'}
-              onClick={() => {
-                if (activeSession) {
-                  setIsGymModeOpen(true);
-                } else {
-                  startActiveSession('Strength Training');
-                }
-              }}
-              style={{ flexShrink: 0 }}
-            >
-              <Play size={18} fill="currentColor" /> {activeSession ? 'Resume' : 'Start Session'}
-            </Button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {savedRoutines.map(routine => (
+                <Card key={routine.id} style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <h4 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: 'var(--ui-text-primary)' }}>
+                        {routine.title}
+                      </h4>
+                      <p style={{ fontSize: 12, color: 'var(--ui-text-secondary)', margin: '2px 0 0 0' }}>
+                        🏋️ {routine.exercises.length} ejercicios {routine.description ? `• ${routine.description}` : ''}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      aria-label="Eliminar rutina guardada"
+                      onClick={() => routine.id && deleteRoutineTemplate(routine.id)}
+                      style={{ background: 'none', border: 'none', color: 'var(--ui-error)', cursor: 'pointer', padding: 4 }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {routine.targetMuscles?.map((muscle, idx) => (
+                        <span key={idx} style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 'var(--ui-radius-pill)', background: 'var(--ui-tonal)', color: 'var(--ui-on-tonal)' }}>
+                          {muscle}
+                        </span>
+                      ))}
+                    </div>
+
+                    <Button
+                      variant="filled"
+                      size="sm"
+                      onClick={() => startActiveSessionWithRoutine(routine)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px' }}
+                    >
+                      <Play size={14} fill="currentColor" /> Iniciar Rutina
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
           </div>
-        </Card>
+        )}
 
         {/* Weekly Stats Summary */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+
           <Card style={{ padding: 12, textAlign: 'center' }}>
             <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ui-primary)' }}>{weeklyStats.count}</div>
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ui-text-secondary)', marginTop: 2 }}>
@@ -172,20 +401,38 @@ export const GymScreen: React.FC = () => {
           </Card>
         </div>
 
-        {/* Personal Best Records (PRs) */}
+        {/* Personal Best Records (PRs) — Grid view (no horizontal scroll) */}
         {personalBests.length > 0 && (
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ui-text-secondary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Trophy size={15} style={{ color: 'gold' }} /> Personal Records ({personalBests.length})
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ui-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Trophy size={15} style={{ color: 'gold' }} /> Récords Personales ({personalBests.length})
+              </div>
+              {personalBests.length > 4 && (
+                <Button
+                  variant="tonal"
+                  size="sm"
+                  onClick={() => setShowAllPrs(prev => !prev)}
+                  style={{ fontSize: 12, padding: '2px 8px' }}
+                >
+                  {showAllPrs ? 'Mostrar menos' : `Ver todos (${personalBests.length})`}
+                </Button>
+              )}
             </div>
-            <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
-              {personalBests.map(pb => (
-                <Card key={pb.name} style={{ padding: '10px 14px', minWidth: 140, flexShrink: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'capitalize', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              {displayedPrs.map(pb => (
+                <Card key={pb.name} style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'capitalize', color: 'var(--ui-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {pb.name}
                   </div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--ui-primary)', marginTop: 4 }}>
-                    {pb.maxWeight} kg <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ui-text-secondary)' }}>× {pb.maxReps}</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                    <span style={{ fontSize: 17, fontWeight: 800, color: 'var(--ui-primary)' }}>
+                      {pb.maxWeight} <span style={{ fontSize: 12, fontWeight: 700 }}>kg</span>
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ui-text-secondary)' }}>
+                      × {pb.maxReps} reps
+                    </span>
                   </div>
                 </Card>
               ))}
@@ -276,6 +523,17 @@ export const GymScreen: React.FC = () => {
       <LiveWorkoutScreen
         isOpen={isGymModeOpen}
         onClose={() => setIsGymModeOpen(false)}
+      />
+
+      <GymEquipmentSheet
+        open={isEquipmentOpen}
+        onClose={() => setIsEquipmentOpen(false)}
+        selected={activeProfile?.availableEquipment ?? []}
+        onSave={async (equipment) => {
+          if (activeProfile) {
+            await updateProfile({ ...activeProfile, availableEquipment: equipment });
+          }
+        }}
       />
     </>
   );
