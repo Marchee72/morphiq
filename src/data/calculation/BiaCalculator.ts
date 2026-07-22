@@ -76,13 +76,12 @@ export class BiaCalculator {
     impedance: number
   ): number {
     const fat = this.getFatPercentage(weight, height, age, gender, impedance);
-    let waterPercentage = (100 - fat) * 0.7;
+    const waterPercentage = (100 - fat) * 0.7;
 
-    let coefficient = waterPercentage <= 50 ? 1.02 : 0.98;
+    const coefficient = waterPercentage <= 50 ? 1.02 : 0.98;
 
     // Capping water percentage
     if (waterPercentage * coefficient >= 65) {
-      waterPercentage = 75;
       return 75; // directly return the capped value
     }
 
@@ -146,7 +145,7 @@ export class BiaCalculator {
     age: number,
     gender: 'male' | 'female'
   ): number {
-    let vfal = 0;
+    let vfal: number;
     if (gender === 'female') {
       if (weight > (13 - (height * 0.5)) * -1) {
         const subsubcalc = ((height * 1.45) + (height * 0.1158) * height) - 120;
@@ -176,7 +175,7 @@ export class BiaCalculator {
     age: number,
     gender: 'male' | 'female'
   ): number {
-    let bmr = 0;
+    let bmr: number;
     if (gender === 'female') {
       bmr = 864.6 + weight * 10.2036 - height * 0.39336 - age * 6.204;
       if (bmr > 2996) bmr = 5000;
@@ -196,7 +195,7 @@ export class BiaCalculator {
     gender: 'male' | 'female',
     impedance: number
   ): number {
-    let metabolicAge = 0;
+    let metabolicAge: number;
     if (gender === 'female') {
       metabolicAge = (height * -1.1165) + (weight * 1.5784) + (age * 0.4615) + (impedance * 0.0415) + 83.2548;
     } else {
@@ -215,7 +214,7 @@ export class BiaCalculator {
   ): number {
     const muscle = this.getMuscleMass(weight, height, age, gender, impedance);
     const water = this.getWaterPercentage(weight, height, age, gender, impedance);
-    let proteinPercentage = (muscle / weight) * 100 - water;
+    const proteinPercentage = (muscle / weight) * 100 - water;
 
     return this.checkValueOverflow(proteinPercentage, 5, 32);
   }

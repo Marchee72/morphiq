@@ -25,6 +25,7 @@ import {
   ServerFavoriteExerciseRepository,
 } from '../../data/database/ServerDatabase';
 import { DeepSeekCoach, chatCompletion, buildProviderFromEnv } from '../../data/ai/GeminiCoach';
+import { generateMockMeasurements, generateMockFoodLogs, generateMockWorkouts } from '../../data/mock/mockData';
 
 import { Capacitor } from '@capacitor/core';
 
@@ -62,6 +63,11 @@ interface StoreState {
   activeTab: 'home' | 'gym' | 'exercises' | 'coach' | 'settings';
   activeWorkout: WorkoutLog | null;
   isGymModeOpen: boolean;
+  activeSession: {
+    startTime: Date;
+    workoutType: string;
+    sets: Omit<WorkoutSet, 'profileId' | 'timestamp' | 'workoutLogId'>[];
+  } | null;
 
   // Actions
   setActiveTab: (tab: 'home' | 'gym' | 'exercises' | 'coach' | 'settings') => void;
@@ -69,6 +75,10 @@ interface StoreState {
   setActiveCoachSubTab: (tab: 'chat' | 'routine' | 'history') => void;
   setActiveWorkout: (workout: WorkoutLog | null) => void;
   setIsGymModeOpen: (open: boolean) => void;
+  startActiveSession: (workoutType?: string) => void;
+  updateActiveSessionSets: (sets: Omit<WorkoutSet, 'profileId' | 'timestamp' | 'workoutLogId'>[]) => void;
+  finishActiveSession: () => Promise<void>;
+  dismissActiveSession: () => void;
   loadProfiles: () => Promise<void>;
   setActiveProfile: (id: string) => Promise<void>;
   createProfile: (profile: Omit<UserProfile, 'createdAt'>) => Promise<string>;
@@ -104,10 +114,38 @@ interface StoreState {
   analyzeWorkoutHistoryPeriod: (period: 'week' | 'month' | 'year') => Promise<string>;
   scheduleMonthlyReminder: () => Promise<void>;
   cancelMonthlyReminder: () => Promise<void>;
+  seedMockData: () => Promise<void>;
+  clearMockData: () => Promise<void>;
   
+  // Theme & Data Management
+  theme: 'system' | 'dark' | 'light';
+  setTheme: (theme: 'system' | 'dark' | 'light') => void;
+  exportBackupData: () => Promise<string>;
+  importBackupData: (jsonContent: string) => Promise<boolean>;
+  clearDatabaseData: () => Promise<void>;
+
   setApiKey: (key: string) => void;
   setSelectedDate: (date: Date) => Promise<void>;
 }
+
+const getInitialTheme = (): 'system' | 'dark' | 'light' => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('morphiq_theme');
+    if (saved === 'dark' || saved === 'light' || saved === 'system') return saved;
+  }
+  return 'system';
+};
+
+const applyThemeToDocument = (theme: 'system' | 'dark' | 'light') => {
+  if (typeof document === 'undefined') return;
+  if (theme === 'system') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+};
+
+applyThemeToDocument(getInitialTheme());
 
 export const useStore = create<StoreState>((set, get) => ({
   profiles: [],
@@ -120,17 +158,69 @@ export const useStore = create<StoreState>((set, get) => ({
   favoriteExerciseIds: [],
   activeWorkoutSets: {},
   exerciseStats: {},
+  theme: getInitialTheme(),
   selectedWorkoutForCoach: null,
   activeCoachSubTab: 'chat',
   activeTab: 'home',
   activeWorkout: null,
   isGymModeOpen: false,
+  activeSession: null,
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedWorkoutForCoach: (workout) => set({ selectedWorkoutForCoach: workout }),
   setActiveCoachSubTab: (tab) => set({ activeCoachSubTab: tab }),
   setActiveWorkout: (workout) => set({ activeWorkout: workout }),
   setIsGymModeOpen: (open) => set({ isGymModeOpen: open }),
+
+  startActiveSession: (workoutType = 'Strength Training') => {
+    set({
+      activeSession: {
+        startTime: new Date(),
+        workoutType,
+        sets: [],
+      },
+      isGymModeOpen: true,
+    });
+  },
+
+  updateActiveSessionSets: (sets) => {
+    const session = get().activeSession;
+    if (session) {
+      set({ activeSession: { ...session, sets } });
+    }
+  },
+
+  finishActiveSession: async () => {
+    const session = get().activeSession;
+    const profile = get().activeProfile;
+    if (!session || !profile) return;
+
+    const durationMinutes = Math.max(1, Math.round((new Date().getTime() - session.startTime.getTime()) / 60000));
+    const logId = await get().addWorkoutLog({
+      type: session.workoutType,
+      duration: durationMinutes,
+      description: `${session.sets.length} sets completed`,
+      source: 'manual',
+    });
+
+    for (const setItem of session.sets) {
+      await get().addWorkoutSet({
+        workoutLogId: logId,
+        exerciseName: setItem.exerciseName,
+        exerciseId: setItem.exerciseId,
+        setNumber: setItem.setNumber,
+        weight: setItem.weight,
+        reps: setItem.reps,
+        notes: setItem.notes,
+      });
+    }
+
+    set({ activeSession: null, isGymModeOpen: false });
+  },
+
+  dismissActiveSession: () => {
+    set({ activeSession: null, isGymModeOpen: false });
+  },
 
   selectedDate: new Date(),
   apiKey: (import.meta.env?.VITE_DEEPSEEK_API_KEY as string) || '',
@@ -971,5 +1061,153 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
     } catch (e) {
       console.error('Failed to cancel local notifications:', e);
     }
+  },
+
+  seedMockData: async () => {
+    let profile = get().activeProfile;
+    if (!profile) {
+      const newId = await get().createProfile({
+        name: 'Alex Johnson',
+        gender: 'male',
+        birthDate: new Date(1998, 4, 15),
+        height: 178,
+      });
+      profile = (await profileRepo.get(newId)) || null;
+    }
+    if (!profile?.id) return;
+
+    // Seed Measurements
+    const mockMeas = generateMockMeasurements(profile.id);
+    for (const m of mockMeas) {
+      await measurementRepo.save(m);
+    }
+
+    // Seed Food Logs
+    const mockFoods = generateMockFoodLogs(profile.id);
+    for (const f of mockFoods) {
+      await foodRepo.add(f);
+    }
+
+    // Seed Workouts & Sets
+    const { workouts, setsByWorkoutIndex } = generateMockWorkouts(profile.id);
+    for (let i = 0; i < workouts.length; i++) {
+      const logId = await workoutRepo.add(workouts[i]);
+      const sets = setsByWorkoutIndex[i] || [];
+      for (const s of sets) {
+        await workoutSetRepo.add({ ...s, workoutLogId: logId });
+      }
+    }
+
+    // Reload active profile data
+    await get().setActiveProfile(profile.id);
+  },
+
+  clearMockData: async () => {
+    const profile = get().activeProfile;
+    if (!profile?.id) return;
+
+    const allMeas = await measurementRepo.getAll(profile.id);
+    for (const m of allMeas) {
+      if (m.id) await measurementRepo.delete(m.id);
+    }
+
+    const allFoods = await foodRepo.getAll(profile.id);
+    for (const f of allFoods) {
+      if (f.id) await foodRepo.delete(f.id);
+    }
+
+    const allWorkouts = await workoutRepo.getAll(profile.id);
+    for (const w of allWorkouts) {
+      if (w.id) await workoutRepo.delete(w.id);
+    }
+
+    await get().setActiveProfile(profile.id);
+  },
+
+  setTheme: (theme) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('morphiq_theme', theme);
+    }
+    applyThemeToDocument(theme);
+    set({ theme });
+  },
+
+  exportBackupData: async () => {
+    const state = get();
+    const data = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      profiles: state.profiles,
+      measurements: state.measurements,
+      foodLogs: state.foodLogs,
+      workoutLogs: state.workoutLogs,
+      favoriteExerciseIds: state.favoriteExerciseIds,
+    };
+    return JSON.stringify(data, null, 2);
+  },
+
+  importBackupData: async (jsonContent: string) => {
+    try {
+      const data = JSON.parse(jsonContent);
+      if (!data || typeof data !== 'object' || !Array.isArray(data.profiles)) {
+        return false;
+      }
+      for (const p of data.profiles) {
+        const existing = get().profiles.find((ep) => ep.id === p.id);
+        if (!existing) {
+          await profileRepo.create(p);
+        } else {
+          await profileRepo.update(p);
+        }
+      }
+      await get().loadProfiles();
+
+      if (data.measurements && Array.isArray(data.measurements)) {
+        for (const m of data.measurements) {
+          await measurementRepo.save({ ...m, timestamp: new Date(m.timestamp) });
+        }
+      }
+      if (data.foodLogs && Array.isArray(data.foodLogs)) {
+        for (const f of data.foodLogs) {
+          await foodRepo.add({ ...f, timestamp: new Date(f.timestamp) });
+        }
+      }
+      if (data.workoutLogs && Array.isArray(data.workoutLogs)) {
+        for (const w of data.workoutLogs) {
+          await workoutRepo.add({ ...w, timestamp: new Date(w.timestamp) });
+        }
+      }
+      const activeP = get().activeProfile;
+      if (data.favoriteExerciseIds && Array.isArray(data.favoriteExerciseIds) && activeP?.id) {
+        for (const id of data.favoriteExerciseIds) {
+          await favoriteRepo.add({ profileId: activeP.id, exerciseId: id, addedAt: new Date() });
+        }
+      }
+      if (activeP?.id) {
+        await get().setActiveProfile(activeP.id);
+      }
+      return true;
+    } catch (err) {
+      console.error('Failed to import backup data:', err);
+      return false;
+    }
+  },
+
+  clearDatabaseData: async () => {
+    const profile = get().activeProfile;
+    if (!profile?.id) return;
+    const allMeas = await measurementRepo.getAll(profile.id);
+    for (const m of allMeas) {
+      if (m.id) await measurementRepo.delete(m.id);
+    }
+    const allFoods = await foodRepo.getAll(profile.id);
+    for (const f of allFoods) {
+      if (f.id) await foodRepo.delete(f.id);
+    }
+    const allWorkouts = await workoutRepo.getAll(profile.id);
+    for (const w of allWorkouts) {
+      if (w.id) await workoutRepo.delete(w.id);
+    }
+    await get().setActiveProfile(profile.id);
   },
 }));

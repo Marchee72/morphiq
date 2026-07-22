@@ -24,7 +24,51 @@ describe('Zustand store state management', () => {
       exerciseStats: {},
       apiKey: '',
       isAiLoading: false,
+      theme: 'system',
     });
+  });
+
+  it('should toggle theme and store preference', () => {
+    const store = useStore.getState();
+    expect(store.theme).toBe('system');
+
+    store.setTheme('dark');
+    expect(useStore.getState().theme).toBe('dark');
+    expect(localStorage.getItem('morphiq_theme')).toBe('dark');
+  });
+
+  it('should export and import backup data correctly', async () => {
+    const store = useStore.getState();
+    await store.createProfile({
+      name: 'Clark Kent',
+      gender: 'male',
+      birthDate: new Date('1990-06-18'),
+      height: 190,
+    });
+
+    await useStore.getState().addFoodLog({
+      mealType: 'lunch',
+      description: 'Chicken Salad',
+      calories: 450,
+      protein: 40,
+      carbs: 20,
+      fat: 15,
+    });
+
+    const jsonBackup = await useStore.getState().exportBackupData();
+    expect(jsonBackup).toContain('Clark Kent');
+    expect(jsonBackup).toContain('Chicken Salad');
+
+    // Reset state & DB
+    await db.userProfiles.clear();
+    await db.foodLogs.clear();
+    useStore.setState({ profiles: [], activeProfile: null, foodLogs: [] });
+
+    // Import backup
+    const success = await useStore.getState().importBackupData(jsonBackup);
+    expect(success).toBe(true);
+    expect(useStore.getState().profiles.length).toBe(1);
+    expect(useStore.getState().profiles[0].name).toBe('Clark Kent');
   });
 
   it('should manage profile creation and selection', async () => {

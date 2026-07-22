@@ -6,6 +6,9 @@ export interface UserProfile {
   height: number; // in cm
   targetWeight?: number; // in kg
   targetBodyFat?: number; // in %
+  targetCalories?: number; // in kcal
+  targetProtein?: number; // in g
+  weeklyWorkoutGoalDays?: number; // default: 4 days/week
   createdAt: Date;
   trainingProfile?: string;
 }

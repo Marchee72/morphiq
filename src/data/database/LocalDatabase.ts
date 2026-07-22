@@ -165,7 +165,7 @@ export class FoodLogRepository implements IFoodLogRepository {
   }
 
   async getAll(profileId: string, date?: Date): Promise<FoodLog[]> {
-    let query = db.foodLogs.where('profileId').equals(profileId);
+    const query = db.foodLogs.where('profileId').equals(profileId);
     let logs = await query.toArray();
 
     if (date) {
@@ -193,7 +193,7 @@ export class WorkoutLogRepository implements IWorkoutLogRepository {
   }
 
   async getAll(profileId: string, date?: Date): Promise<WorkoutLog[]> {
-    let query = db.workoutLogs.where('profileId').equals(profileId);
+    const query = db.workoutLogs.where('profileId').equals(profileId);
     let logs = await query.toArray();
 
     if (date) {
@@ -213,7 +213,7 @@ export class WorkoutLogRepository implements IWorkoutLogRepository {
       const t = l.timestamp.getTime();
       return t >= startMs && t <= endMs;
     });
-    filtered.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    filtered.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     return filtered.map(l => ({ ...l, id: l.id?.toString() }));
   }
 

@@ -32,11 +32,11 @@ describe('App shell', () => {
     expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument();
   });
 
-  it('switches to Gym placeholder', async () => {
+  it('switches to Gym tab', async () => {
     await seedProfile();
     render(<App />);
     fireEvent.click(await screen.findByRole('button', { name: 'Gym' }));
-    expect(await screen.findByText(/arriving in slice 3/i)).toBeInTheDocument();
+    expect(await screen.findByText(/ready to train\?/i)).toBeInTheDocument();
   });
 
   it('opens Settings from gear and switches profile', async () => {
@@ -44,7 +44,7 @@ describe('App shell', () => {
     await db.userProfiles.add({ name: 'Sam', gender: 'female', birthDate: new Date('1992-05-10'), height: 168, createdAt: new Date() });
     render(<App />);
     fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
-    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Configuración' })).toBeInTheDocument();
     fireEvent.click(screen.getByText('Sam'));
     await waitFor(() => {
       expect(useStore.getState().activeProfile?.name).toBe('Sam');
