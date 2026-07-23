@@ -15,6 +15,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
+    exclude: ['e2e/**', 'server/**', 'node_modules/**'],
     env: {
       VITE_DB_TYPE: 'local',
     },

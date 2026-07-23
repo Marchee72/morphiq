@@ -1,20 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-
-type ThemeMode = 'system' | 'dark' | 'light';
-
-interface ThemeContextValue {
-  mode: ThemeMode;
-  setMode: (mode: ThemeMode) => void;
-  resolved: 'dark' | 'light';
-}
-
-const ThemeContext = createContext<ThemeContextValue>({
-  mode: 'system',
-  setMode: () => {},
-  resolved: 'dark',
-});
-
-export const useTheme = () => useContext(ThemeContext);
+import React, { useEffect, useState } from 'react';
+import { ThemeContext, type ThemeContextValue, type ThemeMode } from './useTheme';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [mode, setModeState] = useState<ThemeMode>(() => {
@@ -47,8 +32,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('morphiq_theme', newMode);
   };
 
+  const ctx: ThemeContextValue = { mode, setMode, resolved };
+
   return (
-    <ThemeContext.Provider value={{ mode, setMode, resolved }}>
+    <ThemeContext.Provider value={ctx}>
       {children}
     </ThemeContext.Provider>
   );
