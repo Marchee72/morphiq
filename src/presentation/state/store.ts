@@ -14,6 +14,7 @@ import {
   MessageRepository,
   WorkoutSetRepository,
   FavoriteExerciseRepository,
+  RoutineTemplateRepository,
 } from '../../data/database/LocalDatabase';
 import {
   ServerUserProfileRepository,
@@ -23,7 +24,9 @@ import {
   ServerMessageRepository,
   ServerWorkoutSetRepository,
   ServerFavoriteExerciseRepository,
+  ServerRoutineTemplateRepository,
 } from '../../data/database/ServerDatabase';
+import type { RoutineTemplate, RoutineExerciseItem } from '../../core/entities/RoutineTemplate';
 import { DeepSeekCoach, chatCompletion, buildProviderFromEnv } from '../../data/ai/GeminiCoach';
 import { generateMockMeasurements, generateMockFoodLogs, generateMockWorkouts } from '../../data/mock/mockData';
 
@@ -38,9 +41,31 @@ const workoutRepo = isServer ? new ServerWorkoutLogRepository() : new WorkoutLog
 const messageRepo = isServer ? new ServerMessageRepository() : new MessageRepository();
 const workoutSetRepo = isServer ? new ServerWorkoutSetRepository() : new WorkoutSetRepository();
 const favoriteRepo = isServer ? new ServerFavoriteExerciseRepository() : new FavoriteExerciseRepository();
+const routineTemplateRepo = isServer ? new ServerRoutineTemplateRepository() : new RoutineTemplateRepository();
+
 
 // AI Coach adapter
 const aiCoach = new DeepSeekCoach();
+
+export interface ActiveSessionExercise {
+  id: string;
+  exerciseId?: string;
+  exerciseName: string;
+  targetSets: number;
+  targetReps?: number;
+  targetWeight?: number;
+  notes?: string;
+  biserieGroupId?: string;
+}
+
+export interface HistoricalExerciseStats {
+  prWeight: number;
+  prReps: number;
+  lastSessionDate?: Date;
+  lastMaxWeight?: number;
+  lastMinWeight?: number;
+  lastSets?: { weight: number; reps: number }[];
+}
 
 interface StoreState {
   profiles: UserProfile[];
@@ -51,6 +76,7 @@ interface StoreState {
   workoutHistory: WorkoutLog[];
   chatHistory: Message[];
   favoriteExerciseIds: string[];
+  savedRoutines: RoutineTemplate[];
   activeWorkoutSets: Record<string, WorkoutSet[]>;
   exerciseStats: Record<string, { maxWeight: number; avgWeight: number; avgReps: number } | null>;
 
@@ -66,7 +92,11 @@ interface StoreState {
   activeSession: {
     startTime: Date;
     workoutType: string;
+    routineSource?: 'coach' | 'manual' | 'template';
+    routineExercises?: ActiveSessionExercise[];
     sets: Omit<WorkoutSet, 'profileId' | 'timestamp' | 'workoutLogId'>[];
+    feelingTag?: 'feeling_100' | 'good' | 'sore' | 'pain' | 'low_energy';
+    bodyNotes?: string;
   } | null;
 
   // Actions
@@ -76,9 +106,21 @@ interface StoreState {
   setActiveWorkout: (workout: WorkoutLog | null) => void;
   setIsGymModeOpen: (open: boolean) => void;
   startActiveSession: (workoutType?: string) => void;
+  startActiveSessionWithRoutine: (routine: { title: string; description?: string; targetMuscles?: string[]; exercises: RoutineExerciseItem[] }) => void;
+  reorderActiveSessionExercises: (fromIndex: number, toIndex: number) => void;
+  swapActiveSessionExercise: (index: number, newExercise: { id?: string; name: string }) => void;
+  addActiveSessionExercise: (exercise: { id?: string; name: string }) => void;
+  removeActiveSessionExercise: (index: number) => void;
   updateActiveSessionSets: (sets: Omit<WorkoutSet, 'profileId' | 'timestamp' | 'workoutLogId'>[]) => void;
+  updateActiveSessionNote: (feelingTag?: 'feeling_100' | 'good' | 'sore' | 'pain' | 'low_energy', bodyNotes?: string) => void;
+  linkBiserieExercises: (exId1: string, exId2: string) => void;
+  unlinkBiserieExercise: (exId: string) => void;
+  getExerciseStats: (exerciseName: string) => HistoricalExerciseStats | null;
   finishActiveSession: () => Promise<void>;
   dismissActiveSession: () => void;
+  loadSavedRoutines: () => Promise<void>;
+  saveRoutineTemplate: (routine: Omit<RoutineTemplate, 'profileId' | 'createdAt'>) => Promise<string>;
+  deleteRoutineTemplate: (id: string) => Promise<void>;
   loadProfiles: () => Promise<void>;
   setActiveProfile: (id: string) => Promise<void>;
   createProfile: (profile: Omit<UserProfile, 'createdAt'>) => Promise<string>;
@@ -128,6 +170,7 @@ interface StoreState {
   setSelectedDate: (date: Date) => Promise<void>;
 }
 
+
 const getInitialTheme = (): 'system' | 'dark' | 'light' => {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('morphiq_theme');
@@ -156,6 +199,7 @@ export const useStore = create<StoreState>((set, get) => ({
   workoutHistory: [],
   chatHistory: [],
   favoriteExerciseIds: [],
+  savedRoutines: [],
   activeWorkoutSets: {},
   exerciseStats: {},
   theme: getInitialTheme(),
@@ -183,11 +227,200 @@ export const useStore = create<StoreState>((set, get) => ({
     });
   },
 
+  startActiveSessionWithRoutine: (routine) => {
+    const routineExercises: ActiveSessionExercise[] = (routine.exercises || []).map((ex, idx) => ({
+      id: `ex_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+      exerciseId: ex.exerciseId,
+      exerciseName: ex.exerciseName,
+      targetSets: ex.targetSets || 3,
+      targetReps: ex.targetReps,
+      notes: ex.notes,
+    }));
+
+    set({
+      activeSession: {
+        startTime: new Date(),
+        workoutType: routine.title || 'Coach Routine',
+        routineSource: 'coach',
+        routineExercises,
+        sets: [],
+      },
+      activeTab: 'gym',
+      isGymModeOpen: true,
+    });
+  },
+
+  reorderActiveSessionExercises: (fromIndex, toIndex) => {
+    const session = get().activeSession;
+    if (!session || !session.routineExercises) return;
+    const list = [...session.routineExercises];
+    if (fromIndex < 0 || fromIndex >= list.length || toIndex < 0 || toIndex >= list.length) return;
+    const [moved] = list.splice(fromIndex, 1);
+    list.splice(toIndex, 0, moved);
+    set({ activeSession: { ...session, routineExercises: list } });
+  },
+
+  swapActiveSessionExercise: (index, newExercise) => {
+    const session = get().activeSession;
+    if (!session || !session.routineExercises) return;
+    const list = [...session.routineExercises];
+    if (index < 0 || index >= list.length) return;
+    list[index] = {
+      ...list[index],
+      exerciseId: newExercise.id,
+      exerciseName: newExercise.name,
+    };
+    set({ activeSession: { ...session, routineExercises: list } });
+  },
+
+  addActiveSessionExercise: (exercise) => {
+    const session = get().activeSession;
+    if (!session) return;
+    const list = session.routineExercises ? [...session.routineExercises] : [];
+    const newEx: ActiveSessionExercise = {
+      id: `ex_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      targetSets: 3,
+    };
+    set({ activeSession: { ...session, routineExercises: [...list, newEx] } });
+  },
+
+  removeActiveSessionExercise: (index) => {
+    const session = get().activeSession;
+    if (!session || !session.routineExercises) return;
+    const list = session.routineExercises.filter((_, i) => i !== index);
+    set({ activeSession: { ...session, routineExercises: list } });
+  },
+
+  loadSavedRoutines: async () => {
+    const profile = get().activeProfile;
+    if (!profile || !profile.id) {
+      set({ savedRoutines: [] });
+      return;
+    }
+    const routines = await routineTemplateRepo.getAll(profile.id);
+    set({ savedRoutines: routines });
+  },
+
+  saveRoutineTemplate: async (routine) => {
+    const profile = get().activeProfile;
+    if (!profile || !profile.id) throw new Error('No active profile');
+    const newRoutine: RoutineTemplate = {
+      ...routine,
+      profileId: profile.id,
+      createdAt: new Date(),
+    };
+    const id = await routineTemplateRepo.save(newRoutine);
+    await get().loadSavedRoutines();
+    return id;
+  },
+
+  deleteRoutineTemplate: async (id) => {
+    await routineTemplateRepo.delete(id);
+    await get().loadSavedRoutines();
+  },
+
   updateActiveSessionSets: (sets) => {
     const session = get().activeSession;
     if (session) {
       set({ activeSession: { ...session, sets } });
     }
+  },
+
+  updateActiveSessionNote: (feelingTag, bodyNotes) => {
+    const session = get().activeSession;
+    if (session) {
+      set({ activeSession: { ...session, feelingTag, bodyNotes } });
+    }
+  },
+
+  linkBiserieExercises: (exId1, exId2) => {
+    const session = get().activeSession;
+    if (!session || !session.routineExercises) return;
+    const groupId = `biserie_${Date.now()}`;
+    const updated = session.routineExercises.map(ex => {
+      if (ex.id === exId1 || ex.id === exId2) {
+        return { ...ex, biserieGroupId: groupId };
+      }
+      return ex;
+    });
+    set({ activeSession: { ...session, routineExercises: updated } });
+  },
+
+  unlinkBiserieExercise: (exId) => {
+    const session = get().activeSession;
+    if (!session || !session.routineExercises) return;
+    const targetEx = session.routineExercises.find(ex => ex.id === exId);
+    if (!targetEx || !targetEx.biserieGroupId) return;
+    const groupId = targetEx.biserieGroupId;
+    const updated = session.routineExercises.map(ex => {
+      if (ex.biserieGroupId === groupId) {
+        const { biserieGroupId: _, ...rest } = ex;
+        return rest;
+      }
+      return ex;
+    });
+    set({ activeSession: { ...session, routineExercises: updated } });
+  },
+
+  getExerciseStats: (exerciseName: string) => {
+    if (!exerciseName) return null;
+    const norm = exerciseName.trim().toLowerCase();
+    const allSets: { set: WorkoutSet; date: Date }[] = [];
+    const setsByWorkout: Record<string, { date: Date; sets: WorkoutSet[] }> = {};
+
+    const workoutSets = get().activeWorkoutSets;
+    const history = get().workoutHistory;
+
+    for (const w of history) {
+      if (!w.id) continue;
+      const sets = workoutSets[w.id] || [];
+      const matching = sets.filter(s => s.exerciseName.trim().toLowerCase() === norm);
+      if (matching.length > 0) {
+        setsByWorkout[w.id] = { date: new Date(w.timestamp), sets: matching };
+        for (const s of matching) {
+          allSets.push({ set: s, date: new Date(w.timestamp) });
+        }
+      }
+    }
+
+    if (allSets.length === 0) return null;
+
+    let prWeight = 0;
+    let prReps = 0;
+    for (const item of allSets) {
+      const w = item.set.weight || 0;
+      const r = item.set.reps || 0;
+      if (w > prWeight || (w === prWeight && r > prReps)) {
+        prWeight = w;
+        prReps = r;
+      }
+    }
+
+    const sortedWorkouts = Object.values(setsByWorkout).sort((a, b) => b.date.getTime() - a.date.getTime());
+    const lastSession = sortedWorkouts[0];
+    let lastMaxWeight: number | undefined;
+    let lastMinWeight: number | undefined;
+    let lastSets: { weight: number; reps: number }[] = [];
+
+    if (lastSession) {
+      const weights = lastSession.sets.map(s => s.weight).filter((w): w is number => w != null && w > 0);
+      if (weights.length > 0) {
+        lastMaxWeight = Math.max(...weights);
+        lastMinWeight = Math.min(...weights);
+      }
+      lastSets = lastSession.sets.map(s => ({ weight: s.weight || 0, reps: s.reps || 0 }));
+    }
+
+    return {
+      prWeight,
+      prReps,
+      lastSessionDate: lastSession?.date,
+      lastMaxWeight,
+      lastMinWeight,
+      lastSets,
+    };
   },
 
   finishActiveSession: async () => {
@@ -199,8 +432,10 @@ export const useStore = create<StoreState>((set, get) => ({
     const logId = await get().addWorkoutLog({
       type: session.workoutType,
       duration: durationMinutes,
-      description: `${session.sets.length} sets completed`,
+      description: session.bodyNotes ? `${session.sets.length} sets completed. Note: ${session.bodyNotes}` : `${session.sets.length} sets completed`,
       source: 'manual',
+      feelingTag: session.feelingTag,
+      bodyNotes: session.bodyNotes,
     });
 
     for (const setItem of session.sets) {
@@ -212,6 +447,8 @@ export const useStore = create<StoreState>((set, get) => ({
         weight: setItem.weight,
         reps: setItem.reps,
         notes: setItem.notes,
+        biserieGroupId: setItem.biserieGroupId,
+        isCompleted: setItem.isCompleted,
       });
     }
 
@@ -221,6 +458,7 @@ export const useStore = create<StoreState>((set, get) => ({
   dismissActiveSession: () => {
     set({ activeSession: null, isGymModeOpen: false });
   },
+
 
   selectedDate: new Date(),
   apiKey: (import.meta.env?.VITE_DEEPSEEK_API_KEY as string) || '',
@@ -309,8 +547,10 @@ export const useStore = create<StoreState>((set, get) => ({
         activeWorkout,
       });
       get().loadFavorites();
+      get().loadSavedRoutines();
     }
   },
+
 
   createProfile: async (profileData) => {
     const newId = await profileRepo.create({

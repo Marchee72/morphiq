@@ -35,7 +35,14 @@ export function buildFullCoachContext(data: CoachContextData): string {
     lines.push('Sin perfil activo');
   }
 
-  // 2. Composición Corporal & BIA
+  // 2. Available Gym Equipment
+  if (data.profile?.availableEquipment && data.profile.availableEquipment.length > 0) {
+    lines.push('\n--- EQUIPAMIENTO DISPONIBLE EN EL GIMNASIO ---');
+    lines.push(`• Equipos configurados: ${data.profile.availableEquipment.join(', ')}`);
+    lines.push('IMPORTANTE: SOLO sugiere ejercicios que utilicen este equipamiento. No sugieras ejercicios que requieran equipamiento no listado.');
+  }
+
+  // 3. Composición Corporal & BIA
   lines.push('\n--- COMPOSICIÓN CORPORAL (BIA) ---');
   if (data.measurements && data.measurements.length > 0) {
     const sorted = [...data.measurements].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -56,7 +63,7 @@ export function buildFullCoachContext(data: CoachContextData): string {
     lines.push('Sin registros de peso o BIA.');
   }
 
-  // 3. Nutrición (últimos 7 días)
+  // 4. Nutrición (últimos 7 días)
   lines.push('\n--- RESUMEN NUTRICIONAL (7 DÍAS) ---');
   if (data.foodLogs && data.foodLogs.length > 0) {
     const totalCal = data.foodLogs.reduce((sum, f) => sum + (f.calories || 0), 0);
@@ -79,7 +86,7 @@ export function buildFullCoachContext(data: CoachContextData): string {
     lines.push('Sin registros de nutrición recientes.');
   }
 
-  // 4. Entrenamientos (últimos 14 días)
+  // 5. Entrenamientos (últimos 14 días)
   lines.push('\n--- ENTRENAMIENTO Y GIMNASIO (14 DÍAS) ---');
   if (data.workoutLogs && data.workoutLogs.length > 0) {
     const sortedWorkouts = [...data.workoutLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -112,6 +119,7 @@ export function buildFullCoachContext(data: CoachContextData): string {
   }
 
   lines.push('\nInstrucciones para el Coach: Responde siempre en español, de forma concisa, motivadora y basada estrictamente en los datos del usuario precedentes.');
+  lines.push('Cuando sugieras una rutina de ejercicios, formatea cada ejercicio como una lista con nombre, series, repeticiones y peso sugerido.');
   lines.push('=========================================================\n');
 
   return lines.join('\n');

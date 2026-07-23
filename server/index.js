@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
@@ -8,6 +8,9 @@ import { dirname, join } from 'path';
 
 const { Pool } = pg;
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+dotenv.config({ path: join(__dirname, '.env') });
+dotenv.config();
 
 // ─── Logging Utility ─────────────────────────────────────────────────────────
 const LOG_FILE = join(__dirname, 'app.log');
@@ -30,13 +33,22 @@ function logToFile(level, message, stack = null, context = null) {
 }
 
 // ─── Database Connection ───────────────────────────────────────────────────────
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'morphiq',
-  user: process.env.DB_USER || 'morphiq',
-  password: process.env.DB_PASSWORD || 'morphiq_secret_2024',
-});
+const poolConfig = process.env.DATABASE_URL
+  ? {
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DATABASE_URL.includes('sslmode=require') || process.env.DATABASE_URL.includes('neon.tech')
+        ? { rejectUnauthorized: false }
+        : undefined,
+    }
+  : {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME || 'morphiq',
+      user: process.env.DB_USER || 'morphiq',
+      password: process.env.DB_PASSWORD || 'morphiq_secret_2024',
+    };
+
+const pool = new Pool(poolConfig);
 
 async function initDb() {
   try {
@@ -480,6 +492,56 @@ app.delete('/api/exercise-favorites', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Routine Templates ────────────────────────────────────────────────────────
+app.get('/api/profiles/:profileId/routines', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM routine_templates WHERE "profileId" = $1 ORDER BY "createdAt" DESC',
+      [req.params.profileId]
+    );
+    res.json(rows.map(r => ({ ...r, id: r.id.toString(), createdAt: r.createdAt })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/routines/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM routine_templates WHERE id = $1',
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Routine not found' });
+    res.json({ ...rows[0], id: rows[0].id.toString(), createdAt: rows[0].createdAt });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/routines', async (req, res) => {
+  const r = req.body;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO routine_templates ("profileId", title, description, "targetMuscles", exercises, "createdAt")
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
+        r.profileId,
+        r.title,
+        r.description || '',
+        JSON.stringify(r.targetMuscles || []),
+        JSON.stringify(r.exercises || []),
+        r.createdAt || new Date(),
+      ]
+    );
+    res.status(201).json({ ...rows[0], id: rows[0].id.toString(), createdAt: rows[0].createdAt });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/routines/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM routine_templates WHERE id = $1', [req.params.id]);
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+
 // ─── Error Handling Middleware ────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   logToFile('SERVER_ERROR', err.message, err.stack, { url: req.url, method: req.method });
@@ -488,13 +550,21 @@ app.use((err, req, res, next) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-initDb()
-  .then(() => {
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 MorphIQ API server running on port ${PORT}`);
+if (!process.env.VERCEL) {
+  initDb()
+    .then(() => {
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`🚀 MorphIQ API server running on port ${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error('❌ Failed to initialize database:', err);
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error('❌ Failed to initialize database:', err);
-    process.exit(1);
+} else {
+  initDb().catch((err) => {
+    console.error('❌ Failed to initialize database on Vercel cold start:', err);
   });
+}
+
+export default app;

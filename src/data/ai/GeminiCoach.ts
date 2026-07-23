@@ -1,6 +1,45 @@
 import type { ICoachAgentService, AgentContext } from '../../core/interfaces/IAgent';
 import { getAge } from '../../core/entities/UserProfile';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
+import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
+
+export function parseRoutineFromMessage(content: string): RoutineTemplate | null {
+  if (!content) return null;
+  const routineJsonRegex = /```(?:json:routine|json)\s*\n?([\s\S]*?)\n?```/i;
+  const match = content.match(routineJsonRegex);
+  
+  const jsonString = match
+    ? match[1].trim()
+    : (content.trim().startsWith('{') && content.trim().endsWith('}') ? content.trim() : '');
+
+  if (!jsonString) return null;
+
+  try {
+    const data = JSON.parse(jsonString);
+    if (data && typeof data === 'object' && Array.isArray(data.exercises) && data.exercises.length > 0) {
+      return {
+        id: data.id || undefined,
+        profileId: data.profileId || '',
+        title: data.title || 'Rutina Sugerida por Coach',
+        description: data.description || '',
+        targetMuscles: Array.isArray(data.targetMuscles) ? data.targetMuscles : [],
+        exercises: data.exercises.map((ex: Record<string, unknown>) => ({
+          exerciseId: String(ex.exerciseId || ex.id || ''),
+          exerciseName: String(ex.exerciseName || ex.name || 'Ejercicio'),
+          targetSets: Number(ex.targetSets || ex.sets || 3),
+          targetReps: ex.targetReps != null ? Number(ex.targetReps) : undefined,
+          notes: ex.notes ? String(ex.notes) : undefined,
+        })),
+        createdAt: data.createdAt ? new Date(data.createdAt as string) : new Date(),
+      };
+    }
+  } catch {
+    // Ignore JSON parse error
+  }
+  return null;
+}
+
+
 
 // ─── LLM Provider Config ───────────────────────────────────────────────────
 export interface LLMProviderConfig {
@@ -92,6 +131,11 @@ ${profile.targetWeight ? `- Target Weight: ${profile.targetWeight.toFixed(2)} kg
 
 === ATHLETE PROFILE & TRAINING SUMMARY ===
 ${profile.trainingProfile || 'No specific training profile summary or custom goals provided yet.'}
+
+=== AVAILABLE GYM EQUIPMENT ===
+${profile.availableEquipment && profile.availableEquipment.length > 0
+    ? `Configured equipment: ${profile.availableEquipment.join(', ')}\nIMPORTANT: ONLY suggest exercises that use this equipment. Do NOT suggest exercises requiring equipment not listed.`
+    : 'No equipment configured — all equipment types are available.'}
 
 === LATEST MEASUREMENT (Xiaomi Scale 2) ===
 `;
@@ -192,12 +236,27 @@ ${profile.trainingProfile || 'No specific training profile summary or custom goa
 
   prompt += `
 === CONVERSATION RULES ===
-1. Keep responses highly personalized to the user's specific BIA metrics (inject reference stats like BMR, BMR limits, protein, and water).
-2. Ground your advice in sports science (e.g., progressive overload, caloric deficits/surpluses, protein intake targets like 1.6-2.2g per kg of bodyweight).
-3. Check the user's training goals and style (Athlete Profile & Training Summary) before answering. Tailor exercise recommendations, volume recommendations, and frequency to their goals.
-4. If they ask about recipes or workouts, give clean bulleted routines or macro breakdowns.
-5. Keep the tone encouraging, technical, yet directly actionable. Do not add general placeholders or boilerplate disclaimers at the end of every response.
+1. BE HIGHLY CONCISE, DIRECT, AND CONCISE. Avoid long conversational preambles, repeated greetings, or verbose introductory fluff.
+2. Keep responses personalized using exact user BIA metrics (BMR, body fat %, muscle mass, protein targets).
+3. Ground all advice in sports science (progressive overload, 1.6-2.2g protein/kg, calorie targets).
+4. STRICTLY FOCUS ON STRENGTH TRAINING & HYPERTROPHY. Do NOT generate or recommend HIIT, cardio, calisthenics, or endurance routines. ONLY generate weight and resistance strength routines.
+5. Use clear markdown bullet points and short paragraphs for fast scanning.
+6. When recommending a gym routine, write ONLY 1 brief introductory sentence in text. Do NOT write markdown tables or bulleted exercise lists in text. ALWAYS append a structured JSON routine code block using tag \`\`\`json:routine:
+\`\`\`json:routine
+{
+  "title": "Nombre de la Rutina",
+  "description": "Breve descripción",
+  "targetMuscles": ["Chest", "Triceps"],
+  "exercises": [
+    { "exerciseId": "0025", "exerciseName": "barbell bench press", "targetSets": 4, "targetReps": 10, "notes": "Sobrecarga progresiva" }
+  ]
+}
+\`\`\`
+7. Do NOT add disclaimers, boilerplate summaries, or repeated sign-offs at the end.
 `;
+
+
+
 
   if (userMessage) {
     prompt += `
@@ -211,7 +270,7 @@ ${userMessage}
 
 // ─── Coach Service Implementation ────────────────────────────────────────
 const COACH_SYSTEM_PROMPT =
-  "You are MorphIQ, a professional sports nutritionist and gym coach. Answer user's questions about their fitness and nutrition based on their body composition logs.";
+  "You are MorphIQ, a concise, high-efficiency sports nutritionist and strength coach specialized exclusively in strength training, muscle hypertrophy, and weightlifting. Never recommend HIIT or calisthenics routines.";
 
 export class MorphIQCoach implements ICoachAgentService {
   async generateResponse(context: AgentContext, userMessage: string, apiKey: string): Promise<string> {

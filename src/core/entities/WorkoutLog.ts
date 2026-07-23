@@ -13,6 +13,10 @@ export interface WorkoutLog {
   maxHeartRate?: number;
   source?: 'manual' | 'health-connect';  // track origin
   externalId?: string;    // Health Connect record ID (for dedup)
+
+  // Gym session day state
+  feelingTag?: 'feeling_100' | 'good' | 'sore' | 'pain' | 'low_energy';
+  bodyNotes?: string;
 }
 
 export function formatWorkoutDuration(minutes: number): string {

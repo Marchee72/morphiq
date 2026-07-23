@@ -5,6 +5,7 @@ import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { Message } from '../../core/entities/Message';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import type { FavoriteExercise } from '../../core/entities/FavoriteExercise';
+import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
 import type {
   IUserProfileRepository,
   IMeasurementRepository,
@@ -13,12 +14,22 @@ import type {
   IMessageRepository,
   IWorkoutSetRepository,
   IFavoriteExerciseRepository,
+  IRoutineTemplateRepository,
 } from '../../core/interfaces/IDatabase';
 
-const API_URL = (import.meta.env?.VITE_API_URL as string) || 'http://localhost:3000';
+function getApiUrl(): string {
+  let url = (import.meta.env?.VITE_API_URL as string) || 'http://192.168.100.142:3000';
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    if (url.includes('localhost') || url.includes('127.0.0.1')) {
+      url = url.replace('localhost', '192.168.100.142').replace('127.0.0.1', '192.168.100.142');
+    }
+  }
+  return url;
+}
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const baseUrl = getApiUrl();
+  const res = await fetch(`${baseUrl}${path}`, {
     headers: { 
       'Content-Type': 'application/json',
       'ngrok-skip-browser-warning': 'true'
@@ -201,7 +212,9 @@ export class ServerWorkoutLogRepository implements IWorkoutLogRepository {
     const rows = await api<Record<string, unknown>[]>(
       `/api/profiles/${profileId}/workout-logs${query}`
     );
-    return rows.map(parseWorkoutLog);
+    const logs = rows.map(parseWorkoutLog);
+    logs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return logs;
   }
 
   async delete(id: string): Promise<void> {
@@ -301,4 +314,40 @@ export class ServerFavoriteExerciseRepository implements IFavoriteExerciseReposi
     return rows.map(parseFavoriteExercise);
   }
 }
+
+function parseRoutineTemplate(raw: Record<string, unknown>): RoutineTemplate {
+  return {
+    ...raw,
+    id: String(raw.id),
+    createdAt: new Date(raw.createdAt as string),
+    exercises: typeof raw.exercises === 'string' ? JSON.parse(raw.exercises) : (raw.exercises || []),
+    targetMuscles: typeof raw.targetMuscles === 'string' ? JSON.parse(raw.targetMuscles) : (raw.targetMuscles || []),
+  } as RoutineTemplate;
+}
+
+export class ServerRoutineTemplateRepository implements IRoutineTemplateRepository {
+  async save(routine: RoutineTemplate): Promise<string> {
+    const result = await api<{ id: string }>('/api/routines', {
+      method: 'POST',
+      body: JSON.stringify(routine),
+    });
+    return result.id;
+  }
+
+  async getAll(profileId: string): Promise<RoutineTemplate[]> {
+    const rows = await api<Record<string, unknown>[]>(`/api/profiles/${profileId}/routines`);
+    return rows.map(parseRoutineTemplate);
+  }
+
+  async get(id: string): Promise<RoutineTemplate | undefined> {
+    const raw = await api<Record<string, unknown>>(`/api/routines/${id}`);
+    if (!raw) return undefined;
+    return parseRoutineTemplate(raw);
+  }
+
+  async delete(id: string): Promise<void> {
+    await api(`/api/routines/${id}`, { method: 'DELETE' });
+  }
+}
+
 

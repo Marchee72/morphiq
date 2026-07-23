@@ -39,6 +39,7 @@
             android:resource="@array/health_permissions" />
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+            android:screenOrientation="portrait"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
@@ -76,7 +77,23 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Active Workout Native Foreground Service for Samsung Lock Screen Now Bar -->
+        <service
+            android:name=".ActiveWorkoutService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse|health">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Live Workout Tracker for Samsung Lock Screen Now Bar" />
+        </service>
     </application>
+
+    <!-- Foreground Service Permissions for Native Live Chronometer & Samsung Now Bar -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
 
     <uses-permission android:name="android.permission.INTERNET" />
 

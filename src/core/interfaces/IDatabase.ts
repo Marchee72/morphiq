@@ -49,10 +49,19 @@ export interface IWorkoutSetRepository {
 }
 
 import type { FavoriteExercise } from '../entities/FavoriteExercise';
+import type { RoutineTemplate } from '../entities/RoutineTemplate';
 
 export interface IFavoriteExerciseRepository {
   add(favorite: FavoriteExercise): Promise<string>;
   remove(profileId: string, exerciseId: string): Promise<void>;
   getAll(profileId: string): Promise<FavoriteExercise[]>;
 }
+
+export interface IRoutineTemplateRepository {
+  save(routine: RoutineTemplate): Promise<string>;
+  getAll(profileId: string): Promise<RoutineTemplate[]>;
+  get(id: string): Promise<RoutineTemplate | undefined>;
+  delete(id: string): Promise<void>;
+}
+
 

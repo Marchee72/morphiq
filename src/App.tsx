@@ -18,6 +18,8 @@ import { CapacitorHealthProvider } from './data/health/CapacitorHealthProvider';
 import { WebHealthProvider } from './data/health/WebHealthProvider';
 import { FloatingWorkoutBar } from './features/gym/FloatingWorkoutBar';
 
+import { LiveWorkoutScreen } from './features/gym/LiveWorkoutScreen';
+
 const NAV_ITEMS = [
   { id: 'home', label: 'Home', icon: <LayoutDashboard size={22} /> },
   { id: 'gym', label: 'Gym', icon: <Dumbbell size={22} /> },
@@ -28,7 +30,18 @@ const NAV_ITEMS = [
 type TabId = (typeof NAV_ITEMS)[number]['id'];
 
 function App() {
-  const { loadProfiles, profiles, activeProfile, activeTab, setActiveTab, addFoodLog, addManualMeasurement, startActiveSession } = useStore();
+  const {
+    loadProfiles,
+    profiles,
+    activeProfile,
+    activeTab,
+    setActiveTab,
+    addFoodLog,
+    addManualMeasurement,
+    startActiveSession,
+    isGymModeOpen,
+    setIsGymModeOpen,
+  } = useStore();
   const [showSplash, setShowSplash] = useState(true);
   const [splashExiting, setSplashExiting] = useState(false);
   const [foodOpen, setFoodOpen] = useState(false);
@@ -163,6 +176,7 @@ function App() {
         {activeTab === 'settings' && <SettingsScreen />}
       </main>
       <FloatingWorkoutBar />
+      <LiveWorkoutScreen isOpen={isGymModeOpen} onClose={() => setIsGymModeOpen(false)} />
       <BottomNav
         items={[...NAV_ITEMS]}
         activeId={activeTab}

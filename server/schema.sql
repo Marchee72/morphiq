@@ -115,3 +115,14 @@ ALTER TABLE workout_sets ADD COLUMN IF NOT EXISTS "exerciseId" TEXT;
 
 DROP TABLE IF EXISTS user_exercises;
 
+CREATE TABLE IF NOT EXISTS routine_templates (
+  id SERIAL PRIMARY KEY,
+  "profileId" TEXT NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  "targetMuscles" JSONB DEFAULT '[]',
+  exercises JSONB NOT NULL DEFAULT '[]',
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+

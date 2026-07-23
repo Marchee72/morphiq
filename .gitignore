@@ -27,3 +27,14 @@ dist-ssr
 .agents/
 .superpowers/
 
+# Deployment
+.vercel
+
+# Secrets (API keys, DB credentials)
+.env
+
+# Temporary / generated artifacts
+scratch/
+test-results/
+playwright-report/
+e2e/screenshots/

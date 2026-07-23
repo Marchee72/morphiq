@@ -7,6 +7,7 @@ import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { Message } from '../../core/entities/Message';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import type { FavoriteExercise } from '../../core/entities/FavoriteExercise';
+import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
 import type {
   IUserProfileRepository,
   IMeasurementRepository,
@@ -15,6 +16,7 @@ import type {
   IMessageRepository,
   IWorkoutSetRepository,
   IFavoriteExerciseRepository,
+  IRoutineTemplateRepository,
 } from '../../core/interfaces/IDatabase';
 
 
@@ -26,6 +28,7 @@ export class DexieDatabase extends Dexie {
   messages!: Table<Message, number>;
   workoutSets!: Table<WorkoutSet, number>;
   favoriteExercises!: Table<FavoriteExercise, number>;
+  routineTemplates!: Table<RoutineTemplate, number>;
 
   constructor() {
     super('MorphIQDatabase');
@@ -72,6 +75,17 @@ export class DexieDatabase extends Dexie {
       workoutSets: '++id, workoutLogId, profileId, exerciseName, exerciseId, timestamp',
       userExercises: null,
       favoriteExercises: '++id, profileId, exerciseId, addedAt',
+    });
+    this.version(6).stores({
+      userProfiles: '++id, name, gender, birthDate, height, createdAt',
+      measurements: '++id, profileId, timestamp, weight, impedance',
+      foodLogs: '++id, profileId, timestamp, mealType',
+      workoutLogs: '++id, profileId, timestamp, type',
+      messages: '++id, profileId, timestamp, sender',
+      workoutSets: '++id, workoutLogId, profileId, exerciseName, exerciseId, timestamp',
+      userExercises: null,
+      favoriteExercises: '++id, profileId, exerciseId, addedAt',
+      routineTemplates: '++id, profileId, title, createdAt',
     });
   }
 }
@@ -318,4 +332,34 @@ export class FavoriteExerciseRepository implements IFavoriteExerciseRepository {
     return records.map(r => ({ ...r, id: r.id?.toString() }));
   }
 }
+
+export class RoutineTemplateRepository implements IRoutineTemplateRepository {
+  async save(routine: RoutineTemplate): Promise<string> {
+    const id = await db.routineTemplates.add({
+      ...routine,
+      createdAt: routine.createdAt || new Date(),
+    });
+    return id.toString();
+  }
+
+  async getAll(profileId: string): Promise<RoutineTemplate[]> {
+    const records = await db.routineTemplates
+      .where('profileId')
+      .equals(profileId)
+      .reverse()
+      .sortBy('createdAt');
+    return records.map(r => ({ ...r, id: r.id?.toString() }));
+  }
+
+  async get(id: string): Promise<RoutineTemplate | undefined> {
+    const record = await db.routineTemplates.get(Number(id));
+    if (!record) return undefined;
+    return { ...record, id: record.id?.toString() };
+  }
+
+  async delete(id: string): Promise<void> {
+    await db.routineTemplates.delete(Number(id));
+  }
+}
+
 

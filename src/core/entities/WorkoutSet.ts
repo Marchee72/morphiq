@@ -12,4 +12,6 @@ export interface WorkoutSet {
   speed?: number;        // Speed in km/h or mph
   timestamp: Date;      // Timestamp of log
   notes?: string;
+  biserieGroupId?: string; // Group ID if performed in a superset/biserie
+  isCompleted?: boolean;   // Completion status checkmark
 }

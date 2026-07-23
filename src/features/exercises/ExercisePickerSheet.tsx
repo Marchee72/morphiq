@@ -19,10 +19,11 @@ export const ExercisePickerSheet: React.FC<ExercisePickerSheetProps> = ({
   onClose,
   onSelect,
 }) => {
-  const { favoriteExerciseIds, toggleFavorite } = useStore();
+  const { favoriteExerciseIds, toggleFavorite, activeProfile } = useStore();
   const [catalog, setCatalog] = useState<ExerciseCatalog | null>(null);
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>(undefined);
+  const [filterGymEquipment, setFilterGymEquipment] = useState(false);
   const [previewExercise, setPreviewExercise] = useState<Exercise | null>(null);
 
   useEffect(() => {
@@ -45,10 +46,20 @@ export const ExercisePickerSheet: React.FC<ExercisePickerSheetProps> = ({
       : [];
   }, [catalog, favoriteExerciseIds]);
 
+  const userEquipment = activeProfile?.availableEquipment || [];
+
   const searchResults = useMemo(() => {
     if (!catalog) return [];
-    return catalog.search(query, { category: selectedCategory });
-  }, [catalog, query, selectedCategory]);
+    let results = catalog.search(query, { category: selectedCategory });
+    if (filterGymEquipment && userEquipment.length > 0) {
+      results = results.filter(ex => {
+        if (!ex.equipment) return true;
+        const normEq = ex.equipment.toLowerCase();
+        return userEquipment.some(eq => normEq.includes(eq.toLowerCase()));
+      });
+    }
+    return results;
+  }, [catalog, query, selectedCategory, filterGymEquipment, userEquipment]);
 
   const handleInfoClick = (e: React.MouseEvent, exercise: Exercise) => {
     e.stopPropagation();
@@ -100,11 +111,26 @@ export const ExercisePickerSheet: React.FC<ExercisePickerSheetProps> = ({
               scrollSnapType: 'x mandatory',
             }}
           >
+            {userEquipment.length > 0 && (
+              <Chip
+                selected={filterGymEquipment}
+                onClick={() => setFilterGymEquipment(!filterGymEquipment)}
+                style={{
+                  background: filterGymEquipment ? 'var(--ui-primary)' : 'var(--ui-surface-dim)',
+                  color: filterGymEquipment ? '#FFFFFF' : 'var(--ui-text-primary)',
+                }}
+              >
+                🏋️ Mi Equipamiento
+              </Chip>
+            )}
             <Chip
-              selected={selectedCategory === undefined}
-              onClick={() => setSelectedCategory(undefined)}
+              selected={selectedCategory === undefined && !filterGymEquipment}
+              onClick={() => {
+                setSelectedCategory(undefined);
+                setFilterGymEquipment(false);
+              }}
             >
-              All
+              Todos
             </Chip>
             {facets.categories.map(cat => (
               <Chip

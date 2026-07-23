@@ -27,6 +27,10 @@ export const ExerciseLibraryScreen: React.FC<{ onLogSet?: (exercise: Exercise) =
   const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
     let active = true;
     getExerciseCatalog()
       .then(cat => { if (active) { setCatalog(cat); setLoading(false); } })

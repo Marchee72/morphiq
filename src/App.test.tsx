@@ -36,7 +36,7 @@ describe('App shell', () => {
     await seedProfile();
     render(<App />);
     fireEvent.click(await screen.findByRole('button', { name: 'Gym' }));
-    expect(await screen.findByText(/ready to train\?/i)).toBeInTheDocument();
+    expect(await screen.findByText(/listo para entrenar\?/i)).toBeInTheDocument();
   });
 
   it('opens Settings from gear and switches profile', async () => {

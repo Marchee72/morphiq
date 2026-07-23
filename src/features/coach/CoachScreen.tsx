@@ -3,24 +3,21 @@ import { Sparkles, Send, Bot, User, RefreshCw } from 'lucide-react';
 import { useStore } from '../../presentation/state/store';
 import { AppBar } from '../../ui/primitives/AppBar';
 import { Card } from '../../ui/primitives/Card';
-import { Button } from '../../ui/primitives/Button';
 import { Chip } from '../../ui/primitives/Chip';
-import { buildFullCoachContext } from './CoachContextBuilder';
+import { FormattedMarkdown } from '../../ui/primitives/FormattedMarkdown';
+import { ConfirmDialog } from '../../ui/primitives/ConfirmDialog';
+import { parseRoutineFromMessage } from '../../data/ai/GeminiCoach';
+import { RoutineCard } from './RoutineCard';
 
 const QUICK_PROMPTS = [
+  'Recomendar rutina para hoy',
   'Analizar mi entrenamiento esta semana',
   'Evaluar mi progreso de peso y grasa',
   'Ajustar mi meta de macronutrientes',
-  'Recomendar rutina para hoy',
 ];
 
 export function CoachScreen() {
   const {
-    activeProfile,
-    measurements,
-    foodLogs,
-    workoutLogs,
-    activeWorkoutSets,
     chatHistory,
     isAiLoading,
     sendChatMessage,
@@ -28,11 +25,16 @@ export function CoachScreen() {
   } = useStore();
 
   const [input, setInput] = useState('');
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   };
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -42,17 +44,8 @@ export function CoachScreen() {
     const messageText = (textToSend || input).trim();
     if (!messageText || isAiLoading) return;
 
-    const contextPrefix = buildFullCoachContext({
-      profile: activeProfile,
-      measurements,
-      foodLogs,
-      workoutLogs,
-      activeWorkoutSets,
-    });
-
-    const fullPrompt = `${contextPrefix}\nConsulta del usuario: ${messageText}`;
     setInput('');
-    await sendChatMessage(fullPrompt);
+    await sendChatMessage(messageText);
   };
 
   return (
@@ -62,9 +55,15 @@ export function CoachScreen() {
         overline="Inteligencia corporal personalizada"
         actions={
           chatHistory.length > 0 ? (
-            <Button variant="ghost" size="sm" onClick={() => clearChat()} aria-label="Limpiar chat">
-              <RefreshCw size={16} />
-            </Button>
+            <button
+              type="button"
+              className="ui-icon-btn"
+              onClick={() => setConfirmResetOpen(true)}
+              aria-label="Reiniciar conversación"
+              title="Reiniciar conversación"
+            >
+              <RefreshCw size={20} />
+            </button>
           ) : undefined
         }
       />
@@ -78,17 +77,17 @@ export function CoachScreen() {
         </Card>
       </div>
 
-      {/* Quick Prompts Carousel */}
-      <div style={{ display: 'flex', gap: 8, padding: '0 16px 12px 16px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      {/* Quick Prompts Wrapped Layout */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '0 16px 12px 16px' }}>
         {QUICK_PROMPTS.map((prompt, i) => (
-          <Chip key={i} onClick={() => handleSend(prompt)} style={{ flexShrink: 0, cursor: 'pointer' }}>
+          <Chip key={i} onClick={() => handleSend(prompt)} style={{ cursor: 'pointer', fontSize: 12 }}>
             {prompt}
           </Chip>
         ))}
       </div>
 
       {/* Message Stream */}
-      <div style={{ flex: 1, padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ flex: 1, padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12, overflowX: 'hidden' }}>
         {chatHistory.length === 0 ? (
           <div style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--ui-text-secondary)' }}>
             <div
@@ -116,6 +115,11 @@ export function CoachScreen() {
         ) : (
           chatHistory.map((msg, index) => {
             const isUser = msg.sender === 'user';
+            const parsedRoutine = !isUser ? parseRoutineFromMessage(msg.content) : null;
+            const cleanContent = parsedRoutine
+              ? msg.content.replace(/```(?:json:routine|json)[\s\S]*?```/gi, '').trim()
+              : msg.content;
+
             return (
               <div
                 key={index}
@@ -146,18 +150,34 @@ export function CoachScreen() {
                 <div
                   style={{
                     maxWidth: '82%',
-                    padding: '10px 14px',
-                    borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                    background: isUser ? 'var(--ui-primary)' : 'var(--ui-surface)',
-                    color: isUser ? 'var(--ui-on-primary)' : 'var(--ui-text-primary)',
-                    fontSize: 14,
-                    lineHeight: '1.45',
-                    boxShadow: isUser ? 'none' : '0 1px 3px rgba(0,0,0,0.12)',
-                    whiteSpace: 'pre-wrap',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
                   }}
                 >
-                  {msg.content}
+                  {cleanContent.length > 0 && (
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                        background: isUser ? 'var(--ui-primary)' : 'var(--ui-surface)',
+                        color: isUser ? 'var(--ui-on-primary)' : 'var(--ui-text-primary)',
+                        fontSize: 14,
+                        lineHeight: '1.45',
+                        boxShadow: isUser ? 'none' : '0 1px 3px rgba(0,0,0,0.12)',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                      }}
+                    >
+                      <FormattedMarkdown content={cleanContent} />
+                    </div>
+                  )}
+
+                  {parsedRoutine && (
+                    <RoutineCard routine={parsedRoutine} />
+                  )}
                 </div>
+
                 {isUser && (
                   <div
                     style={{
@@ -179,6 +199,7 @@ export function CoachScreen() {
             );
           })
         )}
+
 
         {isAiLoading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ui-text-secondary)', fontSize: 13 }}>
@@ -204,6 +225,7 @@ export function CoachScreen() {
 
       {/* Input Bar */}
       <div
+        className="ui-coach-input-bar"
         style={{
           position: 'fixed',
           bottom: 64,
@@ -216,6 +238,8 @@ export function CoachScreen() {
           gap: 8,
           alignItems: 'center',
           zIndex: 10,
+          boxSizing: 'border-box',
+          maxWidth: '100vw',
         }}
       >
         <input
@@ -228,19 +252,47 @@ export function CoachScreen() {
           placeholder="Escribe una pregunta para el Coach..."
           style={{
             flex: 1,
-            padding: '10px 14px',
-            borderRadius: 20,
-            border: '1px solid var(--ui-border)',
+            padding: '10px 16px',
+            borderRadius: 'var(--ui-radius-pill)',
+            border: '1px solid var(--ui-outline)',
             background: 'var(--ui-surface)',
             color: 'var(--ui-text-primary)',
             fontSize: 14,
             outline: 'none',
           }}
         />
-        <Button variant="filled" size="sm" onClick={() => handleSend()} disabled={!input.trim() || isAiLoading} aria-label="Enviar">
-          <Send size={16} />
-        </Button>
+        <button
+          type="button"
+          className="ui-btn ui-btn-filled"
+          onClick={() => handleSend()}
+          disabled={!input.trim() || isAiLoading}
+          aria-label="Enviar mensaje"
+          style={{
+            width: 44,
+            height: 44,
+            minHeight: 44,
+            padding: 0,
+            borderRadius: 'var(--ui-radius-pill)',
+            flexShrink: 0,
+          }}
+        >
+          <Send size={18} />
+        </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmResetOpen}
+        title="Reiniciar conversación"
+        message="¿Deseas borrar el historial de mensajes de este chat y comenzar una nueva consulta?"
+        confirmText="Reiniciar"
+        cancelText="Cancelar"
+        variant="danger"
+        onConfirm={() => {
+          clearChat();
+          setConfirmResetOpen(false);
+        }}
+        onCancel={() => setConfirmResetOpen(false)}
+      />
     </div>
   );
 }

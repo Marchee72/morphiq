@@ -292,29 +292,18 @@ export const GymScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* Quick Launch Buttons */}
+              {/* Quick Launch Button */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, paddingTop: 4 }}>
                 <Button
                   variant="filled"
                   size="sm"
-                  onClick={() => startActiveSession('Entrenamiento de Fuerza')}
+                  onClick={() => {
+                    startActiveSession('Entrenamiento de Fuerza');
+                    setIsGymModeOpen(true);
+                  }}
                   style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <Play size={14} fill="currentColor" /> Fuerza
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="sm"
-                  onClick={() => startActiveSession('HIIT / Cardio')}
-                >
-                  ⚡ HIIT / Cardio
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="sm"
-                  onClick={() => startActiveSession('Calistenia')}
-                >
-                  🤸 Calistenia
+                  <Play size={14} fill="currentColor" /> Iniciar Entrenamiento de Fuerza
                 </Button>
               </div>
             </div>
@@ -364,7 +353,10 @@ export const GymScreen: React.FC = () => {
                     <Button
                       variant="filled"
                       size="sm"
-                      onClick={() => startActiveSessionWithRoutine(routine)}
+                      onClick={() => {
+                        startActiveSessionWithRoutine(routine);
+                        setIsGymModeOpen(true);
+                      }}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px' }}
                     >
                       <Play size={14} fill="currentColor" /> Iniciar Rutina

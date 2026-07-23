@@ -11,6 +11,7 @@ export interface UserProfile {
   weeklyWorkoutGoalDays?: number; // default: 4 days/week
   createdAt: Date;
   trainingProfile?: string;
+  availableEquipment?: string[]; // e.g. ["barbell","dumbbell","cable","body weight"]
 }
 
 export function getAge(birthDate: Date | string | number): number {
