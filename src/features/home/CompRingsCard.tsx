@@ -17,8 +17,8 @@ export const CompRingsCard: React.FC<CompRingsCardProps> = ({ bodyFatPct, muscle
   return (
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-around', gap: 16 }}>
-        <Ring value={(bodyFatPct / 50) * 100} label="Body fat" valueText={`${bodyFatPct}%`} />
-        <Ring value={(muscleMassKg / 60) * 100} label="Muscle" valueText={`${muscleMassKg}`} />
+        <Ring value={(bodyFatPct / 50) * 100} label="Body fat" valueText={`${bodyFatPct.toFixed(2)}%`} />
+        <Ring value={(muscleMassKg / 60) * 100} label="Muscle" valueText={`${muscleMassKg.toFixed(2)}`} />
       </div>
     </Card>
   );

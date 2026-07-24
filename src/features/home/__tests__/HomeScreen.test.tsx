@@ -31,9 +31,9 @@ describe('HomeScreen', () => {
   it('shows body category content (weight, body fat, trend)', () => {
     render(<HomeScreen onOpenSettings={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /body/i }));
-    expect(screen.getByText('78.4')).toBeInTheDocument();
-    expect(screen.getAllByText(/-0\.6/)[0]).toBeInTheDocument();
-    expect(screen.getByText('18.2%')).toBeInTheDocument();
+    expect(screen.getByText('78.40')).toBeInTheDocument();
+    expect(screen.getAllByText(/-0\.60/)[0]).toBeInTheDocument();
+    expect(screen.getByText('18.20%')).toBeInTheDocument();
     expect(screen.getByText(/weight trend/i)).toBeInTheDocument();
   });
 

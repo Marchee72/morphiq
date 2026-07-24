@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { registerBackHandler } from '../../presentation/state/backHandler';
 
+import { lockBodyScroll, unlockBodyScroll } from './bodyScrollLock';
+
 export interface SheetProps {
   open: boolean;
   onClose: () => void;
@@ -16,8 +18,7 @@ export const Sheet: React.FC<SheetProps> = ({ open, onClose, title, children }) 
   useEffect(() => {
     if (!open) return;
 
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    lockBodyScroll();
 
     const id = `sheet_${Date.now()}_${Math.random()}`;
     const unregister = registerBackHandler(id, () => {
@@ -28,7 +29,7 @@ export const Sheet: React.FC<SheetProps> = ({ open, onClose, title, children }) 
     document.addEventListener('keydown', onKey);
 
     return () => {
-      document.body.style.overflow = originalOverflow;
+      unlockBodyScroll();
       document.removeEventListener('keydown', onKey);
       unregister();
     };

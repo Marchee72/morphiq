@@ -112,7 +112,7 @@ export const InteractiveSetTable: React.FC<InteractiveSetTableProps> = ({
                     aria-label="Disminuir 2.5 kg"
                     onClick={() => {
                       const current = set.weight ?? ghost?.weight ?? 0;
-                      const next = Math.max(0, Number((current - 2.5).toFixed(1)));
+                      const next = Math.max(0, Number((current - 2.5).toFixed(2)));
                       onUpdateSet(originalIndex, next, set.reps, set.isCompleted, set.notes);
                     }}
                     style={{
@@ -163,7 +163,7 @@ export const InteractiveSetTable: React.FC<InteractiveSetTableProps> = ({
                     aria-label="Aumentar 2.5 kg"
                     onClick={() => {
                       const current = set.weight ?? ghost?.weight ?? 0;
-                      const next = Number((current + 2.5).toFixed(1));
+                      const next = Number((current + 2.5).toFixed(2));
                       onUpdateSet(originalIndex, next, set.reps, set.isCompleted, set.notes);
                     }}
                     style={{

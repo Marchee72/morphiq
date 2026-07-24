@@ -48,7 +48,7 @@ export const WorkoutHistoryCard: React.FC<WorkoutHistoryCardProps> = ({ log, set
             </span>
             {log.caloriesBurned && log.caloriesBurned > 0 && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Flame size={13} style={{ color: 'var(--ui-error)' }} /> {log.caloriesBurned} kcal
+                <Flame size={13} style={{ color: 'var(--ui-error)' }} /> {log.caloriesBurned.toFixed(2)} kcal
               </span>
             )}
           </div>
@@ -124,9 +124,9 @@ export const WorkoutHistoryCard: React.FC<WorkoutHistoryCardProps> = ({ log, set
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600 }}>
-                    {s.weight != null && s.weight > 0 && <span>{s.weight} kg</span>}
+                    {s.weight != null && s.weight > 0 && <span>{s.weight.toFixed(2)} kg</span>}
                     {s.reps != null && s.reps > 0 && <span>× {s.reps} reps</span>}
-                    {s.distanceKm != null && s.distanceKm > 0 && <span>{s.distanceKm} km</span>}
+                    {s.distanceKm != null && s.distanceKm > 0 && <span>{s.distanceKm.toFixed(2)} km</span>}
                     {s.notes && (
                       <span title={s.notes} style={{ color: 'var(--ui-primary)', display: 'flex', alignItems: 'center' }}>
                         <FileText size={14} />

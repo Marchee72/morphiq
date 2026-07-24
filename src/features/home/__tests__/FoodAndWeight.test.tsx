@@ -15,7 +15,7 @@ describe('FoodTodayCard', () => {
     render(<FoodTodayCard logs={logs} onDelete={() => {}} onAdd={() => {}} />);
     expect(screen.getByText('Oats')).toBeInTheDocument();
     expect(screen.getByText('Chicken bowl')).toBeInTheDocument();
-    expect(screen.getByText('970')).toBeInTheDocument();
+    expect(screen.getByText('970.00')).toBeInTheDocument();
   });
   it('shows an empty state', () => {
     render(<FoodTodayCard logs={[]} onDelete={() => {}} onAdd={() => {}} />);

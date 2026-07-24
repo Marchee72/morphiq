@@ -12,7 +12,8 @@ export const FloatingWorkoutBar: React.FC = () => {
       return;
     }
 
-    const initialSecs = Math.max(0, Math.floor((new Date().getTime() - activeSession.startTime.getTime()) / 1000));
+    const startMs = activeSession.startTime ? new Date(activeSession.startTime).getTime() : Date.now();
+    const initialSecs = Math.max(0, Math.floor((new Date().getTime() - startMs) / 1000));
     const m = Math.floor(initialSecs / 60);
     const s = initialSecs % 60;
     const timeStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;

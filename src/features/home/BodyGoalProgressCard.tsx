@@ -24,9 +24,9 @@ export const BodyGoalProgressCard: React.FC<BodyGoalProgressCardProps> = ({
   const progressMade = Math.abs(startWeight - currentWeight);
   const pct = totalDistance > 0 ? Math.min(100, Math.max(0, Math.round((progressMade / totalDistance) * 100))) : 100;
 
-  const remainingKg = Math.max(0, parseFloat((currentWeight - targetWeightKg).toFixed(1)));
+  const remainingKg = Math.max(0, parseFloat((currentWeight - targetWeightKg).toFixed(2)));
   const currentFat = latest?.bodyFat ?? 18.5;
-  const fatDiff = parseFloat((currentFat - targetBodyFatPct).toFixed(1));
+  const fatDiff = parseFloat((currentFat - targetBodyFatPct).toFixed(2));
 
   return (
     <Card style={{ padding: 18 }}>
@@ -49,7 +49,7 @@ export const BodyGoalProgressCard: React.FC<BodyGoalProgressCardProps> = ({
               Body Composition Target
             </div>
             <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--ui-text-primary)', letterSpacing: '-0.3px' }}>
-              Target: {targetWeightKg} kg · {targetBodyFatPct}% Fat
+              Target: {targetWeightKg.toFixed(2)} kg · {targetBodyFatPct.toFixed(2)}% Fat
             </div>
           </div>
         </div>
@@ -62,16 +62,16 @@ export const BodyGoalProgressCard: React.FC<BodyGoalProgressCardProps> = ({
           background: remainingKg <= 0 ? 'var(--ui-success-bg)' : 'var(--ui-tonal)',
           color: remainingKg <= 0 ? 'var(--ui-success)' : 'var(--ui-primary)',
         }}>
-          {remainingKg <= 0 ? 'Target Achieved 🎉' : `${remainingKg} kg left`}
+          {remainingKg <= 0 ? 'Target Achieved 🎉' : `${remainingKg.toFixed(2)} kg left`}
         </span>
       </div>
 
       {/* Visual Weight Progress Timeline Bar */}
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: 'var(--ui-text-secondary)', marginBottom: 6 }}>
-          <span>Start: {startWeight} kg</span>
-          <span>Current: {currentWeight} kg ({pct}%)</span>
-          <span>Goal: {targetWeightKg} kg</span>
+          <span>Start: {startWeight.toFixed(2)} kg</span>
+          <span>Current: {currentWeight.toFixed(2)} kg ({pct}%)</span>
+          <span>Goal: {targetWeightKg.toFixed(2)} kg</span>
         </div>
         <div style={{ width: '100%', height: 8, borderRadius: 999, background: 'var(--ui-tonal)', overflow: 'hidden' }}>
           <div style={{ width: `${pct}%`, height: '100%', borderRadius: 999, background: 'var(--ui-primary)', transition: 'width 0.4s ease' }} />
@@ -92,7 +92,7 @@ export const BodyGoalProgressCard: React.FC<BodyGoalProgressCardProps> = ({
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ui-text-secondary)' }}>Weight Drop</div>
             <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--ui-text-primary)' }}>
-              -{progressMade.toFixed(1)} kg achieved
+              -{progressMade.toFixed(2)} kg achieved
             </div>
           </div>
         </div>
@@ -109,7 +109,7 @@ export const BodyGoalProgressCard: React.FC<BodyGoalProgressCardProps> = ({
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ui-text-secondary)' }}>Body Fat Goal</div>
             <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--ui-text-primary)' }}>
-              {fatDiff <= 0 ? 'Goal Reached' : `${fatDiff}% to goal`}
+              {fatDiff <= 0 ? 'Goal Reached' : `${fatDiff.toFixed(2)}% to goal`}
             </div>
           </div>
         </div>

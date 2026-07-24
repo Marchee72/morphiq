@@ -5,6 +5,10 @@
   border-radius: var(--ui-radius-card);
   padding: var(--ui-space-4);
   box-shadow: var(--ui-card-shadow);
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .ui-btn {

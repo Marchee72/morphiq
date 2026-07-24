@@ -42,7 +42,7 @@ describe('Weekly Goal & Sleep Recovery Components', () => {
     );
 
     expect(screen.getByText(/body composition target/i)).toBeInTheDocument();
-    expect(screen.getByText(/target: 74 kg · 15% fat/i)).toBeInTheDocument();
-    expect(screen.getByText(/4.4 kg left/i)).toBeInTheDocument();
+    expect(screen.getByText(/target: 74\.00 kg · 15\.00% fat/i)).toBeInTheDocument();
+    expect(screen.getByText(/4\.40 kg left/i)).toBeInTheDocument();
   });
 });

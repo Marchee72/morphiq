@@ -99,7 +99,7 @@ export const TrendCard: React.FC<{ points: TrendPoint[] }> = ({ points }) => {
                   outline: 'none',
                 }}
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                formatter={(value: any) => [`${value ?? 0} ${metric.unit}`, metric.label]}
+                formatter={(value: any) => [`${typeof value === 'number' ? value.toFixed(2) : (value ?? 0)} ${metric.unit}`, metric.label]}
               />
               <Area
                 type="monotone"

@@ -34,7 +34,7 @@ export const WorkoutExerciseStepper: React.FC<WorkoutExerciseStepperProps> = ({
       {exercises.map((ex, idx) => {
         const isSelected = activeExerciseIndex === idx;
         const loggedSets = sets.filter(
-          (s) => s.exerciseName.trim().toLowerCase() === ex.exerciseName.trim().toLowerCase() && s.isCompleted
+          (s) => s && s.exerciseName && ex.exerciseName && s.exerciseName.trim().toLowerCase() === ex.exerciseName.trim().toLowerCase() && s.isCompleted
         ).length;
         const isFullyDone = loggedSets >= ex.targetSets;
         const isBiserie = Boolean(ex.biserieGroupId);

@@ -11,13 +11,13 @@ export const MetricHeroCard: React.FC<MetricHeroCardProps> = ({ latestWeightKg, 
         <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ui-text-secondary)' }}>Weight</div>
         {latestWeightKg !== null ? (
           <>
-            <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1, marginTop: 4 }}>
-              <span>{latestWeightKg}</span> <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--ui-text-secondary)' }}>kg</span>
+            <div style={{ fontSize: 34, fontWeight: 800, letterSpacing: -1, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span>{latestWeightKg.toFixed(2)}</span> <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--ui-text-secondary)' }}>kg</span>
             </div>
             {deltaKg !== null && (
               <span style={{ display: 'inline-block', marginTop: 8, padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700,
                 background: deltaKg <= 0 ? 'var(--ui-success-bg)' : 'var(--ui-error-bg)', color: deltaKg <= 0 ? 'var(--ui-success)' : 'var(--ui-error)' }}>
-                {deltaKg > 0 ? '+' : ''}{deltaKg} this week
+                {deltaKg > 0 ? '+' : ''}{deltaKg.toFixed(2)} this week
               </span>
             )}
           </>

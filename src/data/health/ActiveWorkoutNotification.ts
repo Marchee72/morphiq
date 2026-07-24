@@ -13,8 +13,8 @@ const NativeActiveWorkout = registerPlugin<ActiveWorkoutPluginInterface>('Active
  * Show an ongoing workout notification with a chronometer timer and set count.
  * No media controls, no progress bar — just a clean stopwatch notification.
  */
-export async function showActiveWorkoutNotification(timeStr: string, setsCount: number, startTimeDate?: Date) {
-  const startTimeMs = startTimeDate ? startTimeDate.getTime() : Date.now();
+export async function showActiveWorkoutNotification(timeStr: string, setsCount: number, startTimeDate?: Date | string) {
+  const startTimeMs = startTimeDate ? new Date(startTimeDate).getTime() : Date.now();
 
   if (Capacitor.isNativePlatform()) {
     try {

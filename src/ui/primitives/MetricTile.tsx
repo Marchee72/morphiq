@@ -39,15 +39,18 @@ export const MetricTile: React.FC<MetricTileProps> = ({ label, valueText, icon, 
         fontFamily: 'var(--ui-font)',
         color: 'var(--ui-text-primary)',
         transition: 'transform var(--ui-motion-fast)',
+        minWidth: 0,
+        maxWidth: '100%',
+        overflow: 'hidden',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ui-text-secondary)' }}>{label}</span>
-        {icon && <span style={{ color: 'var(--ui-on-tonal)', display: 'inline-flex' }}>{icon}</span>}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minWidth: 0 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ui-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        {icon && <span style={{ color: 'var(--ui-on-tonal)', display: 'inline-flex', flexShrink: 0 }}>{icon}</span>}
       </div>
-      <strong style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>{valueText}</strong>
+      <strong style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{valueText}</strong>
       {deltaText && (
-        <span style={{ fontSize: 11, fontWeight: 700, color: toneColor[deltaTone] }}>{deltaText}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: toneColor[deltaTone], overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{deltaText}</span>
       )}
     </Tag>
   );

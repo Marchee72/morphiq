@@ -376,7 +376,7 @@ export const useStore = create<StoreState>((set, get) => ({
     for (const w of history) {
       if (!w.id) continue;
       const sets = workoutSets[w.id] || [];
-      const matching = sets.filter(s => s.exerciseName.trim().toLowerCase() === norm);
+      const matching = sets.filter(s => s && s.exerciseName && s.exerciseName.trim().toLowerCase() === norm);
       if (matching.length > 0) {
         setsByWorkout[w.id] = { date: new Date(w.timestamp), sets: matching };
         for (const s of matching) {
@@ -428,7 +428,8 @@ export const useStore = create<StoreState>((set, get) => ({
     const profile = get().activeProfile;
     if (!session || !profile) return;
 
-    const durationMinutes = Math.max(1, Math.round((new Date().getTime() - session.startTime.getTime()) / 60000));
+    const startMs = session.startTime ? new Date(session.startTime).getTime() : Date.now();
+    const durationMinutes = Math.max(1, Math.round((new Date().getTime() - startMs) / 60000));
     const logId = await get().addWorkoutLog({
       type: session.workoutType,
       duration: durationMinutes,
@@ -1358,8 +1359,18 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
 
     const allWorkouts = await workoutRepo.getAll(profile.id);
     for (const w of allWorkouts) {
-      if (w.id) await workoutRepo.delete(w.id);
+      if (w.id) {
+        await workoutRepo.delete(w.id);
+      }
     }
+
+    const pendingSets = await workoutSetRepo.getForWorkout('pending');
+    for (const ps of pendingSets) {
+      if (ps.id) await workoutSetRepo.delete(ps.id);
+    }
+
+    await messageRepo.clear(profile.id);
+    set({ activeWorkout: null, chatHistory: [] });
 
     await get().setActiveProfile(profile.id);
   },
@@ -1446,8 +1457,17 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
     }
     const allWorkouts = await workoutRepo.getAll(profile.id);
     for (const w of allWorkouts) {
-      if (w.id) await workoutRepo.delete(w.id);
+      if (w.id) {
+        await workoutRepo.delete(w.id);
+      }
     }
+    const pendingSets = await workoutSetRepo.getForWorkout('pending');
+    for (const ps of pendingSets) {
+      if (ps.id) await workoutSetRepo.delete(ps.id);
+    }
+    await messageRepo.clear(profile.id);
+    set({ activeWorkout: null, chatHistory: [] });
+
     await get().setActiveProfile(profile.id);
   },
 }));

@@ -19,6 +19,7 @@ import { WebHealthProvider } from './data/health/WebHealthProvider';
 import { FloatingWorkoutBar } from './features/gym/FloatingWorkoutBar';
 
 import { LiveWorkoutScreen } from './features/gym/LiveWorkoutScreen';
+import { ErrorBoundary } from './ui/primitives/ErrorBoundary';
 
 const NAV_ITEMS = [
   { id: 'home', label: 'Home', icon: <LayoutDashboard size={22} /> },
@@ -176,7 +177,9 @@ function App() {
         {activeTab === 'settings' && <SettingsScreen />}
       </main>
       <FloatingWorkoutBar />
-      <LiveWorkoutScreen isOpen={isGymModeOpen} onClose={() => setIsGymModeOpen(false)} />
+      <ErrorBoundary fallbackTitle="Error en Pantalla de Entrenamiento" onReset={() => setIsGymModeOpen(false)}>
+        <LiveWorkoutScreen isOpen={isGymModeOpen} onClose={() => setIsGymModeOpen(false)} />
+      </ErrorBoundary>
       <BottomNav
         items={[...NAV_ITEMS]}
         activeId={activeTab}

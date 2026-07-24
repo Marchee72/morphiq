@@ -69,7 +69,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const latest = measurements.length > 0 ? measurements[measurements.length - 1] : null;
   const prev = measurements.length > 1 ? measurements[measurements.length - 2] : null;
-  const delta = latest && prev ? Number((latest.weight - prev.weight).toFixed(1)) : null;
+  const delta = latest && prev ? Number((latest.weight - prev.weight).toFixed(2)) : null;
   const fmtDate = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
   const trend = measurements.slice(-7).map(m => ({ label: fmtDate(new Date(m.timestamp)), weight: m.weight }));
 
@@ -209,7 +209,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
               <MetricTile
                 label="Calories"
-                valueText={`${totalKcal} kcal`}
+                valueText={`${totalKcal.toFixed(2)} kcal`}
                 icon={<Flame size={16} />}
                 deltaText={foodLogs.length > 0 ? `${foodLogs.length} entries` : 'nothing logged'}
                 deltaTone={foodLogs.length > 0 ? 'positive' : 'neutral'}
@@ -217,7 +217,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               />
               <MetricTile
                 label="Protein"
-                valueText={`${totalProtein} g`}
+                valueText={`${totalProtein.toFixed(2)} g`}
                 icon={<Beef size={16} />}
                 deltaText={totalProtein > 0 ? 'today' : undefined}
               />
@@ -238,13 +238,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
               <MetricTile
                 label="Body fat"
-                valueText={latest?.bodyFat ? `${latest.bodyFat}%` : '—'}
+                valueText={latest?.bodyFat ? `${latest.bodyFat.toFixed(2)}%` : '—'}
                 icon={<Activity size={16} />}
                 deltaText={latest?.bodyFat ? 'of total mass' : undefined}
               />
               <MetricTile
                 label="Muscle"
-                valueText={latest?.muscleMass ? `${latest.muscleMass} kg` : '—'}
+                valueText={latest?.muscleMass ? `${latest.muscleMass.toFixed(2)} kg` : '—'}
                 icon={<Dumbbell size={16} />}
                 deltaText={latest?.muscleMass ? 'lean mass' : undefined}
               />

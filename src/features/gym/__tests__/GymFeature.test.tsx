@@ -65,7 +65,7 @@ describe('Gym Feature Components', () => {
 
     fireEvent.click(screen.getByText('1 sets logged'));
     expect(screen.getByText('bench press')).toBeInTheDocument();
-    expect(screen.getByText('80 kg')).toBeInTheDocument();
+    expect(screen.getByText('80.00 kg')).toBeInTheDocument();
   });
 
   it('opens and closes LiveWorkoutScreen tracker', () => {
@@ -73,6 +73,6 @@ describe('Gym Feature Components', () => {
     render(<LiveWorkoutScreen isOpen={true} onClose={handleClose} />);
 
     expect(screen.getByText('Strength Training')).toBeInTheDocument();
-    expect(screen.getByText(/Finalizar Sesión|Finish Session/i)).toBeInTheDocument();
+    expect(screen.getByTitle(/Finalizar Sesión|Finish Session/i)).toBeInTheDocument();
   });
 });

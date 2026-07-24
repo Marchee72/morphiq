@@ -6,12 +6,12 @@ import { CompRingsCard } from '../CompRingsCard';
 describe('MetricHeroCard', () => {
   it('shows the latest weight with unit', () => {
     render(<MetricHeroCard latestWeightKg={78.4} deltaKg={null} onLogWeight={() => {}} />);
-    expect(screen.getByText('78.4')).toBeInTheDocument();
+    expect(screen.getByText('78.40')).toBeInTheDocument();
     expect(screen.getByText('kg')).toBeInTheDocument();
   });
   it('shows a signed delta', () => {
     render(<MetricHeroCard latestWeightKg={78.4} deltaKg={-0.6} onLogWeight={() => {}} />);
-    expect(screen.getByText(/-0\.6/)).toBeInTheDocument();
+    expect(screen.getByText(/-0\.60/)).toBeInTheDocument();
   });
   it('shows an empty state without measurements', () => {
     render(<MetricHeroCard latestWeightKg={null} deltaKg={null} onLogWeight={() => {}} />);
@@ -28,8 +28,8 @@ describe('MetricHeroCard', () => {
 describe('CompRingsCard', () => {
   it('renders body fat and muscle rings', () => {
     render(<CompRingsCard bodyFatPct={18.2} muscleMassKg={34.1} />);
-    expect(screen.getByText('18.2%')).toBeInTheDocument();
-    expect(screen.getByText('34.1')).toBeInTheDocument();
+    expect(screen.getByText('18.20%')).toBeInTheDocument();
+    expect(screen.getByText('34.10')).toBeInTheDocument();
   });
   it('shows a sync hint when composition data is missing', () => {
     render(<CompRingsCard bodyFatPct={0} muscleMassKg={0} />);
