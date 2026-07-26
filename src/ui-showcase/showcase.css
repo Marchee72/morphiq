@@ -1118,3 +1118,53 @@
   font-size: 11px;
   color: #6B7280;
 }
+
+/* ==========================================================================
+   Coach Screen — Cross-Theme Animations & Effects
+   ========================================================================== */
+
+/* Neumorphic — Amber status light pulse */
+@keyframes amber-status-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(255,92,0,0.4); }
+  50% { opacity: 0.4; box-shadow: 0 0 14px rgba(255,92,0,0.85); }
+}
+
+/* Warm Latte — Serif drop-cap on first coach message */
+.coach-drop-cap::first-letter {
+  font-size: 3em;
+  font-weight: 800;
+  float: left;
+  line-height: 0.8;
+  margin-right: 6px;
+  font-family: 'Playfair Display', serif;
+  color: #3e2a1b;
+}
+
+/* Gamified — Mascot bounce while "typing" */
+@keyframes mascot-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+/* Gamified — Confetti burst on send */
+@keyframes confetti-pop {
+  0% { transform: scale(0) rotate(0deg); opacity: 1; }
+  100% { transform: scale(2.5) rotate(720deg); opacity: 0; }
+}
+
+/* Gamified — Floating emoji reaction */
+@keyframes emoji-float {
+  0% { transform: translateY(0) scale(0); opacity: 0; }
+  15% { transform: translateY(-6px) scale(1.2); opacity: 1; }
+  100% { transform: translateY(-56px) scale(0.4); opacity: 0; }
+}
+
+/* Transitions for coach message animations */
+.coach-msg-enter {
+  animation: coach-fade-up 0.3s ease-out;
+}
+
+@keyframes coach-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
