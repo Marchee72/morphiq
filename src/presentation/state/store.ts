@@ -560,7 +560,18 @@ export const useStore = create<StoreState>((set, get) => ({
   loadProfiles: async () => {
     try {
       const list = await profileRepo.getAll();
-      set({ profiles: list });
+
+      /**
+       * Flagged here, not at the end.
+       *
+       * The gate this unblocks only needs one fact — whether an account exists —
+       * and that is answered by the single query above. Everything below is data
+       * loading: in server mode `setActiveProfile` is a dozen sequential network
+       * round trips, two of them a request per workout. Waiting for all of that
+       * before showing anything left the app sitting on the splash.
+       */
+      set({ profiles: list, profilesLoaded: true });
+
       if (list.length > 0) {
         // Auto-set the first profile if none is active
         const active = get().activeProfile;
@@ -570,11 +581,12 @@ export const useStore = create<StoreState>((set, get) => ({
       } else {
         set({ activeProfile: null, measurements: [], foodLogs: [], workoutLogs: [], workoutHistory: [], chatHistory: [], favoriteExerciseIds: [], activeWorkoutSets: {}, exerciseStats: {} });
       }
-    } finally {
-      // Marked settled even when the load threw — in server mode this is a
-      // network call, and a failure must not leave the app stuck on the splash
-      // forever. An empty profile list then legitimately means onboarding.
+    } catch (err) {
+      // Settled even on failure. In server mode this is a network call, and an
+      // unreachable API must not strand the app on the splash — an empty profile
+      // list then legitimately means onboarding.
       set({ profilesLoaded: true });
+      throw err;
     }
   },
 

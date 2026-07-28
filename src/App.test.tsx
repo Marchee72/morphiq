@@ -39,6 +39,28 @@ describe('App shell', () => {
     expect(screen.queryByRole('button', { name: /create profile/i })).not.toBeInTheDocument();
   });
 
+  it('does not wait for the profile data before showing the app', async () => {
+    // In server mode `setActiveProfile` is a dozen sequential round trips, two
+    // of them a request per workout. Gating the splash on all of that left the
+    // app sitting on the splash screen. It waits for "is there an account" only.
+    await seedProfile();
+    let releaseData = () => {};
+    const dataLoad = new Promise<void>(resolve => { releaseData = resolve; });
+
+    const realSetActiveProfile = useStore.getState().setActiveProfile;
+    useStore.setState({
+      setActiveProfile: async (id: string) => {
+        await dataLoad;
+        await realSetActiveProfile(id);
+      },
+    });
+
+    render(<App />);
+    // The shell is up while the profile's data is still in flight.
+    await screen.findByRole('button', { name: 'Today' });
+    releaseData();
+  });
+
   it('gets out of the splash even when loading the profile fails', async () => {
     // In server mode this is a network call. A rejection used to leave
     // `profilesLoaded` unset, which would strand the app on the splash.

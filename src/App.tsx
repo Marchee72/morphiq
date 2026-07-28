@@ -14,26 +14,40 @@ import { AtlasErrorBoundary } from './ui-atlas/atlas/AtlasErrorBoundary';
 const SPLASH_MIN_MS = 1100;
 /** Long enough for the splash's own exit animation to finish. */
 const SPLASH_FADE_MS = 400;
+/**
+ * Last resort. Nothing should reach this — the profile query is a single lookup
+ * — but a request that never answers must not hold the app hostage. Better a
+ * wrong screen you can act on than a splash that never leaves.
+ */
+const SPLASH_MAX_MS = 8000;
 
 function App() {
   const { loadProfiles, profiles, activeProfile } = useStore();
   const profilesLoaded = useStore(s => s.profilesLoaded);
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+  const [gaveUpWaiting, setGaveUpWaiting] = useState(false);
   const [splashGone, setSplashGone] = useState(false);
 
   useEffect(() => {
     loadProfiles().catch(err => console.error('Failed to load profiles', err));
-    const timer = setTimeout(() => setMinTimeElapsed(true), SPLASH_MIN_MS);
-    return () => clearTimeout(timer);
+    const minTimer = setTimeout(() => setMinTimeElapsed(true), SPLASH_MIN_MS);
+    const maxTimer = setTimeout(() => setGaveUpWaiting(true), SPLASH_MAX_MS);
+    return () => {
+      clearTimeout(minTimer);
+      clearTimeout(maxTimer);
+    };
   }, [loadProfiles]);
 
   /**
-   * The splash leaves when the data is actually there, not on a fixed timer.
+   * The splash leaves when the answer is actually there, not on a fixed timer.
    * It used to disappear after 1.5s regardless, and since `profiles` is `[]`
    * until the load resolves, a slower start showed the onboarding form to
    * someone who already had a profile.
+   *
+   * It waits only for "is there an account", never for the profile's data —
+   * that streams in behind the app shell, which renders its own skeleton.
    */
-  const splashDone = profilesLoaded && minTimeElapsed;
+  const splashDone = (profilesLoaded && minTimeElapsed) || gaveUpWaiting;
 
   useEffect(() => {
     if (!splashDone) return;
@@ -90,7 +104,7 @@ function App() {
 
   // Nothing is known yet — an empty `profiles` here means "not loaded", not
   // "no account". Deciding between the app and the sign-up form has to wait.
-  if (!profilesLoaded) return <>{splash}</>;
+  if (!profilesLoaded && !gaveUpWaiting) return <>{splash}</>;
 
   // Onboarding runs before there is a profile to load, so it sits outside the
   // app shell — but inside its own `.at` wrapper, so it looks like the app.
