@@ -1,10 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import './ui/tokens.css'
-import './ui/ui.css'
 import App from './App.tsx'
-import { ThemeProvider } from './ui/ThemeProvider'
 const API_URL = (import.meta.env?.VITE_API_URL as string) || 'http://localhost:3000';
 
 function sendErrorToServer(level: string, message: string, stack?: string) {
@@ -82,8 +79,6 @@ if (window.visualViewport) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
+    <App />
   </StrictMode>,
 )

@@ -58,6 +58,34 @@ describe('ExerciseCatalog', () => {
     });
   });
 
+  it('facetCounts reports how many exercises sit behind each facet, busiest first', () => {
+    expect(catalog.facetCounts().category).toEqual([
+      { id: 'chest', count: 3 },
+      { id: 'back', count: 1 },
+      { id: 'shoulders', count: 1 },
+      { id: 'upper legs', count: 1 },
+    ]);
+    expect(catalog.facetCounts().equipment[0]).toEqual({ id: 'barbell', count: 4 });
+  });
+
+  it('facetCounts cross-filters each dimension by the other, not by itself', () => {
+    // Selecting a category narrows the equipment counts, but the category counts
+    // stay whole so the user can still see what switching would give them.
+    const counts = catalog.facetCounts({ category: 'chest' });
+    expect(counts.equipment).toEqual([{ id: 'barbell', count: 3 }]);
+    expect(counts.category).toEqual(catalog.facetCounts().category);
+  });
+
+  it('facetCounts caches the unfiltered result', () => {
+    expect(catalog.facetCounts()).toBe(catalog.facetCounts());
+  });
+
+  it('facetCounts totals match the catalog size', () => {
+    const sum = (b: { count: number }[]) => b.reduce((t, x) => t + x.count, 0);
+    expect(sum(catalog.facetCounts().category)).toBe(catalog.size);
+    expect(sum(catalog.facetCounts().equipment)).toBe(catalog.size);
+  });
+
   it('getExerciseCatalog memoizes a single instance backed by the vendored dataset', async () => {
     const { getExerciseCatalog } = await import('./ExerciseCatalog');
     const [a, b] = await Promise.all([getExerciseCatalog(), getExerciseCatalog()]);

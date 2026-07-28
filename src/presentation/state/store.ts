@@ -27,10 +27,15 @@ import {
   ServerRoutineTemplateRepository,
 } from '../../data/database/ServerDatabase';
 import type { RoutineTemplate, RoutineExerciseItem } from '../../core/entities/RoutineTemplate';
+import { normalizeName } from '../../ui-atlas/derive/records';
 import { DeepSeekCoach, chatCompletion, buildProviderFromEnv } from '../../data/ai/GeminiCoach';
 import { generateMockMeasurements, generateMockFoodLogs, generateMockWorkouts } from '../../data/mock/mockData';
 
 import { Capacitor } from '@capacitor/core';
+import {
+  PREF_KEYS, applySurface, initialLanguage, initialMode, writePref,
+  type Lang,
+} from './preferences';
 
 // Repository instances — switch between local IndexedDB and remote server via env vars
 const isServer = (import.meta.env?.VITE_DB_TYPE as string) === 'server' && !(typeof window !== 'undefined' && window.location.search.includes('db=local'));
@@ -47,6 +52,15 @@ const routineTemplateRepo = isServer ? new ServerRoutineTemplateRepository() : n
 // AI Coach adapter
 const aiCoach = new DeepSeekCoach();
 
+/**
+ * The app's destinations.
+ *
+ * Widened rather than replaced when the skins landed, so the Android back
+ * handler, the scroll-reset behaviour and the e2e selectors all survived the
+ * rename. `settings` is reachable from the Today header, never from the nav.
+ */
+export type AppScreenId = 'today' | 'train' | 'library' | 'body' | 'coach' | 'settings';
+
 export interface ActiveSessionExercise {
   id: string;
   exerciseId?: string;
@@ -56,6 +70,38 @@ export interface ActiveSessionExercise {
   targetWeight?: number;
   notes?: string;
   biserieGroupId?: string;
+}
+
+type DraftSet = Omit<WorkoutSet, 'profileId' | 'timestamp' | 'workoutLogId'>;
+
+/** Every set except the ones belonging to `exerciseName`. Keys the same way the derive layer does. */
+function dropSetsFor(sets: DraftSet[], exerciseName: string): DraftSet[] {
+  const key = normalizeName(exerciseName);
+  return sets.filter(s => normalizeName(s.exerciseName) !== key);
+}
+
+/**
+ * The exercise list implied by a freestyle session's logged sets, in first-logged
+ * order — the same reconstruction `buildSessionExercises` performs for display.
+ */
+function exercisesFromSets(sets: DraftSet[]): ActiveSessionExercise[] {
+  const byName = new Map<string, ActiveSessionExercise>();
+  for (const s of sets) {
+    const key = normalizeName(s.exerciseName);
+    if (!key) continue;
+    const existing = byName.get(key);
+    if (existing) {
+      existing.targetSets = Math.max(existing.targetSets, s.setNumber);
+      continue;
+    }
+    byName.set(key, {
+      id: `ex_freestyle_${byName.size}_${Math.random().toString(36).substring(2, 6)}`,
+      exerciseId: s.exerciseId,
+      exerciseName: s.exerciseName,
+      targetSets: s.setNumber,
+    });
+  }
+  return [...byName.values()];
 }
 
 export interface HistoricalExerciseStats {
@@ -86,7 +132,7 @@ interface StoreState {
   isAiLoading: boolean;
   selectedWorkoutForCoach: WorkoutLog | null;
   activeCoachSubTab: 'chat' | 'routine' | 'history';
-  activeTab: 'home' | 'gym' | 'exercises' | 'coach' | 'settings';
+  activeTab: AppScreenId;
   activeWorkout: WorkoutLog | null;
   isGymModeOpen: boolean;
   activeSession: {
@@ -100,7 +146,7 @@ interface StoreState {
   } | null;
 
   // Actions
-  setActiveTab: (tab: 'home' | 'gym' | 'exercises' | 'coach' | 'settings') => void;
+  setActiveTab: (tab: AppScreenId) => void;
   setSelectedWorkoutForCoach: (workout: WorkoutLog | null) => void;
   setActiveCoachSubTab: (tab: 'chat' | 'routine' | 'history') => void;
   setActiveWorkout: (workout: WorkoutLog | null) => void;
@@ -133,13 +179,17 @@ interface StoreState {
   addFoodLog: (log: Omit<FoodLog, 'profileId' | 'timestamp'>) => Promise<void>;
   deleteFoodLog: (id: string) => Promise<void>;
   
-  addWorkoutLog: (log: Omit<WorkoutLog, 'profileId' | 'timestamp'>) => Promise<string>;
+  /** `timestamp` defaults to the selected date; a live session passes the real clock instead. */
+  addWorkoutLog: (log: Omit<WorkoutLog, 'profileId' | 'timestamp'> & { timestamp?: Date }) => Promise<string>;
   deleteWorkoutLog: (id: string) => Promise<void>;
   loadWorkoutHistory: (days?: number) => Promise<void>;
   loadWorkoutRange: (start: Date, end: Date) => Promise<WorkoutLog[]>;
   importWorkouts: (logs: Omit<WorkoutLog, 'profileId'>[]) => Promise<void>;
 
   loadSetsForWorkout: (workoutLogId: string) => Promise<void>;
+  /** Every set ever logged, for all-time personal records and PR-at-the-time flags. */
+  allSets: WorkoutSet[];
+  loadAllSets: () => Promise<void>;
   addWorkoutSet: (set: Omit<WorkoutSet, 'profileId' | 'timestamp'>) => Promise<void>;
   deleteWorkoutSet: (id: string, workoutLogId: string) => Promise<void>;
   loadExerciseStats: (exerciseName: string) => Promise<void>;
@@ -162,6 +212,10 @@ interface StoreState {
   // Theme & Data Management
   theme: 'system' | 'dark' | 'light';
   setTheme: (theme: 'system' | 'dark' | 'light') => void;
+
+  // UI preferences
+  language: Lang;
+  setLanguage: (language: Lang) => void;
   exportBackupData: () => Promise<string>;
   importBackupData: (jsonContent: string) => Promise<boolean>;
   clearDatabaseData: () => Promise<void>;
@@ -171,13 +225,7 @@ interface StoreState {
 }
 
 
-const getInitialTheme = (): 'system' | 'dark' | 'light' => {
-  if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('morphiq_theme');
-    if (saved === 'dark' || saved === 'light' || saved === 'system') return saved;
-  }
-  return 'system';
-};
+const getInitialTheme = (): 'system' | 'dark' | 'light' => initialMode();
 
 const applyThemeToDocument = (theme: 'system' | 'dark' | 'light') => {
   if (typeof document === 'undefined') return;
@@ -189,6 +237,9 @@ const applyThemeToDocument = (theme: 'system' | 'dark' | 'light') => {
 };
 
 applyThemeToDocument(getInitialTheme());
+// Paint the page background before React mounts, so the splash is never the
+// wrong colour on a cold start.
+applySurface(initialMode());
 
 export const useStore = create<StoreState>((set, get) => ({
   profiles: [],
@@ -201,11 +252,13 @@ export const useStore = create<StoreState>((set, get) => ({
   favoriteExerciseIds: [],
   savedRoutines: [],
   activeWorkoutSets: {},
+  allSets: [],
   exerciseStats: {},
   theme: getInitialTheme(),
+  language: initialLanguage(),
   selectedWorkoutForCoach: null,
   activeCoachSubTab: 'chat',
-  activeTab: 'home',
+  activeTab: 'today',
   activeWorkout: null,
   isGymModeOpen: false,
   activeSession: null,
@@ -245,7 +298,7 @@ export const useStore = create<StoreState>((set, get) => ({
         routineExercises,
         sets: [],
       },
-      activeTab: 'gym',
+      activeTab: 'train',
       isGymModeOpen: true,
     });
   },
@@ -265,18 +318,33 @@ export const useStore = create<StoreState>((set, get) => ({
     if (!session || !session.routineExercises) return;
     const list = [...session.routineExercises];
     if (index < 0 || index >= list.length) return;
+    const replaced = list[index];
     list[index] = {
-      ...list[index],
+      ...replaced,
       exerciseId: newExercise.id,
       exerciseName: newExercise.name,
     };
-    set({ activeSession: { ...session, routineExercises: list } });
+    // Sets key on exercise name, so the outgoing lift's sets would otherwise stay
+    // in `sets` — invisible on screen but still written to history on finish.
+    // A swap means you are doing a different movement; its sets go with it.
+    set({
+      activeSession: {
+        ...session,
+        routineExercises: list,
+        sets: dropSetsFor(session.sets, replaced.exerciseName),
+      },
+    });
   },
 
   addActiveSessionExercise: (exercise) => {
     const session = get().activeSession;
     if (!session) return;
-    const list = session.routineExercises ? [...session.routineExercises] : [];
+    // A freestyle session carries no `routineExercises` — its exercise list is
+    // recovered from the logged sets. Materialise that list before appending, or
+    // the first add would replace it and hide everything already logged.
+    const list = session.routineExercises
+      ? [...session.routineExercises]
+      : exercisesFromSets(session.sets);
     const newEx: ActiveSessionExercise = {
       id: `ex_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       exerciseId: exercise.id,
@@ -289,8 +357,16 @@ export const useStore = create<StoreState>((set, get) => ({
   removeActiveSessionExercise: (index) => {
     const session = get().activeSession;
     if (!session || !session.routineExercises) return;
+    const removed = session.routineExercises[index];
+    if (!removed) return;
     const list = session.routineExercises.filter((_, i) => i !== index);
-    set({ activeSession: { ...session, routineExercises: list } });
+    set({
+      activeSession: {
+        ...session,
+        routineExercises: list,
+        sets: dropSetsFor(session.sets, removed.exerciseName),
+      },
+    });
   },
 
   loadSavedRoutines: async () => {
@@ -432,6 +508,9 @@ export const useStore = create<StoreState>((set, get) => ({
     const durationMinutes = Math.max(1, Math.round((new Date().getTime() - startMs) / 60000));
     const logId = await get().addWorkoutLog({
       type: session.workoutType,
+      // The real clock, not `selectedDate` — finishing a session while browsing a
+      // past day used to file the workout on that day instead of today.
+      timestamp: new Date(),
       duration: durationMinutes,
       description: session.bodyNotes ? `${session.sets.length} sets completed. Note: ${session.bodyNotes}` : `${session.sets.length} sets completed`,
       source: 'manual',
@@ -635,7 +714,7 @@ export const useStore = create<StoreState>((set, get) => ({
     const logId = await workoutRepo.add({
       ...workoutData,
       profileId: profile.id!,
-      timestamp: get().selectedDate,
+      timestamp: workoutData.timestamp ?? get().selectedDate,
     });
     const workouts = await workoutRepo.getAll(profile.id!, get().selectedDate);
     const workoutSets = { ...get().activeWorkoutSets };
@@ -849,6 +928,12 @@ export const useStore = create<StoreState>((set, get) => ({
         [workoutLogId]: sets
       }
     }));
+  },
+
+  loadAllSets: async () => {
+    const { activeProfile } = get();
+    if (!activeProfile?.id) return;
+    set({ allSets: await workoutSetRepo.getAllForProfile(activeProfile.id) });
   },
 
   addWorkoutSet: async (setData) => {
@@ -1376,11 +1461,16 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
   },
 
   setTheme: (theme) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('morphiq_theme', theme);
-    }
+    writePref(PREF_KEYS.mode, theme);
     applyThemeToDocument(theme);
+    applySurface(theme);
     set({ theme });
+  },
+
+  setLanguage: (language) => {
+    writePref(PREF_KEYS.language, language);
+    if (typeof document !== 'undefined') document.documentElement.lang = language;
+    set({ language });
   },
 
   exportBackupData: async () => {

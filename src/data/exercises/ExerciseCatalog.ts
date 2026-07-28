@@ -10,9 +10,21 @@ interface IndexedExercise {
   haystack: string;
 }
 
+export interface FacetBucket {
+  /** The raw dataset value, e.g. `"upper legs"`. Labels are resolved through i18n at render. */
+  id: string;
+  count: number;
+}
+
+export interface FacetCounts {
+  category: FacetBucket[];
+  equipment: FacetBucket[];
+}
+
 export class ExerciseCatalog {
   private readonly byId: Map<string, Exercise>;
   private readonly index: IndexedExercise[];
+  private cachedFacetCounts: FacetCounts | null = null;
 
   constructor(exercises: Exercise[]) {
     this.byId = new Map(exercises.map(e => [e.id, e]));
@@ -65,6 +77,44 @@ export class ExerciseCatalog {
       equipment.add(exercise.equipment);
     }
     return { categories: [...categories].sort(), equipment: [...equipment].sort() };
+  }
+
+  /**
+   * Facets carrying how many exercises sit behind each one.
+   *
+   * Lives on the catalog rather than in a view layer because this class owns the
+   * index — counting outside it means re-walking all 1,324 entries on every render.
+   * The unfiltered result is computed once and cached.
+   *
+   * Passing `filters` cross-filters: each dimension is counted with the *other*
+   * dimension's filter applied but not its own, so selecting a category updates
+   * the equipment counts while leaving the category counts intact to switch between.
+   */
+  facetCounts(filters: ExerciseFilters = {}): FacetCounts {
+    const unfiltered = !filters.category && !filters.equipment;
+    if (unfiltered && this.cachedFacetCounts) return this.cachedFacetCounts;
+
+    const categories = new Map<string, number>();
+    const equipment = new Map<string, number>();
+
+    for (const { exercise } of this.index) {
+      if (!filters.equipment || exercise.equipment === filters.equipment) {
+        categories.set(exercise.category, (categories.get(exercise.category) ?? 0) + 1);
+      }
+      if (!filters.category || exercise.category === filters.category) {
+        equipment.set(exercise.equipment, (equipment.get(exercise.equipment) ?? 0) + 1);
+      }
+    }
+
+    // Most-populated first: the facets worth tapping lead the rail.
+    const toBuckets = (counts: Map<string, number>): FacetBucket[] =>
+      [...counts.entries()]
+        .map(([id, count]) => ({ id, count }))
+        .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+
+    const result: FacetCounts = { category: toBuckets(categories), equipment: toBuckets(equipment) };
+    if (unfiltered) this.cachedFacetCounts = result;
+    return result;
   }
 }
 

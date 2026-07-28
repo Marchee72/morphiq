@@ -10,6 +10,11 @@ async function seedProfile() {
   await db.userProfiles.add({ name: 'Alex', gender: 'male', birthDate: new Date('1995-01-01'), height: 180, createdAt: new Date() });
 }
 
+/**
+ * These cover what the shell itself guarantees — the five destinations exist,
+ * the right one is current, and mode and language changes re-render without
+ * disturbing state. Screen content is covered by the screen tests.
+ */
 describe('App shell', () => {
   beforeEach(async () => {
     useStore.setState(initialState, true);
@@ -18,36 +23,52 @@ describe('App shell', () => {
 
   it('shows onboarding when no profiles exist', async () => {
     render(<App />);
-    expect(await screen.findByText('Create your profile')).toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Main navigation' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /create profile/i })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 
-  it('renders four tabs with Home active', async () => {
+  it('renders five destinations with Today current', async () => {
     await seedProfile();
     render(<App />);
-    for (const tab of ['Home', 'Gym', 'Exercises', 'Coach']) {
+    for (const tab of ['Today', 'Train', 'Find', 'Body', 'Coach']) {
       expect(await screen.findByRole('button', { name: tab })).toBeInTheDocument();
     }
-    expect(screen.getByRole('button', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Today' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('switches to Gym tab', async () => {
+  it('navigates between destinations', async () => {
     await seedProfile();
     render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Gym' }));
-    expect(await screen.findByText(/listo para entrenar\?/i)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Body' }));
+    await waitFor(() => expect(useStore.getState().activeTab).toBe('body'));
+    expect(screen.getByRole('button', { name: 'Body' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('opens Settings from gear and switches profile', async () => {
+  it('mounts the app shell', async () => {
     await seedProfile();
-    await db.userProfiles.add({ name: 'Sam', gender: 'female', birthDate: new Date('1992-05-10'), height: 168, createdAt: new Date() });
+    const { container } = render(<App />);
+    await screen.findByRole('button', { name: 'Today' });
+    expect(container.querySelector('.app.at')).toBeTruthy();
+  });
+
+  it('follows the colour mode setting', async () => {
+    await seedProfile();
+    const { container } = render(<App />);
+    await screen.findByRole('button', { name: 'Today' });
+
+    useStore.getState().setTheme('dark');
+    await waitFor(() => expect(container.querySelector('.app')).toHaveAttribute('data-mode', 'dark'));
+    useStore.getState().setTheme('light');
+    await waitFor(() => expect(container.querySelector('.app')).toHaveAttribute('data-mode', 'light'));
+  });
+
+  it('follows the language setting', async () => {
+    await seedProfile();
     render(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
-    expect(await screen.findByRole('heading', { name: 'Configuración' })).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Sam'));
-    await waitFor(() => {
-      expect(useStore.getState().activeProfile?.name).toBe('Sam');
-    });
+    await screen.findByRole('button', { name: 'Today' });
+
+    useStore.getState().setLanguage('es');
+    expect(await screen.findByRole('button', { name: 'Hoy' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Today' })).not.toBeInTheDocument();
   });
 });

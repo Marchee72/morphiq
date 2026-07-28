@@ -15,7 +15,14 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
-    exclude: ['e2e/**', 'server/**', 'node_modules/**'],
+    // `**/node_modules/**` rather than `node_modules/**`: tooling directories such
+    // as `.opencode/` and `.gemini/` carry their own nested node_modules, and the
+    // top-level-only glob let their vendored test suites into our run.
+    exclude: ['e2e/**', 'server/**', '**/node_modules/**'],
+    // The exercise catalogue is a 1 MB lazy chunk. Screens that wait on it need
+    // more than the 5s default, and hitting that default produced failures that
+    // looked like flakiness but were purely the timeout.
+    testTimeout: 30000,
     env: {
       VITE_DB_TYPE: 'local',
     },

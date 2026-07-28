@@ -1,54 +1,128 @@
 import React, { useState } from 'react';
+import { ArrowRight } from 'lucide-react';
+import { useT } from '../../i18n';
+import { AtlasInput, AtlasChoice, AtlasField } from '../../ui-atlas/atlas/AtlasField';
+import { AppMark } from '../../ui-atlas/atlas/AppMark';
+import { GoogleButton } from '../../ui-atlas/atlas/GoogleButton';
 import { useStore } from '../../presentation/state/store';
-import { Card } from '../../ui/primitives/Card';
-import { Button } from '../../ui/primitives/Button';
-import { Chip } from '../../ui/primitives/Chip';
 
-const istyle: React.CSSProperties = { width:'100%',minHeight:48,padding:'10px 14px',borderRadius:16,border:'1.5px solid var(--ui-outline-strong)',background:'var(--ui-surface)',color:'var(--ui-text-primary)',fontSize:16 };
-const ls: React.CSSProperties = { display:'flex',flexDirection:'column',gap:6,fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--ui-text-secondary)' };
+const MIN_HEIGHT_CM = 100;
+const MAX_HEIGHT_CM = 230;
 
+/**
+ * The first screen a new user ever sees, in Atlas's language.
+ *
+ * It sits outside the app shell — there is no profile yet, so there is nothing
+ * for the shell's data provider to load — but it renders inside an `.at`
+ * wrapper so the palette, fonts and controls are the same ones the rest of the
+ * app uses. The previous version was 54 lines of inline styles that shared
+ * nothing with anything.
+ */
 export const OnboardingScreen: React.FC = () => {
-  const { createProfile } = useStore();
-  const [n,setN]=useState(''); const [g,setG]=useState<'male'|'female'|null>(null);
-  const [b,setB]=useState(''); const [h,setH]=useState('');
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const hn=Number(h);
-  const ok=n.trim()&&g&&b&&Number.isFinite(hn)&&hn>=100&&hn<=230;
+  const { createProfile, loadProfiles } = useStore();
+  const { t } = useT();
 
-  const go = async () => {
-    if(!ok||!g) return;
+  const [name, setName] = useState('');
+  const [gender, setGender] = useState<'male' | 'female' | undefined>(undefined);
+  const [birthDate, setBirthDate] = useState('');
+  const [height, setHeight] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const heightCm = Number(height);
+  const heightValid = Number.isFinite(heightCm) && heightCm >= MIN_HEIGHT_CM && heightCm <= MAX_HEIGHT_CM;
+  const ready = Boolean(name.trim() && gender && birthDate && heightValid);
+
+  const submit = async () => {
+    if (!ready || !gender) return;
     setLoading(true);
-    setErrorMsg(null);
+    setError(null);
     try {
-      await createProfile({ name:n.trim(), gender:g, birthDate:new Date(b), height:hn });
+      await createProfile({
+        name: name.trim(),
+        gender,
+        birthDate: new Date(birthDate),
+        height: heightCm,
+      });
     } catch (err) {
       console.error('Failed to create profile:', err);
-      setErrorMsg(err instanceof Error ? err.message : 'Server connection failed');
+      setError(err instanceof Error ? err.message : t('onboarding.error'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'100dvh',padding:16}}>
-      <h1 style={{fontSize:34,fontWeight:800,letterSpacing:-1,marginBottom:4}}>MorphIQ</h1>
-      <p style={{color:'var(--ui-text-secondary)',marginBottom:24,fontWeight:600}}>Create your profile</p>
-      <Card style={{maxWidth:420,width:'100%'}}>
-        <div style={{display:'flex',flexDirection:'column',gap:14}}>
-          {errorMsg && (
-            <div style={{ padding: '10px 14px', borderRadius: 12, background: 'var(--ui-error-bg, rgba(239,68,68,0.15))', color: 'var(--ui-error, #ef4444)', fontSize: 13, fontWeight: 600 }}>
-              {errorMsg}
-            </div>
-          )}
-          <label style={ls}>Name<input aria-label="Name" style={istyle} value={n} onChange={e=>setN(e.target.value)} placeholder="Alex"/></label>
-          <div style={ls}>Gender<div style={{display:'flex',gap:8}}><Chip selected={g==='male'} onClick={()=>setG('male')}>Male</Chip><Chip selected={g==='female'} onClick={()=>setG('female')}>Female</Chip></div></div>
-          <label style={ls}>Birth date<input aria-label="Birth date" type="date" style={istyle} value={b} onChange={e=>setB(e.target.value)}/></label>
-          <label style={ls}>Height (cm)<input aria-label="Height" inputMode="numeric" style={istyle} value={h} onChange={e=>setH(e.target.value)} placeholder="180"/></label>
-          <Button onClick={go} disabled={!ok || loading}>{loading ? 'Creating...' : 'Create profile'}</Button>
-          <p style={{fontSize:12,color:'var(--ui-text-secondary)',lineHeight:1.5}}>MorphIQ uses your height, age, and gender to compute body composition metrics from Samsung Health measurements.</p>
+    <div className="app at at-onboard" data-mode="light">
+      <div className="at-onboard-inner">
+        <div className="at-onboard-head">
+          <AppMark size={64} />
+          <h1 className="at-serif">{t('onboarding.title')}</h1>
+          <p>{t('onboarding.subtitle')}</p>
         </div>
-      </Card>
+
+        <div className="at-card at-onboard-form" style={{ marginBottom: 14 }}>
+          {/* Signing in first means the profile is created already owned, and
+              any history that predates accounts is claimed in the same step. */}
+          <GoogleButton onSignedIn={() => { loadProfiles(); }} />
+          <span className="at-onboard-divider">{t('auth.or')}</span>
+        </div>
+
+        <form
+          className="at-card at-onboard-form"
+          onSubmit={e => { e.preventDefault(); submit(); }}
+        >
+          {error && <div className="at-onboard-error">{error}</div>}
+
+          <AtlasInput
+            label={t('onboarding.name')}
+            value={name}
+            onChange={setName}
+            placeholder={t('onboarding.namePlaceholder')}
+            autoFocus
+          />
+
+          <AtlasChoice
+            label={t('onboarding.gender')}
+            value={gender}
+            onChange={setGender}
+            options={[
+              { value: 'male', label: t('onboarding.male') },
+              { value: 'female', label: t('onboarding.female') },
+            ]}
+          />
+
+          <AtlasField label={t('onboarding.birthDate')}>
+            {id => (
+              <input
+                id={id}
+                className="at-input"
+                type="date"
+                value={birthDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={e => setBirthDate(e.target.value)}
+              />
+            )}
+          </AtlasField>
+
+          <AtlasInput
+            label={t('onboarding.height')}
+            value={height}
+            onChange={setHeight}
+            inputMode="numeric"
+            placeholder="178"
+            suffix={t('onboarding.cm')}
+            hint={height && !heightValid ? t('onboarding.heightRange', { min: MIN_HEIGHT_CM, max: MAX_HEIGHT_CM }) : undefined}
+          />
+
+          <button className="at-btn" type="submit" disabled={!ready || loading} style={{ justifyContent: 'center', marginTop: 4 }}>
+            {loading ? t('onboarding.creating') : t('onboarding.create')}
+            {!loading && <i><ArrowRight size={16} /></i>}
+          </button>
+        </form>
+
+        <p className="at-onboard-note">{t('onboarding.why')}</p>
+      </div>
     </div>
   );
 };

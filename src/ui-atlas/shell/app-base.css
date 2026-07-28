@@ -1,0 +1,110 @@
+/* ==========================================================================
+   App frame — the shell every screen renders inside.
+
+   Everything here was previously implicit in the design showcase's `.v2` shell
+   and would have silently disappeared in the port from the design showcase: its
+   only box-sizing reset was `.v2 *`, its fonts came from a Google Fonts @import,
+   and its scroll container was `.v2-scroll`.
+
+   MAINTENANCE CONSTRAINT: `.at` must not set `transform`, `filter`,
+   `backdrop-filter`, `perspective` or `contain` on the wrapper element. Any of
+   those creates a containing block, and every `position: fixed` overlay
+   (sheets, the live session, confirm dialogs) would then be trapped inside it.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Fonts — self-hosted.
+
+   A remote @import blocks first paint inside the Capacitor WebView and fails
+   outright offline, which is exactly when someone is standing in a gym. These
+   are the variable files, so one file per family covers every weight; only
+   latin and latin-ext are shipped, since the app is English and Spanish.
+   Instrument Serif, JetBrains Mono and Outfit were in the showcase's import
+   and used by neither concept — they are not shipped.
+   -------------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/fraunces-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/fraunces-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* --------------------------------------------------------------------------
+   The frame
+   -------------------------------------------------------------------------- */
+
+.app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app *,
+.app *::before,
+.app *::after { box-sizing: border-box; }
+
+.app button { font-family: inherit; }
+
+/* The device's own status bar sits above the app; this reserves room for it and
+   picks up whatever background the wrapper sets. */
+.app-statusbar {
+  flex-shrink: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: inherit;
+}
+
+.app-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.app-scroll::-webkit-scrollbar { display: none; }
+
+/* Overlays (sheets, the live session, dialogs) mount inside `.app` so they
+   inherit its palette, but above the scrolling body. */
+.app-overlays {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.app-overlays > * { pointer-events: auto; }
+

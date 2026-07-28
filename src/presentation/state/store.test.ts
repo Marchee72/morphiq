@@ -440,3 +440,80 @@ describe('Zustand store state management', () => {
   });
 });
 
+/**
+ * Sets key on exercise name, and the exercise list is a separate array. Changing
+ * one without the other leaves sets in the session that no exercise owns — they
+ * vanish from the screen but are still written to history when the session ends.
+ */
+describe('active session — exercise list and sets stay in step', () => {
+  beforeEach(() => {
+    useStore.setState({
+      activeSession: {
+        startTime: new Date(),
+        workoutType: 'Push A',
+        routineExercises: [
+          { id: 'e1', exerciseName: 'Bench Press', targetSets: 2 },
+          { id: 'e2', exerciseName: 'Barbell Row', targetSets: 2 },
+        ],
+        sets: [
+          { exerciseName: 'Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+          { exerciseName: 'Barbell Row', setNumber: 1, weight: 60, reps: 10, isCompleted: true },
+        ],
+      },
+    });
+  });
+
+  it('drops an exercise together with its logged sets', () => {
+    useStore.getState().removeActiveSessionExercise(0);
+
+    const session = useStore.getState().activeSession;
+    expect(session?.routineExercises?.map(e => e.exerciseName)).toEqual(['Barbell Row']);
+    expect(session?.sets.map(s => s.exerciseName)).toEqual(['Barbell Row']);
+  });
+
+  it('drops the outgoing exercise sets when one is swapped out', () => {
+    useStore.getState().swapActiveSessionExercise(0, { id: '0025', name: 'Incline Press' });
+
+    const session = useStore.getState().activeSession;
+    expect(session?.routineExercises?.[0]).toMatchObject({
+      exerciseId: '0025',
+      exerciseName: 'Incline Press',
+    });
+    // The replaced lift's sets must not be inherited by the one that took its place.
+    expect(session?.sets.map(s => s.exerciseName)).toEqual(['Barbell Row']);
+  });
+
+  it('matches names the way the derive layer does, ignoring case and spacing', () => {
+    useStore.setState({
+      activeSession: {
+        ...useStore.getState().activeSession!,
+        sets: [{ exerciseName: '  bench   press ', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    useStore.getState().removeActiveSessionExercise(0);
+    expect(useStore.getState().activeSession?.sets).toHaveLength(0);
+  });
+
+  it('keeps freestyle exercises visible when the first one is added by hand', () => {
+    // A freestyle session has no `routineExercises` — the list is implied by the
+    // sets. Appending used to start from an empty array and hide everything.
+    useStore.setState({
+      activeSession: {
+        startTime: new Date(),
+        workoutType: 'Freestyle',
+        sets: [
+          { exerciseName: 'Deadlift', setNumber: 1, weight: 140, reps: 5, isCompleted: true },
+          { exerciseName: 'Deadlift', setNumber: 2, weight: 140, reps: 5, isCompleted: true },
+        ],
+      },
+    });
+
+    useStore.getState().addActiveSessionExercise({ id: '0025', name: 'Bench Press' });
+
+    const list = useStore.getState().activeSession?.routineExercises ?? [];
+    expect(list.map(e => e.exerciseName)).toEqual(['Deadlift', 'Bench Press']);
+    expect(list[0].targetSets).toBe(2);
+  });
+});
+

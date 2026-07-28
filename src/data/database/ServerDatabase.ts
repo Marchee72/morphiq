@@ -5,6 +5,7 @@ import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { Message } from '../../core/entities/Message';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import type { FavoriteExercise } from '../../core/entities/FavoriteExercise';
+import { authHeaders, clearSession } from '../auth/session';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
 import type {
   IUserProfileRepository,
@@ -27,15 +28,31 @@ function getApiUrl(): string {
   return url;
 }
 
+export class UnauthorizedError extends Error {
+  constructor() { super('Session expired'); this.name = 'UnauthorizedError'; }
+}
+
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const baseUrl = getApiUrl();
   const res = await fetch(`${baseUrl}${path}`, {
-    headers: { 
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true'
-    },
     ...options,
+    // Merged rather than spread over: `...options` used to sit after `headers`,
+    // so any caller passing its own headers would have dropped these.
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+      ...authHeaders(),
+      ...(options?.headers as Record<string, string> | undefined),
+    },
   });
+
+  // A rejected session is not a normal failure: the app has to stop pretending
+  // it is signed in, or every subsequent call fails the same way.
+  if (res.status === 401) {
+    clearSession();
+    throw new UnauthorizedError();
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || `HTTP ${res.status}`);
@@ -279,6 +296,11 @@ export class ServerWorkoutSetRepository implements IWorkoutSetRepository {
       `/api/profiles/${profileId}/exercises/sets${query}`
     );
     return rows.map(parseWorkoutSet);
+  }
+
+  async getAllForProfile(profileId: string): Promise<WorkoutSet[]> {
+    const rows = await api<Record<string, unknown>[]>(`/api/profiles/${profileId}/sets`);
+    return rows.map(parseWorkoutSet).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   }
 
   async deleteForWorkout(workoutLogId: string): Promise<void> {

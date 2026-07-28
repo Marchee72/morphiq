@@ -39,7 +39,7 @@ describe('Zustand Store — Routine Integration', () => {
 
     const state = useStore.getState();
     expect(state.isGymModeOpen).toBe(true);
-    expect(state.activeTab).toBe('gym');
+    expect(state.activeTab).toBe('train');
     expect(state.activeSession).not.toBeNull();
     expect(state.activeSession?.workoutType).toBe('Torso Fuerza');
     expect(state.activeSession?.routineExercises).toHaveLength(2);

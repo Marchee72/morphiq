@@ -2,9 +2,13 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
-import { readFileSync, appendFileSync } from 'fs';
+import { readFileSync, appendFileSync, existsSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import {
+  authRequired, authenticate, verifyGoogleToken, upsertUser, issueSession,
+  adoptOrphanProfiles, guardProfile,
+} from './auth.js';
 
 const { Pool } = pg;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -54,6 +58,16 @@ async function initDb() {
   try {
     const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf8');
     await pool.query(schema);
+
+    // Migrations are additive and individually guarded, so replaying them is
+    // safe — which matters on serverless, where this can run on any cold start.
+    const migrationsDir = join(__dirname, 'migrations');
+    if (existsSync(migrationsDir)) {
+      for (const file of readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort()) {
+        await pool.query(readFileSync(join(migrationsDir, file), 'utf8'));
+        console.log(`✅ Migration applied: ${file}`);
+      }
+    }
     console.log('✅ Database schema verified/applied.');
   } catch (err) {
     logToFile('DATABASE_INIT_ERROR', err.message, err.stack);
@@ -63,8 +77,66 @@ async function initDb() {
 
 // ─── Express Setup ────────────────────────────────────────────────────────────
 const app = express();
-app.use(cors({ origin: '*' }));
+
+// An allow-list, not `*`. The Capacitor WebView reports its origin as
+// http(s)://localhost, and requests with no Origin header at all (curl, native
+// HTTP clients) are still allowed — the session token is what protects the data,
+// CORS only stops a hostile web page from riding along with it.
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost',
+  'https://morphiq-eight.vercel.app',
+];
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error(`Origin not allowed: ${origin}`));
+  },
+  credentials: true,
+}));
 app.use(express.json());
+
+// ─── Authentication ───────────────────────────────────────────────────────────
+
+/**
+ * Exchanges a Google ID token for an app session.
+ *
+ * Deliberately mounted before `authenticate`: signing in cannot itself require
+ * being signed in.
+ */
+app.post('/api/auth/google', async (req, res) => {
+  try {
+    const { idToken } = req.body ?? {};
+    if (!idToken) return res.status(400).json({ error: 'Missing idToken' });
+
+    const payload = await verifyGoogleToken(idToken);
+    const user = await upsertUser(pool, payload);
+    const adopted = await adoptOrphanProfiles(pool, user.id);
+
+    res.json({
+      token: issueSession(user),
+      user: { id: user.id, email: user.email, name: user.name, picture: user.picture },
+      adoptedProfiles: adopted,
+    });
+  } catch (err) {
+    logToFile('AUTH_ERROR', err.message, err.stack);
+    res.status(401).json({ error: 'Could not verify that sign-in' });
+  }
+});
+
+/** Who the current session belongs to, and whether auth is being enforced yet. */
+app.get('/api/auth/me', authenticate(pool), (req, res) => {
+  res.json({
+    authRequired,
+    user: req.user
+      ? { id: req.user.id, email: req.user.email, name: req.user.name, picture: req.user.picture }
+      : null,
+  });
+});
 
 // ─── Remote Client Logging Endpoint ──────────────────────────────────────────
 app.post('/api/logs', (req, res) => {
@@ -75,16 +147,28 @@ app.post('/api/logs', (req, res) => {
 
 // ─── Health ───────────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), authRequired });
 });
+
+// From here down every route requires a session (once AUTH_REQUIRED is on), and
+// anything addressing a specific profile also has to belong to the caller.
+app.use('/api', authenticate(pool));
+app.use('/api/profiles/:profileId', guardProfile(pool));
 
 // ─── Helper: parse numeric nulls from pg ─────────────────────────────────────
 const num = (v) => (v != null ? parseFloat(v) : undefined);
 
 // ─── User Profiles ────────────────────────────────────────────────────────────
-app.get('/api/profiles', async (_req, res) => {
+app.get('/api/profiles', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM user_profiles WHERE is_deleted = false OR is_deleted IS NULL ORDER BY "createdAt" ASC');
+    const live = '(is_deleted = false OR is_deleted IS NULL)';
+    const { rows } = req.user
+      ? await pool.query(
+          `SELECT * FROM user_profiles WHERE ${live} AND user_id = $1 ORDER BY "createdAt" ASC`,
+          [req.user.id],
+        )
+      // Only reachable while AUTH_REQUIRED is off, during the rollout.
+      : await pool.query(`SELECT * FROM user_profiles WHERE ${live} ORDER BY "createdAt" ASC`);
     res.json(rows.map(r => ({ ...r, id: r.id.toString(), height: num(r.height) })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -102,9 +186,9 @@ app.post('/api/profiles', async (req, res) => {
   const p = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO user_profiles (name, gender, "birthDate", height, "targetWeight", "targetBodyFat", "createdAt", "trainingProfile")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [p.name, p.gender, p.birthDate, p.height, p.targetWeight, p.targetBodyFat, p.createdAt || new Date(), p.trainingProfile]
+      `INSERT INTO user_profiles (name, gender, "birthDate", height, "targetWeight", "targetBodyFat", "createdAt", "trainingProfile", user_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [p.name, p.gender, p.birthDate, p.height, p.targetWeight, p.targetBodyFat, p.createdAt || new Date(), p.trainingProfile, req.user?.id ?? null]
     );
     const r = rows[0];
     res.status(201).json({ ...r, id: r.id.toString(), height: num(r.height) });
@@ -429,6 +513,26 @@ app.get('/api/profiles/:profileId/exercises/sets', async (req, res) => {
     const { rows } = await pool.query(
       'SELECT * FROM workout_sets WHERE "profileId" = $1 AND LOWER("exerciseName") = LOWER($2) ORDER BY timestamp DESC',
       [req.params.profileId, exerciseName]
+    );
+    res.json(rows.map(r => ({
+      ...r,
+      id: r.id.toString(),
+      reps: num(r.reps),
+      weight: num(r.weight),
+      distanceKm: num(r.distanceKm),
+      duration: num(r.duration),
+      speed: num(r.speed)
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Every set a profile has ever logged. Personal records are only honest over the
+// full history, so this is deliberately unbounded rather than windowed.
+app.get('/api/profiles/:profileId/sets', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM workout_sets WHERE "profileId" = $1 ORDER BY timestamp ASC',
+      [req.params.profileId]
     );
     res.json(rows.map(r => ({
       ...r,

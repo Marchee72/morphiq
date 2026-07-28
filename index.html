@@ -3,8 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>morphiq</title>
+    <link rel="apple-touch-icon" href="/app_icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Overwritten by the shell once the resolved colour mode is known; this
+         value is what the browser chrome uses before React mounts. -->
+    <meta name="theme-color" content="#f3ece2" />
+    <title>MorphIQ</title>
+    <style>
+      /* Painted before any stylesheet loads, so a cold start never flashes
+         white before the sand background arrives. `applySurface` overrides it
+         with the dark value when that is the resolved mode. */
+      html { background-color: #f3ece2; }
+      @media (prefers-color-scheme: dark) { html { background-color: #1a1512; } }
+    </style>
   </head>
   <body>
     <div id="root"></div>

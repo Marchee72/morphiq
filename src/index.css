@@ -1,5 +1,6 @@
-/* MorphIQ global styles — One UI era.
-   Design tokens: ./ui/tokens.css · Primitive styles: ./ui/ui.css */
+/* MorphIQ global styles.
+   Palette and components live in ./ui-atlas/atlas/atlas.css; the app frame in
+   ./ui-atlas/shell/app-base.css. Only what has to sit on <html>/<body> is here. */
 
 * {
   box-sizing: border-box;
@@ -15,14 +16,15 @@ html, body {
 }
 
 body {
-  background: var(--ui-bg);
-  color: var(--ui-text-primary);
-  font-family: var(--ui-font);
-  font-size: var(--ui-text-body);
+  /* The page background is painted on <html> before React mounts (see
+     `applySurface`), so a cold start never flashes the browser default. */
+  background: inherit;
+  color: #2c241d;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 15px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color var(--ui-motion-fast), color var(--ui-motion-fast);
 }
 
 #root {
@@ -36,54 +38,20 @@ body {
 button, input, select, textarea { font-family: inherit; }
 
 :focus-visible {
-  outline: 2px solid var(--ui-primary);
+  outline: 2px solid #c4643c;
   outline-offset: 2px;
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--ui-outline-strong); border-radius: 999px; }
+::-webkit-scrollbar-thumb { background: #e4dacc; border-radius: 999px; }
 
-/* One UI 9 Kinetic Initialization Animations */
-@keyframes uiSplashPulse {
-  0% { transform: scale(0.92); opacity: 0; }
-  60% { transform: scale(1.05); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
+[data-theme='dark'] body { color: #f2e7d9; }
+[data-theme='dark'] ::-webkit-scrollbar-thumb { background: #3a2f27; }
 
-@keyframes uiSplashFadeUp {
-  0% { transform: translateY(16px); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
-}
-
-@keyframes uiSplashFadeExit {
-  0% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.04); visibility: hidden; }
-}
-
-.ui-splash-icon {
-  animation: uiSplashPulse 0.8s cubic-bezier(0.2, 0.9, 0.25, 1.2) forwards;
-}
-
-.ui-splash-text {
-  animation: uiSplashFadeUp 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.2) 0.2s forwards;
-  opacity: 0;
-}
-
-.ui-splash-container {
-  transition: opacity 0.4s cubic-bezier(0.2, 0.9, 0.25, 1.2), transform 0.4s cubic-bezier(0.2, 0.9, 0.25, 1.2), visibility 0.4s;
-}
-
-.ui-splash-container.exiting {
-  opacity: 0;
-  transform: scale(1.04);
-  pointer-events: none;
-}
-
-/* Recharts Focus & Tap Outline Fixes */
+/* Recharts focus and tap outline fixes. */
 .recharts-wrapper,
 .recharts-surface,
 .recharts-responsive-container {
   outline: none;
   -webkit-tap-highlight-color: transparent;
 }
-

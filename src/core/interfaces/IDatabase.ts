@@ -45,6 +45,15 @@ export interface IWorkoutSetRepository {
   delete(id: string): Promise<void>;
   getForWorkout(workoutLogId: string): Promise<WorkoutSet[]>;
   getForExercise(profileId: string, exerciseName: string): Promise<WorkoutSet[]>;
+  /**
+   * Every set the profile has ever logged, oldest first.
+   *
+   * Personal records and the "was this a PR at the time" walk are only honest
+   * over the whole history — scoping them to a recent window would silently
+   * demote a lift the user hit last year. `profileId` is indexed, so this is one
+   * query rather than the N+1 that fetching per workout would cost.
+   */
+  getAllForProfile(profileId: string): Promise<WorkoutSet[]>;
   deleteForWorkout(workoutLogId: string): Promise<void>;
 }
 

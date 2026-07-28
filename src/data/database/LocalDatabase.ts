@@ -277,6 +277,15 @@ export class WorkoutSetRepository implements IWorkoutSetRepository {
     return records.map(r => ({ ...r, id: r.id?.toString() }));
   }
 
+  async getAllForProfile(profileId: string): Promise<WorkoutSet[]> {
+    const records = await db.workoutSets
+      .where('profileId')
+      .equals(profileId)
+      .toArray();
+    records.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()); // oldest first
+    return records.map(r => ({ ...r, id: r.id?.toString() }));
+  }
+
   async deleteForWorkout(workoutLogId: string): Promise<void> {
     await db.workoutSets
       .where('workoutLogId')

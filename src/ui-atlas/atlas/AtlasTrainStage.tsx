@@ -1,0 +1,88 @@
+import React from 'react';
+import { Plus } from 'lucide-react';
+import { useT } from '../../i18n';
+import { ExerciseThumb } from '../components/ExerciseThumb';
+import { useSwipeNav } from '../components/useSwipeNav';
+import type { SessionExerciseVM } from '../types';
+
+/** Sized to leave the whole set-logging column above the fixed action bar on a
+ *  844px-tall phone. Must match `.at-disc-wrap` in atlas.css. */
+const DISC = 180;
+const RADIUS = 88;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+/**
+ * The exercise you are on, and the gesture that changes it.
+ *
+ * Swiping is bound here rather than to the screen on purpose. Everything below
+ * this — the weight and reps wheels especially — scrolls, and a screen-wide
+ * handler competes with all of it. Confining the gesture to the disc also makes
+ * it discoverable: the thing that moves is the thing you drag.
+ *
+ * Past the last exercise sits an add slot rather than a hard stop. Reaching the
+ * end of the session and being told "no" is the moment you most want to add
+ * something.
+ */
+export const AtlasTrainStage: React.FC<{
+  exercise: SessionExerciseVM | undefined;
+  /** True when the cursor has run past the last exercise onto the add slot. */
+  onAddSlot: boolean;
+  complete: boolean;
+  /** 0–100. Drives the rest arc drawn around the disc. */
+  restPct: number;
+  onNext: () => void;
+  onPrevious: () => void;
+  onOpenDetail: () => void;
+  onAddExercise: () => void;
+}> = ({ exercise, onAddSlot, complete, restPct, onNext, onPrevious, onOpenDetail, onAddExercise }) => {
+  const { t } = useT();
+  const swipe = useSwipeNav(onNext, onPrevious);
+
+  return (
+    <div
+      className="at-stage"
+      {...swipe.bind}
+      // The browser must not claim the horizontal axis for its own back-gesture
+      // or overscroll before the handler above sees the move.
+      style={{ touchAction: 'pan-y' }}
+    >
+      <div
+        className="at-disc-wrap"
+        style={{
+          transform: `translateX(${swipe.dx * 0.4}px)`,
+          transition: swipe.dragging ? 'none' : undefined,
+        }}
+      >
+        {onAddSlot ? (
+          <button className="at-exercise-disc at-disc-add" onClick={onAddExercise}>
+            <Plus size={34} />
+          </button>
+        ) : (
+          <button
+            className="at-exercise-disc"
+            data-complete={complete}
+            onClick={onOpenDetail}
+            aria-label={t('detail.instructions')}
+          >
+            <ExerciseThumb
+              name={exercise?.name ?? ''}
+              image={exercise?.image}
+              gif={exercise?.gif}
+            />
+          </button>
+        )}
+
+        {/* The rest arc is drawn outside the photo's clip so it can overrun the edge. */}
+        <svg className="at-rest-arc" viewBox={`0 0 ${DISC} ${DISC}`} aria-hidden="true">
+          <circle cx={DISC / 2} cy={DISC / 2} r={RADIUS} fill="none" stroke="var(--at-tonal-soft)" strokeWidth="3.5" />
+          <circle
+            cx={DISC / 2} cy={DISC / 2} r={RADIUS} fill="none"
+            stroke="var(--clay)" strokeWidth="3.5" strokeLinecap="round"
+            strokeDasharray={`${(CIRCUMFERENCE * restPct) / 100} ${CIRCUMFERENCE}`}
+            transform={`rotate(-90 ${DISC / 2} ${DISC / 2})`}
+          />
+        </svg>
+      </div>
+    </div>
+  );
+};
