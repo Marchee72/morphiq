@@ -313,6 +313,8 @@ export const es: Translations = {
   'detail.addToSession': 'Anadir a la sesion',
   'detail.favourite': 'Favorito',
   'detail.yourBest': 'Tu mejor marca',
+  'detail.previousSessions': 'Sesiones anteriores',
+  'detail.history': 'Historial',
   'detail.noHistory': 'Aun sin registrar',
 
   // -- Comida y nota del dia --------------------------------------

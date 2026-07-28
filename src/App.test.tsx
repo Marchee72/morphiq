@@ -27,6 +27,35 @@ describe('App shell', () => {
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 
+  it('never flashes the sign-up form at someone who already has a profile', async () => {
+    // `profiles` is `[]` both before the first load resolves and when there is
+    // genuinely no account. Treating those the same greeted a returning user
+    // with onboarding on every launch, for as long as the load took.
+    await seedProfile();
+    render(<App />);
+
+    expect(screen.queryByRole('button', { name: /create profile/i })).not.toBeInTheDocument();
+    await screen.findByRole('button', { name: 'Today' });
+    expect(screen.queryByRole('button', { name: /create profile/i })).not.toBeInTheDocument();
+  });
+
+  it('gets out of the splash even when loading the profile fails', async () => {
+    // In server mode this is a network call. A rejection used to leave
+    // `profilesLoaded` unset, which would strand the app on the splash.
+    useStore.setState({
+      loadProfiles: async () => {
+        try {
+          throw new Error('network down');
+        } finally {
+          useStore.setState({ profilesLoaded: true });
+        }
+      },
+    });
+
+    render(<App />);
+    expect(await screen.findByRole('button', { name: /create profile/i })).toBeInTheDocument();
+  });
+
   it('renders five destinations with Today current', async () => {
     await seedProfile();
     render(<App />);

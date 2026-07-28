@@ -3,6 +3,7 @@ import type { Message } from '../../core/entities/Message';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
 import type { ExerciseFilters, FacetCounts } from '../../data/exercises/ExerciseCatalog';
 import type { WeeklyStatsVM } from '../derive/history';
+import type { ExerciseSessionVM } from '../derive/exerciseHistory';
 import type {
   BodyVM, CatalogItemVM, HistoryEntryVM, MuscleLoadVM, NutritionVM, PrRecordVM,
   ProfileVM, ScreenId, SessionCursor, SessionExerciseVM, SessionTotalsVM, SessionVM, StreakVM,
@@ -44,6 +45,12 @@ export interface AppData {
   nutrition: NutritionVM;
   catalog: CatalogSlice;
   coach: { thread: Message[]; isLoading: boolean };
+  /**
+   * Past sessions for one exercise, newest first. A function rather than a field
+   * because it is asked for one exercise at a time, on demand — deriving it for
+   * all 1,324 up front would be absurd.
+   */
+  exerciseHistory(exerciseName: string): ExerciseSessionVM[];
 }
 
 /** Overlays the shell can open. Any screen can request one. */

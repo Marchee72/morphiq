@@ -14,6 +14,7 @@ import { buildStreak } from '../derive/streak';
 import { buildHistory, buildWeeklyStats, buildWeeklyVolume } from '../derive/history';
 import { buildSessionExercises, buildSessionTotals, findCursor } from '../derive/session';
 import { toCatalogItem } from '../derive/catalog';
+import { buildExerciseHistory } from '../derive/exerciseHistory';
 
 /**
  * One provider, composed once per mount.
@@ -203,6 +204,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     toItem: exercise => toCatalogItem(exercise, usage, favorites),
   }), [catalog, usage, favorites]);
 
+  const exerciseHistory = useCallback(
+    (exerciseName: string) => buildExerciseHistory(setsForDerivation, exerciseName),
+    [setsForDerivation],
+  );
+
   const value: AppData = useMemo(() => ({
     ready: Boolean(activeProfile),
     profile,
@@ -215,7 +221,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     nutrition,
     catalog: catalogSlice,
     coach: { thread: chatHistory, isLoading: isAiLoading },
-  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, catalogSlice, chatHistory, isAiLoading]);
+    exerciseHistory,
+  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, catalogSlice, chatHistory, isAiLoading, exerciseHistory]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 };

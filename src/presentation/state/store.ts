@@ -118,6 +118,15 @@ export interface HistoricalExerciseStats {
 
 interface StoreState {
   profiles: UserProfile[];
+  /**
+   * False until the first `loadProfiles` settles.
+   *
+   * `profiles` is `[]` both before the load and when there genuinely is no
+   * profile, and those two mean opposite things: one is "wait", the other is
+   * "show onboarding". Without this flag the app cannot tell them apart and
+   * greets a returning user with the sign-up form every launch.
+   */
+  profilesLoaded: boolean;
   activeProfile: UserProfile | null;
   measurements: Measurement[];
   foodLogs: FoodLog[];
@@ -246,6 +255,7 @@ applySurface(initialMode());
 
 export const useStore = create<StoreState>((set, get) => ({
   profiles: [],
+  profilesLoaded: false,
   activeProfile: null,
   measurements: [],
   foodLogs: [],
@@ -548,16 +558,23 @@ export const useStore = create<StoreState>((set, get) => ({
   isAiLoading: false,
 
   loadProfiles: async () => {
-    const list = await profileRepo.getAll();
-    set({ profiles: list });
-    if (list.length > 0) {
-      // Auto-set the first profile if none is active
-      const active = get().activeProfile;
-      if (!active || !list.find(p => p.id === active.id)) {
-        await get().setActiveProfile(list[0].id!);
+    try {
+      const list = await profileRepo.getAll();
+      set({ profiles: list });
+      if (list.length > 0) {
+        // Auto-set the first profile if none is active
+        const active = get().activeProfile;
+        if (!active || !list.find(p => p.id === active.id)) {
+          await get().setActiveProfile(list[0].id!);
+        }
+      } else {
+        set({ activeProfile: null, measurements: [], foodLogs: [], workoutLogs: [], workoutHistory: [], chatHistory: [], favoriteExerciseIds: [], activeWorkoutSets: {}, exerciseStats: {} });
       }
-    } else {
-      set({ activeProfile: null, measurements: [], foodLogs: [], workoutLogs: [], workoutHistory: [], chatHistory: [], favoriteExerciseIds: [], activeWorkoutSets: {}, exerciseStats: {} });
+    } finally {
+      // Marked settled even when the load threw — in server mode this is a
+      // network call, and a failure must not leave the app stuck on the splash
+      // forever. An empty profile list then legitimately means onboarding.
+      set({ profilesLoaded: true });
     }
   },
 

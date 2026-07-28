@@ -315,6 +315,8 @@ export const en = {
   'detail.addToSession': 'Add to session',
   'detail.favourite': 'Favourite',
   'detail.yourBest': 'Your best',
+  'detail.previousSessions': 'Previous sessions',
+  'detail.history': 'History',
   'detail.noHistory': 'Not logged yet',
 
   // -- Food and day note -----------------------------------------

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, Plus } from 'lucide-react';
+import { Heart, Plus, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useStore } from '../../presentation/state/store';
 import { useAppData, useAppActions } from '../data/useAppData';
@@ -20,8 +20,8 @@ export const AtlasExerciseDetail: React.FC<{
   exercise: Exercise | null;
   onClose: () => void;
 }> = ({ exercise, onClose }) => {
-  const { t, fmt } = useT();
-  const { catalog, session } = useAppData();
+  const { t, tp, fmt } = useT();
+  const { catalog, session, exerciseHistory } = useAppData();
   const actions = useAppActions();
   const favouriteIds = useStore(s => s.favoriteExerciseIds);
   const addExercise = useStore(s => s.addActiveSessionExercise);
@@ -31,6 +31,8 @@ export const AtlasExerciseDetail: React.FC<{
   const item = catalog.toItem(exercise);
   const isFavourite = favouriteIds.includes(exercise.id);
   const secondary = exercise.secondaryMuscles.filter(Boolean);
+  const past = exerciseHistory(exercise.name);
+  const now = new Date();
 
   return (
     <AtlasSheet
@@ -79,6 +81,36 @@ export const AtlasExerciseDetail: React.FC<{
           <b>{exercise.target}</b>
         </div>
       </div>
+
+      {/* Every session you have done this lift, newest first. The aggregate
+          above says how strong you got; this says how you got there — whether
+          the last number was a step up, and how long you have sat on it. */}
+      {past.length > 0 && (
+        <div>
+          <div className="at-field-label">{t('detail.previousSessions')}</div>
+          <div className="at-past">
+            {past.map(entry => (
+              <div key={entry.workoutLogId} className="at-past-session">
+                <div className="at-past-head">
+                  <b>{fmt.relativeDay(entry.at, now)}</b>
+                  <span>
+                    {tp('unit.sets', entry.sets.length)}
+                    {entry.volumeKg > 0 && ` · ${fmt.n(entry.volumeKg)} ${t('unit.kg')}`}
+                  </span>
+                </div>
+                <div className="at-past-sets">
+                  {entry.sets.map(set => (
+                    <span key={set.setNum} className="at-past-set" data-pr={set.isPr}>
+                      {set.isPr && <Trophy size={10} />}
+                      {fmt.kgReps(set.weightKg, set.reps)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {exercise.instructionSteps.length > 0 && (
         <div>

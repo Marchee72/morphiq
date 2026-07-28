@@ -6,8 +6,10 @@ import { useExerciseSearch } from '../data/useExerciseSearch';
 import { ExerciseThumb } from '../components/ExerciseThumb';
 import { MUSCLE_GROUP_LABELS } from '../derive/muscleLoad';
 import type { CatalogItemVM } from '../types';
+import type { Exercise } from '../../core/entities/Exercise';
 import { BodyMap, type Side } from './BodyMap';
 import { AtlasStates, AtlasSkeleton } from './AtlasStates';
+import { AtlasExerciseDetail } from './AtlasExerciseDetail';
 
 /**
  * Library — the body map is the way in, text search stays secondary.
@@ -18,18 +20,26 @@ import { AtlasStates, AtlasSkeleton } from './AtlasStates';
  * shorter than a pager.
  */
 export const AtlasLibrary: React.FC = () => {
-  const { training } = useAppData();
+  const { training, catalog } = useAppData();
   const actions = useAppActions();
   const search = useExerciseSearch();
   const { t, fmt } = useT();
 
   const [side, setSide] = useState<Side>('front');
+  const [detail, setDetail] = useState<Exercise | null>(null);
 
   const setsThisWeek = training.muscleLoad.rows.find(r => r.group === search.group)?.sets ?? 0;
 
   const Card: React.FC<{ item: CatalogItemVM }> = ({ item }) => (
     <div className="at-ex">
-      <button className="at-ex-tap" onClick={() => actions.toggleFavorite(item.id)}>
+      {/* Tapping the card used to toggle the favourite — the same thing the
+          heart beside it does, and nothing else in a catalogue of 1,324
+          exercises opened one. It opens the exercise now: how it is performed,
+          and every session you have done it. */}
+      <button
+        className="at-ex-tap"
+        onClick={() => { const ex = catalog.byId(item.id); if (ex) setDetail(ex); }}
+      >
         <span className="at-ex-img">
           <ExerciseThumb name={item.name} image={item.image} />
         </span>
@@ -142,6 +152,8 @@ export const AtlasLibrary: React.FC = () => {
       )}
 
       <div style={{ height: 20 }} />
+
+      <AtlasExerciseDetail exercise={detail} onClose={() => setDetail(null)} />
     </>
   );
 };

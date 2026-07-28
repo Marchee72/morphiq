@@ -10,20 +10,36 @@ import { AppRoot } from './ui-atlas/AppRoot';
 import { AtlasSplash } from './ui-atlas/atlas/AtlasSplash';
 import { AtlasErrorBoundary } from './ui-atlas/atlas/AtlasErrorBoundary';
 
+/** The splash holds for at least this long, so a fast load does not flash it. */
+const SPLASH_MIN_MS = 1100;
+/** Long enough for the splash's own exit animation to finish. */
+const SPLASH_FADE_MS = 400;
+
 function App() {
   const { loadProfiles, profiles, activeProfile } = useStore();
-  const [showSplash, setShowSplash] = useState(true);
-  const [splashExiting, setSplashExiting] = useState(false);
+  const profilesLoaded = useStore(s => s.profilesLoaded);
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+  const [splashGone, setSplashGone] = useState(false);
 
   useEffect(() => {
-    loadProfiles();
-    const timerExit = setTimeout(() => setSplashExiting(true), 1100);
-    const timerRemove = setTimeout(() => setShowSplash(false), 1500);
-    return () => {
-      clearTimeout(timerExit);
-      clearTimeout(timerRemove);
-    };
+    loadProfiles().catch(err => console.error('Failed to load profiles', err));
+    const timer = setTimeout(() => setMinTimeElapsed(true), SPLASH_MIN_MS);
+    return () => clearTimeout(timer);
   }, [loadProfiles]);
+
+  /**
+   * The splash leaves when the data is actually there, not on a fixed timer.
+   * It used to disappear after 1.5s regardless, and since `profiles` is `[]`
+   * until the load resolves, a slower start showed the onboarding form to
+   * someone who already had a profile.
+   */
+  const splashDone = profilesLoaded && minTimeElapsed;
+
+  useEffect(() => {
+    if (!splashDone) return;
+    const timer = setTimeout(() => setSplashGone(true), SPLASH_FADE_MS);
+    return () => clearTimeout(timer);
+  }, [splashDone]);
 
   // Android hardware back and the swipe-back gesture, in priority order:
   // an open overlay, then the tab stack, then leave the app.
@@ -70,7 +86,11 @@ function App() {
     autoSync();
   }, [activeProfile]);
 
-  const splash = showSplash && <AtlasSplash exiting={splashExiting} />;
+  const splash = !splashGone && <AtlasSplash exiting={splashDone} />;
+
+  // Nothing is known yet — an empty `profiles` here means "not loaded", not
+  // "no account". Deciding between the app and the sign-up form has to wait.
+  if (!profilesLoaded) return <>{splash}</>;
 
   // Onboarding runs before there is a profile to load, so it sits outside the
   // app shell — but inside its own `.at` wrapper, so it looks like the app.

@@ -33,6 +33,38 @@ describe('Library', () => {
     await waitFor(() => expect(text().toLowerCase()).toContain('bench press'));
   });
 
+  it('opens the exercise when its card is tapped', async () => {
+    // Tapping a card used to toggle the favourite — the same thing the heart
+    // beside it does — so nothing in a 1,324-entry catalogue ever opened.
+    const { container } = renderScreen('library');
+    await waitFor(
+      () => expect(container.querySelectorAll('.at-ex').length).toBeGreaterThan(5),
+      { timeout: 20000 },
+    );
+
+    const before = useStore.getState().favoriteExerciseIds.length;
+    fireEvent.click(container.querySelectorAll('.at-ex-tap')[0] as HTMLElement);
+
+    await waitFor(() => expect(document.querySelector('.at-sheet')).toBeTruthy());
+    expect(useStore.getState().favoriteExerciseIds).toHaveLength(before);
+  });
+
+  it('shows what you lifted on this exercise, session by session', async () => {
+    const { container } = renderScreen('library', { data: 'rich' });
+    await waitFor(
+      () => expect(container.querySelectorAll('.at-ex').length).toBeGreaterThan(5),
+      { timeout: 20000 },
+    );
+
+    fireEvent.change(screen.getByLabelText(/search by name/i), { target: { value: 'barbell bench press' } });
+    await waitFor(() => expect(container.querySelectorAll('.at-ex').length).toBeGreaterThan(0));
+    fireEvent.click(container.querySelectorAll('.at-ex-tap')[0] as HTMLElement);
+
+    await waitFor(() => expect(text()).toMatch(/previous sessions/i));
+    // The rich fixture logs four sets of 82.5 x 8.
+    expect(document.querySelector('.at-past')?.textContent).toMatch(/82[.,]5/);
+  });
+
   it('says so plainly when nothing matches', async () => {
     const { container } = renderScreen('library');
     await waitFor(
