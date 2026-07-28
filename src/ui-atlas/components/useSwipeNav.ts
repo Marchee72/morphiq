@@ -37,6 +37,7 @@ export interface SwipeNav {
     onPointerMove: (e: React.PointerEvent) => void;
     onPointerUp: (e: React.PointerEvent) => void;
     onPointerCancel: (e: React.PointerEvent) => void;
+    onClickCapture: (e: React.MouseEvent) => void;
   };
 }
 
@@ -44,6 +45,12 @@ export function useSwipeNav(onNext: () => void, onPrevious: () => void): SwipeNa
   const start = useRef<{ x: number; y: number; id: number } | null>(null);
   /** null while the axis is still undecided, then locked for the rest of the gesture. */
   const axis = useRef<'x' | 'y' | null>(null);
+  /**
+   * A drag still ends in a `click` on whatever was under the finger. Without
+   * this, every swipe also counted as a tap on the disc and opened the exercise
+   * detail sheet on top of the exercise you had just swiped to.
+   */
+  const swallowClick = useRef(false);
   const [dx, setDx] = useState(0);
 
   const end = () => {
@@ -84,6 +91,10 @@ export function useSwipeNav(onNext: () => void, onPrevious: () => void): SwipeNa
         if (!from || e.pointerId !== from.id) return;
         const moveX = e.clientX - from.x;
 
+        // Any real drag swallows its trailing click, committed or not — a drag
+        // that fell short of the threshold is still not a tap.
+        if (axis.current === 'x' && Math.abs(moveX) >= SLOP_PX) swallowClick.current = true;
+
         if (axis.current === 'x' && Math.abs(moveX) >= COMMIT_PX) {
           if (moveX < 0) onNext();
           else onPrevious();
@@ -92,6 +103,13 @@ export function useSwipeNav(onNext: () => void, onPrevious: () => void): SwipeNa
       },
 
       onPointerCancel: end,
+
+      onClickCapture: e => {
+        if (!swallowClick.current) return;
+        swallowClick.current = false;
+        e.preventDefault();
+        e.stopPropagation();
+      },
     },
   };
 }

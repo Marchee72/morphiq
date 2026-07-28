@@ -218,6 +218,8 @@ export const es: Translations = {
   'train.currentExercise': 'Actual',
   'train.yourPr': 'Tu mejor marca',
   'train.lastTimeLabel': 'La ultima vez',
+  'train.nextNamed': 'Sigue: {name}',
+  'train.dismissRest': 'Cerrar el descanso',
   'train.thisSession': 'Esta sesion',
   'train.noPrYet': 'Aun sin record',
   'train.increase': 'Subir {label}',

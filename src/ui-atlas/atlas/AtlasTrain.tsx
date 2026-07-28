@@ -134,6 +134,16 @@ export const AtlasTrain: React.FC = () => {
   const restPct = endsAt && totalSec > 0 ? (restLeft / totalSec) * 100 : 0;
   const exerciseVolume = exercise.sets.reduce((sum, s) => (s.done ? sum + s.weightKg * s.reps : sum), 0);
 
+  /**
+   * The next exercise with something still to log, which is rarely the one after
+   * this in the list — you land on whatever you added last, so "next" often means
+   * going back to the top. Naming it stops the button lying about where it goes.
+   */
+  const nextUnfinished = sessionExercises.findIndex(
+    (ex, i) => i !== live.cursor.exerciseIdx && ex.sets.some(s => !s.done),
+  );
+  const nextExercise = nextUnfinished === -1 ? undefined : sessionExercises[nextUnfinished];
+
   const openDetail = () => {
     const full = exercise.exerciseId ? catalog.byId(exercise.exerciseId) : undefined;
     if (full) setDetail(full);
@@ -150,9 +160,20 @@ export const AtlasTrain: React.FC = () => {
 
       <AtlasTrainStage
         exercise={exercise}
+        index={live.cursor.exerciseIdx}
         onAddSlot={false}
         complete={exerciseComplete}
         restPct={restPct}
+        caption={
+          <>
+            <div className="at-exercise-name">{exercise.name}</div>
+            <div className="at-exercise-meta">
+              {t('train.exerciseOf', { n: live.cursor.exerciseIdx + 1, total: sessionExercises.length })}
+              {exercise.target && ` · ${exercise.target}`}
+              {exercise.equipment && ` · ${exercise.equipment}`}
+            </div>
+          </>
+        }
         onNext={() => {
           // Past the last exercise there is nothing to move to, so offer the one
           // thing you could possibly want there.
@@ -166,13 +187,6 @@ export const AtlasTrain: React.FC = () => {
         onOpenDetail={openDetail}
         onAddExercise={() => actions.openOverlay('exercisePicker')}
       />
-
-      <div className="at-exercise-name">{exercise.name}</div>
-      <div className="at-exercise-meta">
-        {t('train.exerciseOf', { n: live.cursor.exerciseIdx + 1, total: sessionExercises.length })}
-        {exercise.target && ` · ${exercise.target}`}
-        {exercise.equipment && ` · ${exercise.equipment}`}
-      </div>
 
       {/* What the lift is worth to you: the number to beat, the number to match,
           and what you have put into it today. None of this reached the screen
@@ -221,15 +235,17 @@ export const AtlasTrain: React.FC = () => {
             <span className="at-done-mark"><Check size={20} strokeWidth={3} /></span>
             <h4 className="at-serif">{t('train.exerciseDone')}</h4>
             <p>{t('train.exerciseDoneSub', { n: exercise.sets.length })}</p>
-            {/* Finishing an exercise is the moment you decide what comes next, so
-                the choice sits right here rather than only behind a gesture. */}
-            <button
-              className="at-btn"
-              style={{ justifyContent: 'center', width: '100%' }}
-              onClick={() => actions.openOverlay('exercisePicker')}
-            >
-              <Plus size={16} /> {t('train.pickNext')}
-            </button>
+            {/* Only offered when the sticky bar is not already showing the way
+                on — two buttons for the same decision is worse than one. */}
+            {!nextExercise && !sessionComplete && (
+              <button
+                className="at-btn"
+                style={{ justifyContent: 'center', width: '100%' }}
+                onClick={() => actions.openOverlay('exercisePicker')}
+              >
+                <Plus size={16} /> {t('train.pickNext')}
+              </button>
+            )}
             <p className="at-swipe-hint">{t('train.swipeHint')}</p>
           </div>
         </div>
@@ -291,17 +307,21 @@ export const AtlasTrain: React.FC = () => {
           <button className="at-btn" data-block="true" onClick={() => setFinishingAt(new Date())}>
             <Flag size={16} /> {t('train.finish')}
           </button>
+        ) : exerciseComplete && nextExercise ? (
+          <button
+            className="at-btn"
+            data-block="true"
+            onClick={() => live.goToExercise(nextUnfinished)}
+          >
+            {t('train.nextNamed', { name: nextExercise.name })}
+          </button>
         ) : exerciseComplete ? (
           <button
             className="at-btn"
             data-block="true"
-            onClick={() => {
-              const nextUnfinished = sessionExercises.findIndex(ex => ex.sets.some(s => !s.done));
-              if (nextUnfinished !== -1) live.goToExercise(nextUnfinished);
-              else actions.openOverlay('exercisePicker');
-            }}
+            onClick={() => actions.openOverlay('exercisePicker')}
           >
-            {t('train.nextExercise')}
+            <Plus size={16} /> {t('train.addExercise')}
           </button>
         ) : (
           <button

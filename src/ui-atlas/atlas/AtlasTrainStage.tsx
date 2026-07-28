@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useT } from '../../i18n';
 import { ExerciseThumb } from '../components/ExerciseThumb';
@@ -25,18 +25,34 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  */
 export const AtlasTrainStage: React.FC<{
   exercise: SessionExerciseVM | undefined;
+  /** Which exercise this is. Changing it plays the slide-in. */
+  index: number;
   /** True when the cursor has run past the last exercise onto the add slot. */
   onAddSlot: boolean;
   complete: boolean;
   /** 0–100. Drives the rest arc drawn around the disc. */
   restPct: number;
+  /** Rendered under the disc, inside the sliding block. */
+  caption: React.ReactNode;
   onNext: () => void;
   onPrevious: () => void;
   onOpenDetail: () => void;
   onAddExercise: () => void;
-}> = ({ exercise, onAddSlot, complete, restPct, onNext, onPrevious, onOpenDetail, onAddExercise }) => {
+}> = ({ exercise, index, onAddSlot, complete, restPct, caption, onNext, onPrevious, onOpenDetail, onAddExercise }) => {
   const { t } = useT();
   const swipe = useSwipeNav(onNext, onPrevious);
+
+  /**
+   * Which way the exercise changed, so the incoming disc enters from the side you
+   * came from. Tracked during render against the previous index rather than in an
+   * effect, which would play the animation a frame late.
+   */
+  const [seen, setSeen] = useState(index);
+  const [enterFrom, setEnterFrom] = useState<'left' | 'right' | null>(null);
+  if (seen !== index) {
+    setEnterFrom(index > seen ? 'right' : 'left');
+    setSeen(index);
+  }
 
   return (
     <div
@@ -46,13 +62,20 @@ export const AtlasTrainStage: React.FC<{
       // or overscroll before the handler above sees the move.
       style={{ touchAction: 'pan-y' }}
     >
+      {/* Disc and caption travel together — sliding the photo while the name it
+          belongs to snaps reads as two separate things happening. Keyed on the
+          index so React remounts the block and the entry animation restarts on
+          every change rather than only the first. */}
       <div
-        className="at-disc-wrap"
+        className="at-stage-slide"
+        key={index}
+        data-enter={enterFrom ?? undefined}
         style={{
-          transform: `translateX(${swipe.dx * 0.4}px)`,
+          transform: swipe.dragging ? `translateX(${swipe.dx * 0.4}px)` : undefined,
           transition: swipe.dragging ? 'none' : undefined,
         }}
       >
+      <div className="at-disc-wrap">
         {onAddSlot ? (
           <button className="at-exercise-disc at-disc-add" onClick={onAddExercise}>
             <Plus size={34} />
@@ -82,6 +105,9 @@ export const AtlasTrainStage: React.FC<{
             transform={`rotate(-90 ${DISC / 2} ${DISC / 2})`}
           />
         </svg>
+      </div>
+
+        {caption}
       </div>
     </div>
   );

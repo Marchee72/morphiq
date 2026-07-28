@@ -220,6 +220,8 @@ export const en = {
   'train.currentExercise': 'Current',
   'train.yourPr': 'Your best',
   'train.lastTimeLabel': 'Last time',
+  'train.nextNamed': 'Next: {name}',
+  'train.dismissRest': 'Dismiss rest timer',
   'train.thisSession': 'This session',
   'train.noPrYet': 'No record yet',
   'train.increase': 'Increase {label}',

@@ -51,7 +51,14 @@ export const AtlasSessionEditor: React.FC<{
   };
 
   return (
-    <div className="at-editor" role="dialog" aria-label={t('train.editSession')}>
+    <div className="at-editor-scrim" onClick={onClose}>
+      <div
+        className="at-editor"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('train.editSession')}
+        onClick={e => e.stopPropagation()}
+      >
       <div className="at-editor-head">
         <div>
           <small>{t('train.editSession')}</small>
@@ -160,6 +167,7 @@ export const AtlasSessionEditor: React.FC<{
             </button>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

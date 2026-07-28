@@ -74,6 +74,9 @@ export interface ActiveSessionExercise {
 
 type DraftSet = Omit<WorkoutSet, 'profileId' | 'timestamp' | 'workoutLogId'>;
 
+/** Sets an exercise starts with when added by hand. Trimming one is a tap; adding one is a tap. */
+export const DEFAULT_TARGET_SETS = 4;
+
 /** Every set except the ones belonging to `exerciseName`. Keys the same way the derive layer does. */
 function dropSetsFor(sets: DraftSet[], exerciseName: string): DraftSet[] {
   const key = normalizeName(exerciseName);
@@ -349,7 +352,7 @@ export const useStore = create<StoreState>((set, get) => ({
       id: `ex_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       exerciseId: exercise.id,
       exerciseName: exercise.name,
-      targetSets: 3,
+      targetSets: DEFAULT_TARGET_SETS,
     };
     set({ activeSession: { ...session, routineExercises: [...list, newEx] } });
   },

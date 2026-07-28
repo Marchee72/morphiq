@@ -485,6 +485,23 @@
    image drag fires `pointercancel` and the swipe dies halfway through. */
 .at-stage img { -webkit-user-drag: none; user-drag: none; }
 
+/* The disc and its caption move as one block, so changing exercise reads as
+   travel rather than as a redraw. */
+.at-stage-slide { will-change: transform; }
+
+.at-stage-slide[data-enter='right'] { animation: at-slide-from-right 0.26s cubic-bezier(0.22, 0.61, 0.36, 1); }
+.at-stage-slide[data-enter='left'] { animation: at-slide-from-left 0.26s cubic-bezier(0.22, 0.61, 0.36, 1); }
+
+@keyframes at-slide-from-right {
+  from { transform: translateX(38%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@keyframes at-slide-from-left {
+  from { transform: translateX(-38%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
 /* Wrapper keeps the rest arc outside the disc's own overflow clip. */
 .at-disc-wrap {
   position: relative;
@@ -532,6 +549,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .at-disc-wrap { transition: none; }
+  .at-stage-slide[data-enter] { animation: none; }
 }
 
 .at-rest-arc {
@@ -1360,21 +1378,48 @@
    but the app has always supported it, so each skin designs its own rather
    than losing the feature in the port. */
 
-/* LAYERING: this renders inside `.app-scroll`, not inside `.app-overlays`.
+/* The session list is a side panel, not a takeover.
+   A full-screen list makes checking what is coming up feel like leaving the
+   session; a panel keeps the exercise you are on visible at the edge, so it
+   reads as looking sideways rather than navigating away.
+
+   LAYERING: this renders inside `.app-scroll`, not inside `.app-overlays`.
    `.app-overlays` sets `z-index: 100`, which makes it a stacking context — every
    surface inside it (the exercise picker included) is clamped to that 100 no
    matter what it declares. Anything mounted in the scroll body must therefore
    stay *below* 100, or it paints over the shell's overlays. It used to be 120,
    which is why opening the picker from this screen looked like nothing
    happened: the picker was rendering behind an opaque full-screen panel. */
-.at-editor {
+.at-editor-scrim {
   position: fixed;
   inset: 0;
   z-index: 90;
+  background: rgba(44, 36, 29, 0.42);
+  animation: at-fade 0.18s ease-out;
+}
+
+.at-editor {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(86%, 400px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--sand);
+  box-shadow: -18px 0 40px -20px rgba(64, 44, 26, 0.55);
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: calc(30px + env(safe-area-inset-bottom, 0px));
+  animation: at-slide-in-right 0.24s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes at-slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .at-editor, .at-editor-scrim { animation: none; }
 }
 
 .at-editor-head {
@@ -1394,8 +1439,11 @@
   color: var(--muted);
 }
 
+/* In a side panel there is not enough width for thumb + name + four tools on one
+   line without squeezing the name to nothing, so the tools take their own row. */
 .at-editor-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 12px 14px;
@@ -1407,7 +1455,7 @@
 /* The row itself is the primary action: a list of where you could be that you
    cannot navigate from is a strange thing to hand someone mid-session. */
 .at-editor-jump {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -1436,7 +1484,15 @@
 .at-editor-name b { display: block; font-size: 14.5px; letter-spacing: -0.01em; }
 .at-editor-name small { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 
-.at-editor-tools { display: flex; gap: 4px; flex-shrink: 0; }
+.at-editor-tools {
+  display: flex;
+  gap: 4px;
+  flex: 1 1 100%;
+  justify-content: flex-end;
+  padding-top: 2px;
+  border-top: 1px solid var(--hair);
+  margin-top: 2px;
+}
 
 .at-editor-tools button {
   width: 32px;

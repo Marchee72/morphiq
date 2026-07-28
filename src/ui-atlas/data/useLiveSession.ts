@@ -45,6 +45,14 @@ export interface LiveSession {
   discard(): Promise<void>;
 }
 
+/** Holds a cursor inside the list it points into, whatever happened to that list. */
+export function clampCursor(cursor: SessionCursor, exercises: SessionExerciseVM[]): SessionCursor {
+  if (exercises.length === 0) return { exerciseIdx: 0, setIdx: 0 };
+  const exerciseIdx = Math.min(Math.max(0, cursor.exerciseIdx), exercises.length - 1);
+  const sets = exercises[exerciseIdx].sets.length;
+  return { exerciseIdx, setIdx: Math.min(Math.max(0, cursor.setIdx), Math.max(0, sets - 1)) };
+}
+
 export function useLiveSession(
   cursorOverride?: SessionCursor,
   onCursorChange?: (cursor: SessionCursor) => void,
@@ -52,7 +60,14 @@ export function useLiveSession(
   const { sessionExercises, cursor: derivedCursor } = useAppData();
   const startRest = useRestTimer(s => s.start);
 
-  const cursor = cursorOverride ?? derivedCursor;
+  /**
+   * The override is a screen's local state and the exercise list is not — remove
+   * or swap an exercise and the two disagree. An out-of-range cursor resolves to
+   * `undefined`, which the Train screen reads as "this session has no exercises"
+   * and renders an empty state over a session that still has plenty. Clamping
+   * here rather than in the screen keeps every consumer of the hook honest.
+   */
+  const cursor = clampCursor(cursorOverride ?? derivedCursor, sessionExercises);
   const exercise = sessionExercises[cursor.exerciseIdx];
 
   /**

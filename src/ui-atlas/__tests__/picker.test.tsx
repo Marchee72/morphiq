@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { useStore } from '../../presentation/state/store';
+import { useStore, DEFAULT_TARGET_SETS } from '../../presentation/state/store';
 import { db } from '../../data/database/LocalDatabase';
 import { renderScreen } from '../../test/renderScreen';
 
@@ -169,8 +169,8 @@ describe('— full session flow', () => {
     // 2. It becomes the exercise on screen, not the one we came from.
     await waitFor(() => expect(text()).toMatch(/1 (of|de) 1/));
 
-    // 3. Log all three sets it was added with.
-    for (let i = 0; i < 3; i++) {
+    // 3. Log every set it was added with.
+    for (let i = 0; i < DEFAULT_TARGET_SETS; i++) {
       const log = screen.getAllByRole('button', { name: /complete set|^log /i })[0];
       fireEvent.click(log);
       await waitFor(() => {
@@ -179,9 +179,12 @@ describe('— full session flow', () => {
       });
     }
 
-    // 4. The exercise reads as complete and offers what comes next.
+    // 4. The exercise reads as complete, and with nothing left to log the
+    //    primary action becomes finishing rather than another set.
     await waitFor(() => expect(text()).toMatch(/Exercise complete/i));
-    expect(screen.getAllByRole('button', { name: /pick the next exercise/i }).length).toBeGreaterThan(0);
+    expect(document.querySelector('.at-train-actions')?.textContent).toMatch(/finish session/i);
+    // Adding another exercise stays available in the body of the screen.
+    expect(screen.getAllByRole('button', { name: /add exercise/i }).length).toBeGreaterThan(0);
   });
 
   it('adding a second exercise moves focus onto it', async () => {

@@ -11,6 +11,10 @@ const initialState = useStore.getState();
 const logButton = () => screen.getAllByRole('button', { name: /complete set|^log /i })[0];
 const text = () => document.body.textContent?.replace(/\s+/g, ' ') ?? '';
 
+// The summary outlives the session it describes by design, so it also outlives
+// the test that produced it unless it is cleared for every one of them.
+beforeEach(() => useSessionSummary.setState({ summary: null }));
+
 describe('Train', () => {
   beforeEach(() => {
     useStore.setState(initialState, true);
@@ -97,6 +101,48 @@ describe('Train', () => {
     await waitFor(() =>
       expect(screen.getAllByRole('button', { name: /finish session/i }).length).toBeGreaterThan(0),
     );
+  });
+
+  it('names where the next-exercise button actually goes', async () => {
+    // "Next exercise" jumped to the first unfinished one, which is usually
+    // *behind* you — you land on whatever you added last. The label said next
+    // and the button went back.
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        sets: [
+          { exerciseName: 'Barbell Row', setNumber: 1, weight: 60, reps: 10, isCompleted: true },
+          { exerciseName: 'Barbell Row', setNumber: 2, weight: 60, reps: 10, isCompleted: true },
+          { exerciseName: 'Barbell Row', setNumber: 3, weight: 60, reps: 10, isCompleted: true },
+        ],
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /go to barbell row/i }));
+    await waitFor(() =>
+      expect(document.querySelector('.at-train-actions')?.textContent)
+        .toMatch(/next: barbell bench press/i),
+    );
+  });
+
+  it('does not offer the same decision twice when an exercise is done', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        sets: [
+          { exerciseName: 'Barbell Row', setNumber: 1, weight: 60, reps: 10, isCompleted: true },
+          { exerciseName: 'Barbell Row', setNumber: 2, weight: 60, reps: 10, isCompleted: true },
+          { exerciseName: 'Barbell Row', setNumber: 3, weight: 60, reps: 10, isCompleted: true },
+        ],
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /go to barbell row/i }));
+    // The sticky bar already points at the next exercise, so the completion card
+    // must not repeat the offer.
+    await waitFor(() => expect(document.querySelector('.at-done')).toBeTruthy());
+    expect(within(document.querySelector('.at-done') as HTMLElement)
+      .queryByRole('button', { name: /pick the next exercise/i })).toBeNull();
   });
 
   it('promotes finishing to the primary action once every set is logged', async () => {
@@ -351,6 +397,26 @@ describe('Train — the exercise list', () => {
       expect(list).toHaveLength(2);
       expect(list[0].exerciseName).not.toBe('Barbell Bench Press');
     });
+  });
+
+  it('keeps training after the exercise you were standing on is removed', async () => {
+    // The cursor is the screen's own state; the exercise list is not. Removing
+    // the last exercise left the cursor pointing past the end, which resolved to
+    // `undefined` and rendered "No exercises yet" over a session that still had
+    // one — a dead screen with no way to log anything.
+    renderScreen('train', { data: 'rich', session: {} });
+
+    fireEvent.click(screen.getByRole('button', { name: /go to barbell row/i }));
+    await waitFor(() => expect(text()).toMatch(/2 (of|de) 2/));
+
+    openList();
+    const rows = within(document.querySelector('.at-editor') as HTMLElement)
+      .getAllByRole('button', { name: /^remove$/i });
+    fireEvent.click(rows[rows.length - 1]);
+
+    await waitFor(() => expect(text()).toMatch(/1 (of|de) 1/));
+    expect(text()).not.toMatch(/no exercises yet/i);
+    expect(document.querySelector('.at-train-actions')).toBeTruthy();
   });
 
   it('jumps to an exercise when its row is tapped', async () => {
