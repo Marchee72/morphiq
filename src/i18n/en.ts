@@ -218,6 +218,8 @@ export const en = {
   'train.currentExercise': 'Current',
   'train.yourPr': 'Your best',
   'train.lastTimeLabel': 'Last time',
+  'train.markSetDone': 'Mark set {n} done',
+  'train.editSetValues': 'Edit set {n}',
   'train.nextNamed': 'Next: {name}',
   'train.thisSession': 'This session',
   'train.noPrYet': 'No record yet',

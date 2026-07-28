@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { useStore } from '../../presentation/state/store';
 import { useSessionSummary } from '../state/sessionSummary';
+import { db } from '../../data/database/LocalDatabase';
 import { renderScreen } from '../../test/renderScreen';
 
 const initialState = useStore.getState();
@@ -12,7 +13,12 @@ const text = () => document.body.textContent?.replace(/\s+/g, ' ') ?? '';
 
 // The summary outlives the session it describes by design, so it also outlives
 // the test that produced it unless it is cleared for every one of them.
-beforeEach(() => useSessionSummary.setState({ summary: null }));
+beforeEach(async () => {
+  useSessionSummary.setState({ summary: null });
+  // Finishing a session writes to the database and reloads from it. Left in
+  // place, those rows show up as another test's history.
+  await Promise.all(db.tables.map(t => t.clear()));
+});
 
 describe('Train', () => {
   beforeEach(() => {
@@ -200,6 +206,9 @@ describe('Train — finishing', () => {
       expect(summary?.volumeKg).toBe(640);
       expect(summary?.exercises.map(e => e.name)).toEqual(['Barbell Bench Press']);
     });
+    // Let the write settle inside the test that caused it, or it lands in the
+    // middle of a later one and nulls that test's session.
+    await waitFor(() => expect(useStore.getState().activeSession).toBeNull());
   });
 
   it('records how the session felt at the point you can answer it', async () => {
@@ -211,6 +220,7 @@ describe('Train — finishing', () => {
     fireEvent.click(screen.getByRole('button', { name: /finish and save/i }));
 
     await waitFor(() => expect(useSessionSummary.getState().summary?.feeling).toBe('sore'));
+    await waitFor(() => expect(useStore.getState().activeSession).toBeNull());
   });
 });
 
@@ -334,6 +344,111 @@ describe('Train — what the lift is worth to you', () => {
     });
     // `isPr` has been derived since the beginning and had nowhere to render.
     await waitFor(() => expect(document.querySelector('.at-setpill[data-pr="true"]')).toBeTruthy());
+  });
+});
+
+describe('Train — the set list', () => {
+  beforeEach(() => useStore.setState(initialState, true));
+
+  const rows = () => document.querySelectorAll('.at-setrow');
+
+  it('lists every set of the exercise, logged or not', () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 4 }],
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    expect(rows()).toHaveLength(4);
+    expect(rows()[0].textContent).toMatch(/80 kg/);
+    // Sets not yet done read as blank rather than as a fake zero.
+    expect(rows()[1].textContent).toContain('—');
+  });
+
+  it('corrects a set without dragging the cursor back to it', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 4 }],
+        sets: [
+          { exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+          { exerciseName: 'Barbell Bench Press', setNumber: 2, weight: 80, reps: 8, isCompleted: true },
+        ],
+      },
+    });
+    // The cursor sits on set 3, the first outstanding one.
+    expect(text()).toMatch(/Complete set 3/i);
+
+    fireEvent.click(within(rows()[0] as HTMLElement).getByRole('button', { name: /edit set 1/i }));
+    const weight = screen.getByLabelText('Weight 1');
+    fireEvent.change(weight, { target: { value: '85' } });
+    fireEvent.keyDown(weight, { key: 'Enter' });
+
+    await waitFor(() => {
+      const sets = useStore.getState().activeSession?.sets ?? [];
+      expect(sets.find(s => s.setNumber === 1)?.weight).toBe(85);
+    });
+    // And the cursor stayed where it was.
+    expect(text()).toMatch(/Complete set 3/i);
+  });
+
+  it('moves the primary action on when the cursor set is filled from its row', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: { exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 4 }], sets: [] },
+    });
+    expect(text()).toMatch(/Complete set 1/i);
+
+    fireEvent.click(within(rows()[0] as HTMLElement).getByRole('button', { name: /edit set 1/i }));
+    fireEvent.change(screen.getByLabelText('Weight 1'), { target: { value: '80' } });
+    fireEvent.change(screen.getByLabelText('Reps 1'), { target: { value: '8' } });
+    fireEvent.keyDown(screen.getByLabelText('Reps 1'), { key: 'Enter' });
+
+    // Otherwise the sticky bar keeps offering to complete a set already done.
+    await waitFor(() => expect(text()).toMatch(/Complete set 2/i));
+  });
+
+  it('marks a logged set undone from its row', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 4 }],
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    fireEvent.click(within(rows()[0] as HTMLElement).getByRole('button', { name: /mark set 1 done/i }));
+    await waitFor(() => {
+      const sets = useStore.getState().activeSession?.sets ?? [];
+      expect(sets.find(s => s.setNumber === 1)?.isCompleted).toBe(false);
+    });
+  });
+
+  it('asks for numbers rather than recording an empty set as 0 x 0', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: { exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 4 }], sets: [] },
+    });
+
+    fireEvent.click(within(rows()[2] as HTMLElement).getByRole('button', { name: /mark set 3 done/i }));
+    // Opens the editor instead of writing a meaningless set.
+    await waitFor(() => expect(screen.getByLabelText('Weight 3')).toBeInTheDocument());
+    expect(useStore.getState().activeSession?.sets ?? []).toHaveLength(0);
+  });
+
+  it('stays visible once the exercise is finished, for checking it over', () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 1 }],
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    expect(text()).toMatch(/exercise complete/i);
+    expect(rows()).toHaveLength(1);
   });
 });
 

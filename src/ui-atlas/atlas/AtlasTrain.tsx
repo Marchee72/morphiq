@@ -13,6 +13,7 @@ import { AtlasGymHub } from './AtlasGymHub';
 import { AtlasSessionEditor } from './AtlasSessionEditor';
 import { AtlasStates } from './AtlasStates';
 import { AtlasDial } from './AtlasDial';
+import { AtlasSetList } from './AtlasSetList';
 import { AtlasTrainHeader } from './AtlasTrainHeader';
 import { AtlasTrainStage } from './AtlasTrainStage';
 import { AtlasFinishSheet } from './AtlasFinishSheet';
@@ -237,8 +238,7 @@ export const AtlasTrain: React.FC = () => {
           </div>
         </div>
       ) : (
-        <>
-          <div className="at-dials">
+        <div className="at-dials">
             <AtlasDial
               label={t('train.weight')}
               value={draft.weight}
@@ -257,18 +257,29 @@ export const AtlasTrain: React.FC = () => {
               max={MAX_REPS}
               step={1}
             />
-          </div>
-
-          <div className="at-pad at-setmeta">
-            <span>{t('train.setsDone', { done, total: exercise.sets.length })}</span>
-            {exercise.sets.length > 1 && (
-              <button onClick={() => live.removeSet(live.setIdx)}>
-                <Trash2 size={13} /> {t('train.removeSet')}
-              </button>
-            )}
-          </div>
-        </>
+        </div>
       )}
+
+      {/* Every set of this exercise, so filling them in after the fact — or
+          fixing set 2 while standing on set 4 — does not mean walking the cursor
+          back through each one. Stays visible once the exercise is done, which
+          is when you would want to check it over. */}
+      <div className="at-pad" style={{ paddingTop: 14 }}>
+        <AtlasSetList
+          sets={exercise.sets}
+          currentIdx={live.setIdx}
+          onUpdate={live.updateSet}
+        />
+      </div>
+
+      <div className="at-pad at-setmeta">
+        <span>{t('train.setsDone', { done, total: exercise.sets.length })}</span>
+        {exercise.sets.length > 1 && (
+          <button onClick={() => live.removeSet(live.setIdx)}>
+            <Trash2 size={13} /> {t('train.removeSet')}
+          </button>
+        )}
+      </div>
 
       {/* Swiping past the last exercise reaches the picker too, but a gesture is
           not an affordance — this is the one that can be seen. */}

@@ -28,6 +28,13 @@ export interface LiveSession {
   logSet(weightKg: number, reps: number): void;
   /** Writes weight/reps without completing — used while nudging the numbers. */
   editSet(weightKg: number, reps: number): void;
+  /**
+   * Corrects any set of the current exercise, cursor or not.
+   *
+   * The wheels only ever address the set under the cursor, which is the wrong
+   * shape for fixing set 2 after the exercise is over.
+   */
+  updateSet(setIdx: number, patch: { weightKg?: number; reps?: number; done?: boolean }): void;
   addSet(): void;
   removeSet(setIdx: number): void;
 
@@ -122,6 +129,27 @@ export function useLiveSession(
     writeSet(cursor.exerciseIdx, cursor.setIdx, { weight: weightKg, reps });
   }, [writeSet, cursor]);
 
+  const updateSet = useCallback((
+    setIdx: number,
+    patch: { weightKg?: number; reps?: number; done?: boolean },
+  ) => {
+    writeSet(cursor.exerciseIdx, setIdx, {
+      ...(patch.weightKg !== undefined && { weight: patch.weightKg }),
+      ...(patch.reps !== undefined && { reps: patch.reps }),
+      ...(patch.done !== undefined && { isCompleted: patch.done }),
+    });
+
+    // Completing the cursor's own set from the list has to move the cursor on,
+    // exactly as logging it with the wheels would. Otherwise the primary action
+    // keeps offering to complete a set that is already done.
+    if (patch.done !== true || setIdx !== cursor.setIdx) return;
+    const target = sessionExercises[cursor.exerciseIdx];
+    const nextOutstanding = target?.sets.findIndex((s, i) => i !== setIdx && !s.done) ?? -1;
+    if (nextOutstanding !== -1) {
+      onCursorChange?.({ exerciseIdx: cursor.exerciseIdx, setIdx: nextOutstanding });
+    }
+  }, [writeSet, cursor, sessionExercises, onCursorChange]);
+
   const addSet = useCallback(() => {
     const target = sessionExercises[cursor.exerciseIdx];
     if (!target) return;
@@ -169,6 +197,7 @@ export function useLiveSession(
     setIdx: cursor.setIdx,
     logSet,
     editSet,
+    updateSet,
     addSet,
     removeSet,
     goTo: (exerciseIdx, setIdx) => onCursorChange?.({ exerciseIdx, setIdx }),

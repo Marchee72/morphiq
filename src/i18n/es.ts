@@ -216,6 +216,8 @@ export const es: Translations = {
   'train.currentExercise': 'Actual',
   'train.yourPr': 'Tu mejor marca',
   'train.lastTimeLabel': 'La ultima vez',
+  'train.markSetDone': 'Marcar serie {n} como hecha',
+  'train.editSetValues': 'Editar serie {n}',
   'train.nextNamed': 'Sigue: {name}',
   'train.thisSession': 'Esta sesion',
   'train.noPrYet': 'Aun sin record',

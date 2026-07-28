@@ -2136,6 +2136,96 @@
 
 .at-dials { display: flex; gap: 12px; padding: 16px 18px 0; }
 
+/* ---------- the exercise's sets, listed ----------
+   The wheels address one set. This shows all of them, and lets any one be
+   corrected without walking the cursor back to it. */
+
+.at-setlist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.at-setrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1.5px solid transparent;
+  border-radius: 16px;
+  padding: 7px 10px 7px 12px;
+  min-height: 44px;
+}
+
+.at-setrow[data-cur='true'] { border-color: var(--clay); }
+.at-setrow[data-editing='true'] { border-color: var(--clay); background: var(--at-tonal-soft); }
+
+.at-setrow-n {
+  flex-shrink: 0;
+  width: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.at-setrow-val {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  padding: 6px 0;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--cocoa);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.at-setrow-val i { font-style: normal; color: var(--at-placeholder); font-weight: 500; }
+.at-setrow-val svg { color: var(--clay); flex-shrink: 0; }
+
+.at-setrow-input {
+  width: 62px;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1.5px solid var(--clay);
+  background: none;
+  padding: 4px 2px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--cocoa);
+  text-align: center;
+  outline: none;
+}
+
+.at-setrow-x { font-size: 11.5px; color: var(--muted); font-weight: 600; flex-shrink: 0; }
+
+.at-setrow-tick {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid var(--hair);
+  background: none;
+  color: var(--at-placeholder);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.at-setrow-tick[data-on='true'] {
+  background: var(--cocoa);
+  border-color: var(--cocoa);
+  color: var(--sand);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .at-dial-tick { transition: none; }
 }

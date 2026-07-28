@@ -23,12 +23,21 @@ export function useSetDraft(key: string, set: SessionSetVM | undefined): SetDraf
   const seedWeight = set?.weightKg || set?.lastWeightKg || 0;
   const seedReps = set?.reps || set?.lastReps || 10;
 
-  const [seenKey, setSeenKey] = useState(key);
+  /**
+   * The stored values are part of the identity, not just the cursor position.
+   * Correcting the current set from the list below writes to the store without
+   * moving the cursor, and the wheels have to follow — otherwise they keep
+   * showing what that set used to say. Turning a wheel does not write until the
+   * set is logged, so this cannot fight the user mid-scroll.
+   */
+  const fullKey = `${key}:${set?.weightKg ?? ''}:${set?.reps ?? ''}`;
+
+  const [seenKey, setSeenKey] = useState(fullKey);
   const [weight, setWeight] = useState(seedWeight);
   const [reps, setReps] = useState(seedReps);
 
-  if (seenKey !== key) {
-    setSeenKey(key);
+  if (seenKey !== fullKey) {
+    setSeenKey(fullKey);
     setWeight(seedWeight);
     setReps(seedReps);
   }
