@@ -1,7 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { useStore } from '../../presentation/state/store';
-import { useRestTimer } from '../state/restTimer';
 import { useSessionSummary } from '../state/sessionSummary';
 import { renderScreen } from '../../test/renderScreen';
 
@@ -18,7 +17,6 @@ beforeEach(() => useSessionSummary.setState({ summary: null }));
 describe('Train', () => {
   beforeEach(() => {
     useStore.setState(initialState, true);
-    useRestTimer.setState({ endsAt: null });
   });
 
   it('shows the gym hub when nothing is running', () => {
@@ -52,23 +50,7 @@ describe('Train', () => {
     });
   });
 
-  it('starts the rest clock after logging', async () => {
-    renderScreen('train', { data: 'rich', session: {} });
-    expect(useRestTimer.getState().endsAt).toBeNull();
 
-    fireEvent.click(logButton());
-    await waitFor(() => expect(useRestTimer.getState().endsAt).not.toBeNull());
-  });
-
-  it('falls back to the default rest until the catalogue resolves', async () => {
-    // Rest length comes from the exercise's equipment, which lives in the lazily
-    // loaded catalogue chunk. Before it arrives the default has to be sane rather
-    // than zero. Equipment-specific windows are covered in derive/session.test.
-    renderScreen('train', { data: 'rich', session: {} });
-    fireEvent.click(logButton());
-    await waitFor(() => expect(useRestTimer.getState().endsAt).not.toBeNull());
-    expect(useRestTimer.getState().totalSec).toBeGreaterThan(0);
-  });
 
   it('advances past the set it just logged', async () => {
     renderScreen('train', { data: 'rich', session: {} });
@@ -171,7 +153,6 @@ describe('Train', () => {
 describe('Train — finishing', () => {
   beforeEach(() => {
     useStore.setState(initialState, true);
-    useRestTimer.setState({ endsAt: null });
     useSessionSummary.setState({ summary: null });
   });
 
@@ -245,7 +226,6 @@ function swipe(dx: number, dy = 0) {
 describe('Train — moving between exercises', () => {
   beforeEach(() => {
     useStore.setState(initialState, true);
-    useRestTimer.setState({ endsAt: null });
   });
 
   it('swipes left to the next exercise', async () => {
@@ -299,13 +279,11 @@ describe('Train — moving between exercises', () => {
 describe('Train — signature controls', () => {
   beforeEach(() => {
     useStore.setState(initialState, true);
-    useRestTimer.setState({ endsAt: null });
   });
 
-  it('renders the circular disc, the rest arc and both number dials', () => {
+  it('renders the circular disc and both number dials', () => {
     const { container } = renderScreen('train', { session: {} });
     expect(container.querySelector('.at-disc-wrap')).toBeTruthy();
-    expect(container.querySelector('.at-rest-arc')).toBeTruthy();
     // Weight and reps, each a scroll wheel with keyboard entry.
     expect(container.querySelectorAll('.at-dial')).toHaveLength(2);
     expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
@@ -328,7 +306,6 @@ describe('Train — signature controls', () => {
 describe('Train — what the lift is worth to you', () => {
   beforeEach(() => {
     useStore.setState(initialState, true);
-    useRestTimer.setState({ endsAt: null });
   });
 
   it('shows your all-time best on the current exercise', () => {
@@ -363,7 +340,6 @@ describe('Train — what the lift is worth to you', () => {
 describe('Train — the exercise list', () => {
   beforeEach(() => {
     useStore.setState(initialState, true);
-    useRestTimer.setState({ endsAt: null });
   });
 
   const openList = () => fireEvent.click(screen.getAllByRole('button', { name: /edit session/i })[0]);

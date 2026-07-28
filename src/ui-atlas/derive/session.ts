@@ -26,35 +26,6 @@ export interface ExerciseAnchors {
   prReps?: number;
 }
 
-export const DEFAULT_REST_SEC = 90;
-
-/**
- * Rest scales with how systemically taxing the lift is. These match what the
- * live workout screen has always defaulted to for the general case (90 s) while
- * giving heavy compounds and isolation work more appropriate windows.
- */
-export const REST_BY_EQUIPMENT: Record<string, number> = {
-  barbell: 150,
-  'olympic barbell': 150,
-  'trap bar': 150,
-  'ez barbell': 120,
-  'smith machine': 120,
-  dumbbell: 90,
-  kettlebell: 90,
-  'leverage machine': 75,
-  cable: 75,
-  'sled machine': 90,
-  'body weight': 60,
-  assisted: 60,
-  band: 60,
-  'resistance band': 60,
-};
-
-export function restSecFor(exercise: Exercise | undefined): number {
-  if (!exercise) return DEFAULT_REST_SEC;
-  return REST_BY_EQUIPMENT[exercise.equipment?.toLowerCase()] ?? DEFAULT_REST_SEC;
-}
-
 function anchorFor(anchors: ExerciseAnchors | null, setIdx: number): { lastWeightKg?: number; lastReps?: number } {
   if (!anchors) return {};
   const fromLastSession = anchors.lastSets?.[setIdx];
@@ -147,7 +118,6 @@ export function buildSessionExercises(
       image: exercise?.image ?? '',
       gif: exercise?.gifUrl ?? '',
       sets,
-      restSec: restSecFor(exercise),
       note: entry.notes,
       best: bestFor(usage, key),
     };

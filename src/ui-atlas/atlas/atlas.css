@@ -502,12 +502,15 @@
   to { transform: none; opacity: 1; }
 }
 
-/* Wrapper keeps the rest arc outside the disc's own overflow clip. */
+/* The ring used to be an SVG because it doubled as the rest countdown's arc.
+   With rest gone it is only a frame, and a border draws that for free. */
 .at-disc-wrap {
   position: relative;
   width: 180px;
   height: 180px;
   margin: 8px auto 0;
+  border: 3.5px solid var(--at-tonal-soft);
+  border-radius: 50%;
   transition: transform 0.22s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
@@ -550,12 +553,6 @@
 @media (prefers-reduced-motion: reduce) {
   .at-disc-wrap { transition: none; }
   .at-stage-slide[data-enter] { animation: none; }
-}
-
-.at-rest-arc {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
 }
 
 .at-exercise-name {
@@ -710,76 +707,6 @@
 .at-upnext-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .at-upnext small { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .at-upnext b { display: block; font-size: 14px; font-weight: 650; margin-top: 2px; letter-spacing: -0.01em; }
-
-/* ---------- rest countdown ----------
-   Rest used to be an arc you had to decode and a skip button several sections
-   further down. The number and the three things you might do to it now sit
-   together. */
-
-.at-restbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 4px 18px 0;
-  padding: 8px 10px;
-  border-radius: 20px;
-  background: var(--at-tonal-soft);
-  border: 1px solid var(--hair);
-}
-
-/* The two nudges are round; the skip pill opts out via its own rule below. */
-.at-restbar > button:not(.at-restbar-skip) {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 0;
-  background: var(--card);
-  color: var(--cocoa);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-}
-
-.at-restbar-clock { flex: 1; min-width: 0; text-align: center; }
-.at-restbar-clock small {
-  display: block;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.at-restbar-clock b {
-  display: block;
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--clay);
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-}
-
-.at-restbar-skip {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  width: auto;
-  white-space: nowrap;
-  padding: 0 12px;
-  height: 32px;
-  border-radius: 999px;
-  border: 0;
-  background: var(--card);
-  color: var(--cocoa);
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
 
 /* ---------- the one primary action ----------
    Pinned above the dock so logging a set never depends on where the page is

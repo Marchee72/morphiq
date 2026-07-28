@@ -2,7 +2,6 @@ import { useCallback } from 'react';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import { useStore } from '../../presentation/state/store';
 import { cancelActiveWorkoutNotification } from '../../data/health/ActiveWorkoutNotification';
-import { useRestTimer } from '../state/restTimer';
 import { useAppData } from './useAppData';
 import type { SessionCursor, SessionExerciseVM } from '../types';
 
@@ -25,7 +24,7 @@ export interface LiveSession {
   exercise: SessionExerciseVM | undefined;
   setIdx: number;
 
-  /** Writes weight/reps and marks the set done, then starts the rest clock. */
+  /** Writes weight/reps and marks the set done, then moves to the next outstanding set. */
   logSet(weightKg: number, reps: number): void;
   /** Writes weight/reps without completing — used while nudging the numbers. */
   editSet(weightKg: number, reps: number): void;
@@ -58,7 +57,6 @@ export function useLiveSession(
   onCursorChange?: (cursor: SessionCursor) => void,
 ): LiveSession {
   const { sessionExercises, cursor: derivedCursor } = useAppData();
-  const startRest = useRestTimer(s => s.start);
 
   /**
    * The override is a screen's local state and the exercise list is not — remove
@@ -110,8 +108,6 @@ export function useLiveSession(
 
   const logSet = useCallback((weightKg: number, reps: number) => {
     writeSet(cursor.exerciseIdx, cursor.setIdx, { weight: weightKg, reps, isCompleted: true });
-    // Rest length follows the equipment — a barbell compound needs longer than a cable.
-    startRest(exercise?.restSec);
 
     // Advance to whatever is still outstanding after this write.
     const target = sessionExercises[cursor.exerciseIdx];
@@ -120,7 +116,7 @@ export function useLiveSession(
     } else if (cursor.exerciseIdx + 1 < sessionExercises.length) {
       onCursorChange?.({ exerciseIdx: cursor.exerciseIdx + 1, setIdx: 0 });
     }
-  }, [writeSet, cursor, exercise?.restSec, startRest, sessionExercises, onCursorChange]);
+  }, [writeSet, cursor, sessionExercises, onCursorChange]);
 
   const editSet = useCallback((weightKg: number, reps: number) => {
     writeSet(cursor.exerciseIdx, cursor.setIdx, { weight: weightKg, reps });

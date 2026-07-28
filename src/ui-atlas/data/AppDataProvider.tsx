@@ -23,9 +23,8 @@ import { toCatalogItem } from '../derive/catalog';
  * derive the same values several times over. Both skins consume the identical
  * object, which also means switching skin re-renders markup and nothing else.
  *
- * Nothing here holds a ticking value. Elapsed time and the rest countdown would
- * re-render every screen every second, so they live in `components/useTicker`
- * and `state/restTimer` instead.
+ * Nothing here holds a ticking value. The session clock would re-render every
+ * screen every second, so it lives in `components/useTicker` instead.
  */
 
 const EMPTY_FACETS: FacetCounts = { category: [], equipment: [] };

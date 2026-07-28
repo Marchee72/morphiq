@@ -5,12 +5,6 @@ import { ExerciseThumb } from '../components/ExerciseThumb';
 import { useSwipeNav } from '../components/useSwipeNav';
 import type { SessionExerciseVM } from '../types';
 
-/** Sized to leave the whole set-logging column above the fixed action bar on a
- *  844px-tall phone. Must match `.at-disc-wrap` in atlas.css. */
-const DISC = 180;
-const RADIUS = 88;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
 /**
  * The exercise you are on, and the gesture that changes it.
  *
@@ -30,15 +24,13 @@ export const AtlasTrainStage: React.FC<{
   /** True when the cursor has run past the last exercise onto the add slot. */
   onAddSlot: boolean;
   complete: boolean;
-  /** 0–100. Drives the rest arc drawn around the disc. */
-  restPct: number;
   /** Rendered under the disc, inside the sliding block. */
   caption: React.ReactNode;
   onNext: () => void;
   onPrevious: () => void;
   onOpenDetail: () => void;
   onAddExercise: () => void;
-}> = ({ exercise, index, onAddSlot, complete, restPct, caption, onNext, onPrevious, onOpenDetail, onAddExercise }) => {
+}> = ({ exercise, index, onAddSlot, complete, caption, onNext, onPrevious, onOpenDetail, onAddExercise }) => {
   const { t } = useT();
   const swipe = useSwipeNav(onNext, onPrevious);
 
@@ -94,17 +86,6 @@ export const AtlasTrainStage: React.FC<{
             />
           </button>
         )}
-
-        {/* The rest arc is drawn outside the photo's clip so it can overrun the edge. */}
-        <svg className="at-rest-arc" viewBox={`0 0 ${DISC} ${DISC}`} aria-hidden="true">
-          <circle cx={DISC / 2} cy={DISC / 2} r={RADIUS} fill="none" stroke="var(--at-tonal-soft)" strokeWidth="3.5" />
-          <circle
-            cx={DISC / 2} cy={DISC / 2} r={RADIUS} fill="none"
-            stroke="var(--clay)" strokeWidth="3.5" strokeLinecap="round"
-            strokeDasharray={`${(CIRCUMFERENCE * restPct) / 100} ${CIRCUMFERENCE}`}
-            transform={`rotate(-90 ${DISC / 2} ${DISC / 2})`}
-          />
-        </svg>
       </div>
 
         {caption}

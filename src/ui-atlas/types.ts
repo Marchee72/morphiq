@@ -103,7 +103,6 @@ export interface SessionExerciseVM {
   /** Repo-relative animated path, or '' — the still `image` is the fallback. */
   gif: string;
   sets: SessionSetVM[];
-  restSec: number;
   note?: string;
   /** Null until this exercise has been logged at least once with a scoreable set. */
   best: ExerciseBestVM | null;

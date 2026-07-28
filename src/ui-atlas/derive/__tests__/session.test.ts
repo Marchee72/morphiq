@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Exercise } from '../../../core/entities/Exercise';
 import {
-  buildSessionExercises, buildSessionTotals, findCursor, restSecFor,
-  DEFAULT_REST_SEC, type DraftSet, type SessionExerciseInput,
+  buildSessionExercises, buildSessionTotals, findCursor,
+  type DraftSet, type SessionExerciseInput,
 } from '../session';
 
 const exercise = (over: Partial<Exercise> = {}): Exercise => ({
@@ -21,19 +21,6 @@ const draft = (over: Partial<DraftSet> = {}): DraftSet => ({
 
 const noExercise = () => undefined;
 const noAnchors = () => null;
-
-describe('restSecFor', () => {
-  it('gives heavy compounds a longer window than isolation work', () => {
-    expect(restSecFor(exercise({ equipment: 'barbell' }))).toBe(150);
-    expect(restSecFor(exercise({ equipment: 'cable' }))).toBe(75);
-    expect(restSecFor(exercise({ equipment: 'body weight' }))).toBe(60);
-  });
-
-  it('falls back to the default for unknown or missing equipment', () => {
-    expect(restSecFor(exercise({ equipment: 'tire' }))).toBe(DEFAULT_REST_SEC);
-    expect(restSecFor(undefined)).toBe(DEFAULT_REST_SEC);
-  });
-});
 
 describe('buildSessionExercises', () => {
   it('pads the planned set count with empty sets', () => {
@@ -60,14 +47,12 @@ describe('buildSessionExercises', () => {
     const [ex] = buildSessionExercises(planned, [], () => exercise(), noAnchors);
     expect(ex.target).toBe('pectorals');
     expect(ex.image).toBe('images/0025.jpg');
-    expect(ex.restSec).toBe(150);
   });
 
   it('degrades cleanly when the exercise is not in the catalogue', () => {
     const [ex] = buildSessionExercises(planned, [], noExercise, noAnchors);
     expect(ex.target).toBe('');
     expect(ex.image).toBe('');
-    expect(ex.restSec).toBe(DEFAULT_REST_SEC);
   });
 
   it('anchors each set to the matching set from last session', () => {

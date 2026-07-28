@@ -21,7 +21,6 @@ function exercise(
     equipment: '',
     image: '',
     gif: '',
-    restSec: 90,
     best: null,
     sets,
     ...extra,

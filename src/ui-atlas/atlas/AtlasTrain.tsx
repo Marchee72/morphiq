@@ -5,8 +5,6 @@ import { useAppData, useAppActions } from '../data/useAppData';
 import { useLiveSession } from '../data/useLiveSession';
 import { useSetDraft } from '../components/useSetDraft';
 import { useFocusOnAdd } from '../components/useFocusOnAdd';
-import { useTicker } from '../components/useTicker';
-import { remainingSec, useRestTimer } from '../state/restTimer';
 import { useSessionSummary } from '../state/sessionSummary';
 import { buildSessionSummary } from '../derive/summary';
 import type { FeelingId, SessionCursor } from '../types';
@@ -17,7 +15,6 @@ import { AtlasStates } from './AtlasStates';
 import { AtlasDial } from './AtlasDial';
 import { AtlasTrainHeader } from './AtlasTrainHeader';
 import { AtlasTrainStage } from './AtlasTrainStage';
-import { AtlasRestBar } from './AtlasRestBar';
 import { AtlasFinishSheet } from './AtlasFinishSheet';
 import { AtlasExerciseDetail } from './AtlasExerciseDetail';
 
@@ -52,9 +49,6 @@ export const AtlasTrain: React.FC = () => {
   useFocusOnAdd(sessionExercises.length, setCursor);
 
   const showSummary = useSessionSummary(s => s.show);
-  const { endsAt, totalSec } = useRestTimer();
-  const tick = useTicker(1000, endsAt !== null);
-  const restLeft = remainingSec(endsAt, tick);
 
   const exercise = live.exercise;
   const set = exercise?.sets[live.setIdx];
@@ -131,7 +125,6 @@ export const AtlasTrain: React.FC = () => {
   const done = exercise.sets.filter(s => s.done).length;
   const exerciseComplete = done === exercise.sets.length && exercise.sets.length > 0;
   const sessionComplete = sessionTotals.setsPlanned > 0 && sessionTotals.setsDone === sessionTotals.setsPlanned;
-  const restPct = endsAt && totalSec > 0 ? (restLeft / totalSec) * 100 : 0;
   const exerciseVolume = exercise.sets.reduce((sum, s) => (s.done ? sum + s.weightKg * s.reps : sum), 0);
 
   /**
@@ -153,17 +146,11 @@ export const AtlasTrain: React.FC = () => {
     <>
       {header}
 
-      {/* Directly under the header rather than after the dials: a countdown you
-          have to scroll to find is not a countdown. Renders nothing when no rest
-          clock is running, so it costs no space the rest of the time. */}
-      <AtlasRestBar />
-
       <AtlasTrainStage
         exercise={exercise}
         index={live.cursor.exerciseIdx}
         onAddSlot={false}
         complete={exerciseComplete}
-        restPct={restPct}
         caption={
           <>
             <div className="at-exercise-name">{exercise.name}</div>
