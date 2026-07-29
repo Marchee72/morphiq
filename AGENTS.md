@@ -7,7 +7,7 @@ npm install          # install deps
 npm run dev          # Vite dev server (http://localhost, HTTPS disabled — Node 22 regression)
 npm run build        # tsc -b && vite build — typecheck + bundle
 npm run lint         # ESLint flat config — run before PR
-npm run test         # Vitest (24 unit tests, no E2E)
+npm run test         # Vitest — unit tests for src/ and server/, no E2E
 npx vitest run --coverage   # with coverage
 npx vitest run src/path/to/file.test.ts   # single test file
 ```
@@ -63,8 +63,14 @@ Key classes: `.glass-panel` (glassmorphism), `.glow-btn` (indigo gradient + glow
 - `server/index.js` — all REST endpoints in one file, ES module (`"type": "module"`)
 - PostgreSQL schema auto-applied on startup (`CREATE TABLE IF NOT EXISTS`)
 - Columns use camelCase with PostgreSQL quoting (e.g., `"profileId"`)
-- `cors({ origin: '*' })` — permissive for Tailscale VPN setup
+- CORS is an allow-list, not `*` — add any new origin to `ALLOWED_ORIGINS`
+- `/api` sends `Cache-Control: no-store`. The platform default lets shared
+  caches keep per-account responses and omits `Authorization` from `Vary`
+- Every route addressing a row by id, or taking `profileId` from the body/query,
+  carries an ownership guard from `auth.js`. Adding a route without one reopens
+  the hole those guards exist to close (`server/__tests__/ownership.test.js`)
 - Deploy: `scp server/{index.js,schema.sql} pi:/home/marche/morphiq-server/ && ssh pi "sudo systemctl restart morphiq-server"`
+- Web + API on one Vercel deployment: `server/DEPLOY_WEB.md`
 
 ## Key gotchas
 

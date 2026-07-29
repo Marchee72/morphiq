@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { SocialLogin } from '@capgo/capacitor-social-login';
 import { setSession, clearSession, type AuthUser } from './session';
+import { apiBaseUrl } from '../database/mode';
 
 /**
  * Google sign-in, on web and on device.
@@ -19,9 +20,6 @@ import { setSession, clearSession, type AuthUser } from './session';
  */
 const WEB_CLIENT_ID = import.meta.env?.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
-function apiUrl(): string {
-  return (import.meta.env?.VITE_API_URL as string) || 'http://192.168.100.142:3000';
-}
 
 export function isGoogleConfigured(): boolean {
   return Boolean(WEB_CLIENT_ID);
@@ -98,7 +96,7 @@ export async function signInWithGoogle(): Promise<SignInResult> {
 
   const idToken = Capacitor.isNativePlatform() ? await nativeIdToken() : await webIdToken();
 
-  const res = await fetch(`${apiUrl()}/api/auth/google`, {
+  const res = await fetch(`${apiBaseUrl()}/api/auth/google`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken }),

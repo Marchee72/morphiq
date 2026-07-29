@@ -84,6 +84,22 @@ async function main() {
   await raster(page, svg({ plate: 'rounded' }), 512, path.join(ROOT, 'public/app_icon.png'));
   written.push('public/app_icon.png');
 
+  // PWA install icons. Chrome will not offer "Install app" without a 192 and a
+  // 512, and it uses the maskable one for the launcher shortcut — that variant
+  // is full-bleed with the figure inside the safe zone, the same 0.62 scale the
+  // Android adaptive foreground uses, or the mask crops its head and feet off.
+  for (const size of [192, 512]) {
+    await raster(page, svg({ plate: 'rounded' }), size, path.join(ROOT, `public/icons/icon-${size}.png`));
+    written.push(`public/icons/icon-${size}.png`);
+  }
+  await raster(
+    page,
+    svg({ plate: 'square', scale: 0.62 }),
+    512,
+    path.join(ROOT, 'public/icons/maskable-512.png'),
+  );
+  written.push('public/icons/maskable-512.png');
+
   // Android
   const res = path.join(ROOT, 'android/app/src/main/res');
   for (const [folder, legacy, adaptive] of DENSITIES) {

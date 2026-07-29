@@ -4,7 +4,14 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/app_icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Track your training, your body composition and what to work next." />
+    <!-- iOS implements none of the install API. These three are what make
+         Add to Home Screen open without Safari's chrome around it. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MorphIQ" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <!-- Overwritten by the shell once the resolved colour mode is known; this
          value is what the browser chrome uses before React mounts. -->
     <meta name="theme-color" content="#f3ece2" />

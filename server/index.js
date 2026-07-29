@@ -7,7 +7,8 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import {
   authRequired, authenticate, verifyGoogleToken, upsertUser, issueSession,
-  adoptOrphanProfiles, guardProfile,
+  adoptOrphanProfiles, guardProfile, guardBodyProfile, guardQueryProfile,
+  guardRow, guardWorkoutSets,
 } from './auth.js';
 
 const { Pool } = pg;
@@ -85,6 +86,10 @@ const app = express();
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://localhost:5174',
+  // `vite preview`, which is how the production bundle gets checked before it
+  // ships. Without it the built app cannot reach the API at all, and the sign-in
+  // wall correctly but unhelpfully reports the server as unreachable.
+  'http://localhost:4173',
   'http://localhost',
   'https://localhost',
   'capacitor://localhost',
@@ -99,6 +104,25 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+
+/**
+ * No cache may keep an API response. Not the browser's disk, not a CDN.
+ *
+ * Every one of these carries one account's profiles, sessions or measurements,
+ * and the platform default is `public, max-age=0, must-revalidate` with a `Vary`
+ * of `Origin` alone. `public` invites shared caches to store it, and leaving
+ * `Authorization` out of `Vary` means two accounts on the same origin key to the
+ * same entry. `must-revalidate` keeps that from becoming a leak in practice, but
+ * the correct answer for authenticated data is not to store it at all — which
+ * also stops per-account JSON sitting on the disk of a shared phone.
+ *
+ * The service worker refuses `/api/` for the same reason; this closes the half
+ * of the problem a service worker cannot reach.
+ */
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 // ─── Authentication ───────────────────────────────────────────────────────────
 
@@ -115,7 +139,7 @@ app.post('/api/auth/google', async (req, res) => {
 
     const payload = await verifyGoogleToken(idToken);
     const user = await upsertUser(pool, payload);
-    const adopted = await adoptOrphanProfiles(pool, user.id);
+    const adopted = await adoptOrphanProfiles(pool, user.id, payload.email);
 
     res.json({
       token: issueSession(user),
@@ -152,8 +176,17 @@ app.get('/api/health', (_req, res) => {
 
 // From here down every route requires a session (once AUTH_REQUIRED is on), and
 // anything addressing a specific profile also has to belong to the caller.
+//
+// The path guard covers only `/api/profiles/:id/...`. It is not enough on its
+// own: most writes name their profile in the body, and every delete addresses a
+// row by its own id, so each of those routes carries its own guard below.
+// Without them a signed-in user could still read and delete another user's sets,
+// measurements and routines by walking the id space.
 app.use('/api', authenticate(pool));
 app.use('/api/profiles/:profileId', guardProfile(pool));
+
+/** Writes whose profile is named in the body. */
+const ownBody = guardBodyProfile(pool);
 
 // ─── Helper: parse numeric nulls from pg ─────────────────────────────────────
 const num = (v) => (v != null ? parseFloat(v) : undefined);
@@ -248,7 +281,7 @@ app.get('/api/profiles/:id/measurements', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/measurements', async (req, res) => {
+app.post('/api/measurements', ownBody, async (req, res) => {
   const m = req.body;
   try {
     const { rows } = await pool.query(
@@ -264,7 +297,7 @@ app.post('/api/measurements', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/measurements/:id', async (req, res) => {
+app.delete('/api/measurements/:id', guardRow(pool, 'measurements'), async (req, res) => {
   try {
     await pool.query('DELETE FROM measurements WHERE id = $1', [req.params.id]);
     res.status(204).end();
@@ -292,7 +325,7 @@ app.get('/api/profiles/:id/food-logs', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/food-logs', async (req, res) => {
+app.post('/api/food-logs', ownBody, async (req, res) => {
   const f = req.body;
   try {
     const { rows } = await pool.query(
@@ -305,7 +338,7 @@ app.post('/api/food-logs', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/food-logs/:id', async (req, res) => {
+app.delete('/api/food-logs/:id', guardRow(pool, 'food_logs'), async (req, res) => {
   try {
     await pool.query('DELETE FROM food_logs WHERE id = $1', [req.params.id]);
     res.status(204).end();
@@ -340,7 +373,7 @@ app.get('/api/profiles/:id/workout-logs', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/workout-logs', async (req, res) => {
+app.post('/api/workout-logs', ownBody, async (req, res) => {
   const w = req.body;
   try {
     const { rows } = await pool.query(
@@ -373,7 +406,7 @@ app.post('/api/workout-logs', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/workout-logs/:id', async (req, res) => {
+app.put('/api/workout-logs/:id', guardRow(pool, 'workout_logs'), ownBody, async (req, res) => {
   const w = req.body;
   try {
     const { rows } = await pool.query(
@@ -413,7 +446,7 @@ app.put('/api/workout-logs/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/workout-logs/:id', async (req, res) => {
+app.delete('/api/workout-logs/:id', guardRow(pool, 'workout_logs'), async (req, res) => {
   try {
     await pool.query('BEGIN');
     await pool.query('DELETE FROM workout_sets WHERE "workoutLogId" = $1', [req.params.id]);
@@ -437,7 +470,7 @@ app.get('/api/profiles/:id/messages', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/messages', async (req, res) => {
+app.post('/api/messages', ownBody, async (req, res) => {
   const msg = req.body;
   try {
     const { rows } = await pool.query(
@@ -458,7 +491,7 @@ app.delete('/api/profiles/:id/messages', async (req, res) => {
 });
 
 // ─── Workout Sets ─────────────────────────────────────────────────────────────
-app.post('/api/workout-sets', async (req, res) => {
+app.post('/api/workout-sets', ownBody, async (req, res) => {
   const s = req.body;
   try {
     const { rows } = await pool.query(
@@ -479,14 +512,14 @@ app.post('/api/workout-sets', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/workout-sets/:id', async (req, res) => {
+app.delete('/api/workout-sets/:id', guardRow(pool, 'workout_sets'), async (req, res) => {
   try {
     await pool.query('DELETE FROM workout_sets WHERE id = $1', [req.params.id]);
     res.status(204).end();
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/workouts/:workoutLogId/sets', async (req, res) => {
+app.get('/api/workouts/:workoutLogId/sets', guardWorkoutSets(pool), async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM workout_sets WHERE "workoutLogId" = $1 ORDER BY "setNumber" ASC',
@@ -546,7 +579,7 @@ app.get('/api/profiles/:profileId/sets', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/workouts/:workoutLogId/sets', async (req, res) => {
+app.delete('/api/workouts/:workoutLogId/sets', guardWorkoutSets(pool), async (req, res) => {
   try {
     await pool.query('DELETE FROM workout_sets WHERE "workoutLogId" = $1', [req.params.workoutLogId]);
     res.status(204).end();
@@ -564,7 +597,7 @@ app.get('/api/profiles/:profileId/exercise-favorites', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/exercise-favorites', async (req, res) => {
+app.post('/api/exercise-favorites', ownBody, async (req, res) => {
   const f = req.body;
   try {
     const { rows } = await pool.query(
@@ -586,7 +619,7 @@ app.post('/api/exercise-favorites', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/exercise-favorites', async (req, res) => {
+app.delete('/api/exercise-favorites', guardQueryProfile(pool), async (req, res) => {
   try {
     await pool.query(
       'DELETE FROM exercise_favorites WHERE "profileId" = $1 AND "exerciseId" = $2',
@@ -607,7 +640,7 @@ app.get('/api/profiles/:profileId/routines', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/routines/:id', async (req, res) => {
+app.get('/api/routines/:id', guardRow(pool, 'routine_templates'), async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT * FROM routine_templates WHERE id = $1',
@@ -618,7 +651,7 @@ app.get('/api/routines/:id', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/routines', async (req, res) => {
+app.post('/api/routines', ownBody, async (req, res) => {
   const r = req.body;
   try {
     const { rows } = await pool.query(
@@ -638,7 +671,7 @@ app.post('/api/routines', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/routines/:id', async (req, res) => {
+app.delete('/api/routines/:id', guardRow(pool, 'routine_templates'), async (req, res) => {
   try {
     await pool.query('DELETE FROM routine_templates WHERE id = $1', [req.params.id]);
     res.status(204).end();

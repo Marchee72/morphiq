@@ -18,7 +18,11 @@ export default defineConfig({
     // `**/node_modules/**` rather than `node_modules/**`: tooling directories such
     // as `.opencode/` and `.gemini/` carry their own nested node_modules, and the
     // top-level-only glob let their vendored test suites into our run.
-    exclude: ['e2e/**', 'server/**', '**/node_modules/**'],
+    //
+    // `server/` used to be excluded wholesale. Its ownership guards are the only
+    // thing standing between two users' data, so they are tested here rather than
+    // not at all; only its dependencies stay out.
+    exclude: ['e2e/**', 'server/node_modules/**', '**/node_modules/**'],
     // The exercise catalogue is a 1 MB lazy chunk. Screens that wait on it need
     // more than the 5s default, and hitting that default produced failures that
     // looked like flakiness but were purely the timeout.

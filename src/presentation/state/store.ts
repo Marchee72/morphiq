@@ -26,6 +26,7 @@ import {
   ServerFavoriteExerciseRepository,
   ServerRoutineTemplateRepository,
 } from '../../data/database/ServerDatabase';
+import { isServerMode } from '../../data/database/mode';
 import type { RoutineTemplate, RoutineExerciseItem } from '../../core/entities/RoutineTemplate';
 import { normalizeName } from '../../ui-atlas/derive/records';
 import { DeepSeekCoach, chatCompletion, buildProviderFromEnv } from '../../data/ai/GeminiCoach';
@@ -40,7 +41,7 @@ import {
 } from './preferences';
 
 // Repository instances — switch between local IndexedDB and remote server via env vars
-const isServer = (import.meta.env?.VITE_DB_TYPE as string) === 'server' && !(typeof window !== 'undefined' && window.location.search.includes('db=local'));
+const isServer = isServerMode;
 const profileRepo = isServer ? new ServerUserProfileRepository() : new UserProfileRepository();
 const measurementRepo = isServer ? new ServerMeasurementRepository() : new MeasurementRepository();
 const foodRepo = isServer ? new ServerFoodLogRepository() : new FoodLogRepository();
@@ -109,6 +110,31 @@ function exercisesFromSets(sets: DraftSet[]): ActiveSessionExercise[] {
   return [...byName.values()];
 }
 
+/**
+ * A routine's items as session exercises, with fresh ids.
+ *
+ * Shared by "start this routine" and "merge this routine in" so the two cannot
+ * drift. Note it keeps `targetReps` and `notes`, which `addActiveSessionExercise`
+ * has no way to know — appending a routine one call at a time would silently
+ * flatten every prescription to four blank sets.
+ */
+function toActiveExercises(items: RoutineExerciseItem[]): ActiveSessionExercise[] {
+  return items.map((ex, idx) => ({
+    id: `ex_${idx}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`,
+    exerciseId: ex.exerciseId,
+    exerciseName: ex.exerciseName,
+    targetSets: ex.targetSets || DEFAULT_TARGET_SETS,
+    targetReps: ex.targetReps,
+    notes: ex.notes,
+  }));
+}
+
+/** True when this exercise has real work behind it — a set actually marked done. */
+function hasCompletedSet(sets: DraftSet[], exerciseName: string): boolean {
+  const key = normalizeName(exerciseName);
+  return sets.some(s => s.isCompleted && normalizeName(s.exerciseName) === key);
+}
+
 export interface HistoricalExerciseStats {
   prWeight: number;
   prReps: number;
@@ -173,7 +199,23 @@ interface StoreState {
   setActiveWorkout: (workout: WorkoutLog | null) => void;
   setIsGymModeOpen: (open: boolean) => void;
   startActiveSession: (workoutType?: string) => void;
-  startActiveSessionWithRoutine: (routine: { title: string; description?: string; targetMuscles?: string[]; exercises: RoutineExerciseItem[] }) => void;
+  startActiveSessionWithRoutine: (routine: { title: string; description?: string; targetMuscles?: string[]; exercises: RoutineExerciseItem[] }, source?: 'coach' | 'template') => void;
+  /**
+   * Folds a routine into the session already running, rather than replacing it.
+   *
+   * `append` puts the routine's exercises after what is there. `replacePending`
+   * first drops the planned exercises nobody has completed a set on — the ones
+   * you are abandoning by switching routines — and keeps everything you actually
+   * did. Neither mode can lose a logged set, which is the whole point: starting
+   * a routine used to overwrite `activeSession` outright.
+   *
+   * Exercises already in the session are skipped, not duplicated: sets are keyed
+   * by exercise name, so two rows sharing a name would share their sets too.
+   */
+  mergeRoutineIntoActiveSession: (
+    routine: { title: string; exercises: RoutineExerciseItem[] },
+    mode: 'append' | 'replacePending',
+  ) => { added: number; skipped: number };
   reorderActiveSessionExercises: (fromIndex: number, toIndex: number) => void;
   swapActiveSessionExercise: (index: number, newExercise: { id?: string; name: string }) => void;
   addActiveSessionExercise: (exercise: { id?: string; name: string }) => void;
@@ -220,6 +262,15 @@ interface StoreState {
   /** Every set ever logged, for all-time personal records and PR-at-the-time flags. */
   allSets: WorkoutSet[];
   loadAllSets: () => Promise<void>;
+  /**
+   * Steps per local calendar day, `YYYY-MM-DD`, straight from the health source.
+   *
+   * Deliberately not persisted: the phone's health store is the record, this is
+   * a read-through cache for the current run. Empty means "not answered" — the
+   * screens must not render that as a zero.
+   */
+  dailySteps: { date: string; steps: number }[];
+  setDailySteps: (days: { date: string; steps: number }[]) => void;
   addWorkoutSet: (set: Omit<WorkoutSet, 'profileId' | 'timestamp'>) => Promise<void>;
   deleteWorkoutSet: (id: string, workoutLogId: string) => Promise<void>;
   loadExerciseStats: (exerciseName: string) => Promise<void>;
@@ -284,6 +335,7 @@ export const useStore = create<StoreState>((set, get) => ({
   savedRoutines: [],
   activeWorkoutSets: {},
   allSets: [],
+  dailySteps: [],
   exerciseStats: {},
   theme: getInitialTheme(),
   language: initialLanguage(),
@@ -294,6 +346,8 @@ export const useStore = create<StoreState>((set, get) => ({
   isGymModeOpen: false,
   activeSession: null,
   isFinishingSession: false,
+
+  setDailySteps: (days) => set({ dailySteps: days }),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedWorkoutForCoach: (workout) => set({ selectedWorkoutForCoach: workout }),
@@ -312,27 +366,57 @@ export const useStore = create<StoreState>((set, get) => ({
     });
   },
 
-  startActiveSessionWithRoutine: (routine) => {
-    const routineExercises: ActiveSessionExercise[] = (routine.exercises || []).map((ex, idx) => ({
-      id: `ex_${idx}_${Math.random().toString(36).substring(2, 7)}`,
-      exerciseId: ex.exerciseId,
-      exerciseName: ex.exerciseName,
-      targetSets: ex.targetSets || 3,
-      targetReps: ex.targetReps,
-      notes: ex.notes,
-    }));
-
+  startActiveSessionWithRoutine: (routine, source = 'coach') => {
     set({
       activeSession: {
         startTime: new Date(),
         workoutType: routine.title || 'Coach Routine',
-        routineSource: 'coach',
-        routineExercises,
+        routineSource: source,
+        routineExercises: toActiveExercises(routine.exercises || []),
         sets: [],
       },
       activeTab: 'train',
       isGymModeOpen: true,
     });
+  },
+
+  mergeRoutineIntoActiveSession: (routine, mode) => {
+    const session = get().activeSession;
+    if (!session) return { added: 0, skipped: 0 };
+
+    // A freestyle session carries no `routineExercises` — its list is implied by
+    // the logged sets. Materialise it first, exactly as `addActiveSessionExercise`
+    // does, or the merge would replace everything already logged.
+    const current = session.routineExercises ?? exercisesFromSets(session.sets);
+
+    let kept = current;
+    let sets = session.sets;
+    if (mode === 'replacePending') {
+      kept = current.filter(ex => hasCompletedSet(session.sets, ex.exerciseName));
+      // A set row with no `isCompleted` is what nudging the dial leaves behind,
+      // so dropping it alongside its exercise costs nothing.
+      for (const dropped of current) {
+        if (!kept.includes(dropped)) sets = dropSetsFor(sets, dropped.exerciseName);
+      }
+    }
+
+    const taken = new Set(kept.map(ex => normalizeName(ex.exerciseName)));
+    const fresh = (routine.exercises || []).filter(ex => !taken.has(normalizeName(ex.exerciseName)));
+    const skipped = (routine.exercises || []).length - fresh.length;
+
+    set({
+      activeSession: {
+        ...session,
+        // With nothing left of the old session, this *is* the routine now — so it
+        // takes the routine's name. `routineSource` is left alone either way: it
+        // records how the session began, and a merge does not change that.
+        ...(kept.length === 0 && { workoutType: routine.title || session.workoutType }),
+        routineExercises: [...kept, ...toActiveExercises(fresh)],
+        sets,
+      },
+    });
+
+    return { added: fresh.length, skipped };
   },
 
   reorderActiveSessionExercises: (fromIndex, toIndex) => {

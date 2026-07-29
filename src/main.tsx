@@ -1,11 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { Capacitor } from '@capacitor/core'
 import './index.css'
 import App from './App.tsx'
-const API_URL = (import.meta.env?.VITE_API_URL as string) || 'http://localhost:3000';
+import { apiBaseUrl } from './data/database/mode'
 
 function sendErrorToServer(level: string, message: string, stack?: string) {
-  fetch(`${API_URL}/api/logs`, {
+  fetch(`${apiBaseUrl()}/api/logs`, {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',
@@ -74,6 +75,26 @@ if (window.visualViewport) {
         document.body.classList.remove('keyboard-open');
       }
     }
+  });
+}
+
+/**
+ * The service worker, which is what makes the web build installable.
+ *
+ * Not registered inside the Android app: Capacitor serves the same bundle from
+ * its own WebView over `http://localhost`, where a second caching layer between
+ * the app and its own asset folder buys nothing and can only go wrong.
+ *
+ * Registered after `load` so it never competes with the first paint for
+ * bandwidth on the very visit that decides whether the app feels fast.
+ */
+if ('serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      // An unregistrable worker costs the offline shell and nothing else, so it
+      // is reported rather than surfaced.
+      console.warn('Service worker registration failed', err);
+    });
   });
 }
 

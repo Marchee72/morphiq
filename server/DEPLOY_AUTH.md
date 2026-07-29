@@ -3,6 +3,10 @@
 El código está listo. Faltan las variables de entorno en Vercel y el despliegue,
 en un orden concreto.
 
+> Para compartir el despliegue con otra persona, sigue **[DEPLOY_WEB.md](./DEPLOY_WEB.md)**
+> en su lugar: cubre esto mismo más `OWNER_EMAIL`, que es lo que impide que el
+> primero que entre se quede con tu historial.
+
 ## 1. Variables en Vercel
 
 Desde la raíz del proyecto:
@@ -49,6 +53,9 @@ Abre `http://localhost:5173`, ve a Ajustes → Cuenta → **Continuar con Google
 La respuesta trae `adoptedProfiles`. Debería ser **1**: tu perfil "Alex" y todo
 su historial pasan a tu cuenta. Ese paso solo ocurre una vez — después ningún
 perfil queda sin dueño, así que el UPDATE ya no encuentra nada.
+
+Si sale **0**, falta `OWNER_EMAIL` o no coincide con la cuenta con la que has
+entrado. La adopción está limitada a esa dirección a propósito; ver DEPLOY_WEB.md.
 
 Comprueba que sigues viendo tus datos. Si algo falla, `?db=local` sigue
 funcionando sin cuenta y sin servidor.

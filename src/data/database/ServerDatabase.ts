@@ -6,6 +6,7 @@ import type { Message } from '../../core/entities/Message';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import type { FavoriteExercise } from '../../core/entities/FavoriteExercise';
 import { authHeaders, clearSession } from '../auth/session';
+import { apiBaseUrl } from './mode';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
 import type {
   IUserProfileRepository,
@@ -18,14 +19,16 @@ import type {
   IRoutineTemplateRepository,
 } from '../../core/interfaces/IDatabase';
 
+/**
+ * Resolved centrally now — see `apiBaseUrl`.
+ *
+ * What stood here rewrote any `localhost` in the configured URL to a hardcoded
+ * LAN address whenever the page was not itself on localhost. That was a
+ * developer's convenience wired into the shipping client: served from anywhere
+ * public, it pointed the app at a private IP on the visitor's network.
+ */
 function getApiUrl(): string {
-  let url = (import.meta.env?.VITE_API_URL as string) || 'http://192.168.100.142:3000';
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-    if (url.includes('localhost') || url.includes('127.0.0.1')) {
-      url = url.replace('localhost', '192.168.100.142').replace('127.0.0.1', '192.168.100.142');
-    }
-  }
-  return url;
+  return apiBaseUrl();
 }
 
 export class UnauthorizedError extends Error {

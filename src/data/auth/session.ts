@@ -53,11 +53,31 @@ export function setSession(next: { token: string; user: AuthUser }): void {
   write(USER_KEY, JSON.stringify(next.user));
 }
 
+/**
+ * Told when the session goes away, so the app can put the sign-in wall back up.
+ *
+ * `ServerDatabase` clears the session from inside a `fetch` wrapper that knows
+ * nothing about React. Without this, an expired token left every screen quietly
+ * failing its loads — signed out in fact, still signed in as far as the UI was
+ * concerned.
+ */
+type Listener = () => void;
+const cleared = new Set<Listener>();
+
+export function onSessionCleared(listener: Listener): () => void {
+  cleared.add(listener);
+  return () => { cleared.delete(listener); };
+}
+
 export function clearSession(): void {
+  const had = token !== null;
   token = null;
   user = null;
   write(TOKEN_KEY, null);
   write(USER_KEY, null);
+  // Only when something was actually lost: a clear on an already-signed-out
+  // session is not an event anyone needs to react to.
+  if (had) for (const listener of [...cleared]) listener();
 }
 
 /** Headers for an authenticated request. Empty while signed out. */
