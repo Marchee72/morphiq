@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTodayTraining, nextMuscleFocus } from '../todayTraining';
+import { buildTodayTraining, freshGroups, goalNudge, nextMuscleFocus } from '../todayTraining';
 import type { HistoryEntryVM, MuscleLoadRow } from '../../types';
 
 const NOW = new Date(2026, 6, 29, 18, 0);
@@ -132,5 +132,86 @@ describe('nextMuscleFocus', () => {
       row({ group: 'chest', sets: 16, target: 16 }),
       row({ group: 'legs', labelKey: 'muscle.legs', sets: 20, target: 16 }),
     ])).toBeNull();
+  });
+});
+
+describe('freshGroups', () => {
+  const HOUR = 3_600_000;
+
+  function freshRow(group: string, hoursAgo: number | null): MuscleLoadRow {
+    return {
+      group: group as MuscleLoadRow['group'],
+      labelKey: `muscle.${group}` as MuscleLoadRow['labelKey'],
+      sets: 0, target: 16, recoveredPct: 100,
+      lastHitAt: hoursAgo == null ? null : new Date(NOW.getTime() - hoursAgo * HOUR),
+      exercises: [],
+    };
+  }
+
+  it('returns groups that have never been trained', () => {
+    const fresh = freshGroups([
+      freshRow('chest', 2),
+      freshRow('legs', null),
+      freshRow('back', null),
+    ], NOW);
+    expect(fresh.map(f => f.group)).toEqual(['legs', 'back']);
+  });
+
+  it('returns groups past their recovery window', () => {
+    // Chest recovers over 48h; 50h ago is past it.
+    const fresh = freshGroups([
+      freshRow('chest', 50),
+      freshRow('back', 80), // back recovers over 72h; 80h is past
+    ], NOW);
+    expect(fresh.map(f => f.group)).toEqual(['back', 'chest']);
+  });
+
+  it('excludes groups still within their recovery window', () => {
+    const fresh = freshGroups([
+      freshRow('chest', 24), // 48h window, only halfway
+    ], NOW);
+    expect(fresh).toHaveLength(0);
+  });
+
+  it('sorts by longest rest first', () => {
+    const fresh = freshGroups([
+      freshRow('chest', 50),
+      freshRow('legs', 200), // legs have a 72h window, 200h is way past
+    ], NOW);
+    expect(fresh[0].group).toBe('legs');
+  });
+
+  it('returns at most two groups', () => {
+    const fresh = freshGroups([
+      freshRow('chest', null),
+      freshRow('back', null),
+      freshRow('legs', null),
+    ], NOW);
+    expect(fresh).toHaveLength(2);
+  });
+});
+
+describe('goalNudge', () => {
+  const baseState = { weekDone: 3, weekGoal: 4, trainedToday: false };
+
+  it('returns "goalFresh" when not trained and goal not met', () => {
+    const state = goalNudge(baseState, []);
+    expect(state.kind).toBe('goalFresh');
+  });
+
+  it('returns "goalMetFresh" when not trained but goal is met', () => {
+    const state = goalNudge({ ...baseState, weekDone: 4 }, []);
+    expect(state.kind).toBe('goalMetFresh');
+  });
+
+  it('returns "goalHit" when trained and goal met', () => {
+    const state = goalNudge({ ...baseState, trainedToday: true, weekDone: 4 }, []);
+    expect(state.kind).toBe('goalHit');
+  });
+
+  it('returns "goalRemaining" when trained but goal not met', () => {
+    const state = goalNudge({ ...baseState, trainedToday: true }, []);
+    expect(state.kind).toBe('goalRemaining');
+    expect(state.remaining).toBe(1);
   });
 });

@@ -1,6 +1,7 @@
 import type { HistoryEntryVM, MuscleLoadRow, TodayTrainingVM } from '../types';
-import { dayKey, startOfDay, MS_PER_DAY } from './buckets';
+import { dayKey, hoursBetween, startOfDay, MS_PER_DAY } from './buckets';
 import { normalizeName } from './records';
+import { RECOVERY_HOURS } from './muscleLoad';
 
 /**
  * "Have I trained today, and what was it."
@@ -58,4 +59,50 @@ export function nextMuscleFocus(rows: MuscleLoadRow[]): MuscleLoadRow | null {
   return [...behind].sort((a, b) =>
     (a.sets / a.target) - (b.sets / b.target)
     || b.recoveredPct - a.recoveredPct)[0];
+}
+
+/**
+ * The groups that are rested enough to train — never trained, or past their
+ * recovery window. Sorted by longest rest first, capped at two so the nudge
+ * line stays a line, not a paragraph.
+ */
+export function freshGroups(rows: MuscleLoadRow[], now: Date): MuscleLoadRow[] {
+  return rows
+    .filter(row => {
+      if (!row.lastHitAt) return true;
+      return hoursBetween(row.lastHitAt, now) >= RECOVERY_HOURS[row.group];
+    })
+    .sort((a, b) => {
+      const aHours = a.lastHitAt ? hoursBetween(a.lastHitAt, now) : Infinity;
+      const bHours = b.lastHitAt ? hoursBetween(b.lastHitAt, now) : Infinity;
+      return bHours - aHours;
+    })
+    .slice(0, 2);
+}
+
+export interface GoalNudgeInput {
+  weekDone: number;
+  weekGoal: number;
+  trainedToday: boolean;
+}
+
+export type GoalNudgeState =
+  | { kind: 'goalFresh' }
+  | { kind: 'goalMetFresh' }
+  | { kind: 'goalHit' }
+  | { kind: 'goalRemaining'; remaining: number };
+
+/**
+ * The context-aware nudge under the goal/streak line. Four states, because the
+ * goal and whether you have already trained today are independent — hitting 4/4
+ * before training today is not the same as hitting it after.
+ */
+export function goalNudge(input: GoalNudgeInput, _fresh: MuscleLoadRow[]): GoalNudgeState {
+  const { weekDone, weekGoal, trainedToday } = input;
+  const met = weekDone >= weekGoal;
+
+  if (!trainedToday && !met) return { kind: 'goalFresh' };
+  if (!trainedToday && met) return { kind: 'goalMetFresh' };
+  if (trainedToday && met) return { kind: 'goalHit' };
+  return { kind: 'goalRemaining', remaining: weekGoal - weekDone };
 }
