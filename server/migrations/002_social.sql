@@ -28,12 +28,33 @@ CREATE TABLE IF NOT EXISTS buddy_links (
   "userIdA" INTEGER NOT NULL REFERENCES users(id),
   "userIdB" INTEGER NOT NULL REFERENCES users(id),
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  -- Which side pulled the plug. NULL means the link is active. Blocking keeps
-  -- the row (and the messages) and closes the guards; removing deletes it.
+  -- Which side pulled the plug. NULL means the link is active. Blocking is
+  -- reversible and keeps everything; removing is not — see below.
   "blockedByProfileId" TEXT,
   "blockedAt" TIMESTAMPTZ,
+  -- Removal is per side, not a DELETE.
+  --
+  -- Your copy of a conversation is yours, and the other person's copy is
+  -- theirs: removing a partner cannot reach across and delete what they hold.
+  -- A hard DELETE would, through ON DELETE CASCADE, which is why there is none.
+  --
+  -- The *friendship* still ends for both — nobody can write into a link either
+  -- side has left. Ending it one-way would leave the other person talking into
+  -- a channel that silently goes nowhere, which is worse than being removed.
+  -- So: the relationship is mutual and ends mutually, the transcript is
+  -- personal and each side disposes of their own.
+  --
+  -- When both sides have removed, nothing is reachable by anyone and the row
+  -- and its messages can be collected.
+  "removedByA" TIMESTAMPTZ,
+  "removedByB" TIMESTAMPTZ,
   UNIQUE ("profileIdA", "profileIdB")
 );
+
+-- Existing deployments already have the table, so the CREATE above will not
+-- add these — the same belt-and-braces pattern schema.sql uses throughout.
+ALTER TABLE buddy_links ADD COLUMN IF NOT EXISTS "removedByA" TIMESTAMPTZ;
+ALTER TABLE buddy_links ADD COLUMN IF NOT EXISTS "removedByB" TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS buddy_links_a_idx ON buddy_links("profileIdA");
 CREATE INDEX IF NOT EXISTS buddy_links_b_idx ON buddy_links("profileIdB");

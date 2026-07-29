@@ -547,7 +547,7 @@ export const en = {
   'buddy.unblock': 'Resume',
   'buddy.remove': 'Remove partner',
   'buddy.removeConfirm': 'Remove {name}?',
-  'buddy.removeConfirmSub': 'Everything you shared goes with them, for both of you. Adding them again needs a new code.',
+  'buddy.removeConfirmSub': 'Your copy of the conversation is deleted and you stop training together. Their copy stays with them. Adding them again needs a new code.',
   'buddy.removeAction': 'Remove',
   'buddy.cancel': 'Cancel',
 

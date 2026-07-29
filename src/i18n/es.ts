@@ -544,7 +544,7 @@ export const es: Translations = {
   'buddy.unblock': 'Reanudar',
   'buddy.remove': 'Eliminar compañero',
   'buddy.removeConfirm': '¿Eliminar a {name}?',
-  'buddy.removeConfirmSub': 'Todo lo que hayáis compartido se va con él, para los dos. Volver a añadirlo pide un código nuevo.',
+  'buddy.removeConfirmSub': 'Se borra tu copia de la conversación y dejáis de entrenar juntos. Su copia se queda con él. Volver a añadirlo pide un código nuevo.',
   'buddy.removeAction': 'Eliminar',
   'buddy.cancel': 'Cancelar',
 

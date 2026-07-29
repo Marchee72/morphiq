@@ -120,14 +120,18 @@ describe('the partners hub', () => {
     await waitFor(() => expect(text()).toContain('Ana'));
   });
 
-  it('warns that removing takes the conversation from both people', async () => {
+  it('is honest that removing leaves their copy with them', async () => {
+    // The confirmation used to claim the conversation went for both people.
+    // It does not: your copy is deleted and theirs is not, and promising
+    // otherwise is the one thing this dialog must never do.
     renderBuddies([link()]);
     await waitFor(() => expect(screen.getByText(/Remove partner/i)).toBeTruthy());
 
     fireEvent.click(screen.getByText(/Remove partner/i));
 
     await waitFor(() => expect(text()).toContain('Remove Ana?'));
-    expect(text()).toContain('for both of you');
+    expect(text()).toContain('Their copy stays with them');
+    expect(text()).not.toContain('for both of you');
   });
 
   it('does not remove anyone until the warning is accepted', async () => {

@@ -161,10 +161,11 @@ describe('POST /invites/:code/redeem', () => {
     expect((await redeem(pool)).status).toBe(429);
   });
 
-  it('is idempotent when the two are already partners', async () => {
+  it('is idempotent when the two are already partners, without spending the code', async () => {
+    // Nothing happened, so nothing is consumed.
     const existing = {
       id: 5, profileIdA: '1', profileIdB: '9', createdAt: new Date(),
-      blockedByProfileId: null, buddyName: 'Ana',
+      blockedByProfileId: null, removedByA: null, removedByB: null, buddyName: 'Ana',
     };
     const pool = fakePool([
       OWNS_1_AND_2, NO_ATTEMPTS, RECORD_ATTEMPT,
@@ -176,6 +177,50 @@ describe('POST /invites/:code/redeem', () => {
 
     expect(result.status).toBe(200);
     expect(result.body.id).toBe('5');
+    expect(pool.query.mock.calls.some(([sql]) => sql.includes('UPDATE buddy_invites'))).toBe(false);
+  });
+
+  it('revives a friendship one of them had left', async () => {
+    // The UNIQUE constraint means the abandoned row is still there. Both have
+    // now said otherwise — one minted a code, the other redeemed it — so it
+    // comes back rather than being permanently in the way.
+    const abandoned = {
+      id: 5, profileIdA: '1', profileIdB: '9', createdAt: new Date(),
+      blockedByProfileId: null, removedByA: new Date(), removedByB: null, buddyName: 'Ana',
+    };
+    let revived = false;
+    const pool = fakePool([
+      OWNS_1_AND_2, NO_ATTEMPTS, RECORD_ATTEMPT,
+      invite(),
+      ['UPDATE buddy_invites', [{ code: 'ABCD2345' }]],
+      ['SET "removedByA" = NULL', () => { revived = true; return []; }],
+      ['FROM buddy_links l', () => [revived ? { ...abandoned, removedByA: null } : abandoned]],
+    ]);
+
+    const result = await redeem(pool);
+
+    expect(result.status).toBe(201);
+    expect(revived).toBe(true);
+  });
+
+  it('spends the code when it revives, unlike the idempotent case', async () => {
+    // Reviving is a real outcome. Leaving the code live would let it be used
+    // again on a friendship that already came back.
+    const abandoned = {
+      id: 5, profileIdA: '1', profileIdB: '9', createdAt: new Date(),
+      blockedByProfileId: null, removedByA: new Date(), removedByB: null, buddyName: 'Ana',
+    };
+    const pool = fakePool([
+      OWNS_1_AND_2, NO_ATTEMPTS, RECORD_ATTEMPT,
+      invite(),
+      ['UPDATE buddy_invites', [{ code: 'ABCD2345' }]],
+      ['SET "removedByA" = NULL', []],
+      ['FROM buddy_links l', [abandoned]],
+    ]);
+
+    await redeem(pool);
+
+    expect(pool.query.mock.calls.some(([sql]) => sql.includes('UPDATE buddy_invites'))).toBe(true);
   });
 
   it('refuses to act as a profile that is not yours', async () => {
@@ -249,6 +294,72 @@ describe('GET /buddies', () => {
 
     expect(body[0]).toMatchObject({ buddyProfileId: '9', blockedByMe: true, blockedByThem: false });
     expect(body[1]).toMatchObject({ buddyProfileId: '8', blockedByMe: false, blockedByThem: true });
+  });
+});
+
+describe('DELETE /buddies/:linkId', () => {
+  const LIVE_LINK = {
+    id: 5, profileIdA: '1', profileIdB: '9', blockedByProfileId: null,
+    removedByA: null, removedByB: null,
+  };
+
+  /** Records what the route did, so the test can assert on the decision. */
+  function leavingPool(afterUpdate) {
+    const seen = { update: null, deleted: false };
+    const pool = {
+      seen,
+      query: async sql => {
+        if (sql.includes('FROM user_profiles WHERE user_id')) return { rows: [{ id: 1 }, { id: 2 }] };
+        if (sql.includes('SELECT * FROM buddy_links WHERE id')) return { rows: [LIVE_LINK] };
+        if (sql.includes('UPDATE buddy_links SET')) {
+          seen.update = sql;
+          return { rows: [afterUpdate] };
+        }
+        if (sql.includes('DELETE FROM buddy_links')) { seen.deleted = true; return { rows: [] }; }
+        throw new Error(`Unexpected query: ${sql}`);
+      },
+    };
+    return pool;
+  }
+
+  it('marks your side rather than deleting the row', async () => {
+    // A DELETE cascades, and would take the other person's transcript with
+    // yours. Their copy is theirs; leaving must not reach across and burn it.
+    const pool = leavingPool({ id: 5, removedByA: new Date(), removedByB: null });
+
+    const result = await call(pool, { method: 'DELETE', url: '/buddies/5' });
+
+    expect(result.status).toBe(204);
+    expect(pool.seen.update).toContain('removedByA');
+    expect(pool.seen.deleted).toBe(false);
+  });
+
+  it('marks the B column when you are the B side', async () => {
+    const pool = leavingPool({ id: 5, removedByA: null, removedByB: new Date() });
+    pool.query = async sql => {
+      if (sql.includes('FROM user_profiles WHERE user_id')) return { rows: [{ id: 1 }, { id: 2 }] };
+      if (sql.includes('SELECT * FROM buddy_links WHERE id')) {
+        return { rows: [{ ...LIVE_LINK, profileIdA: '9', profileIdB: '1' }] };
+      }
+      if (sql.includes('UPDATE buddy_links SET')) {
+        pool.seen.update = sql;
+        return { rows: [{ id: 5, removedByA: null, removedByB: new Date() }] };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    };
+
+    await call(pool, { method: 'DELETE', url: '/buddies/5' });
+
+    expect(pool.seen.update).toContain('removedByB');
+  });
+
+  it('collects the row only once both sides have left', async () => {
+    // At that point nobody can reach any of it, so there is nothing to keep.
+    const pool = leavingPool({ id: 5, removedByA: new Date(), removedByB: new Date() });
+
+    await call(pool, { method: 'DELETE', url: '/buddies/5' });
+
+    expect(pool.seen.deleted).toBe(true);
   });
 });
 

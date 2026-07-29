@@ -261,14 +261,15 @@ describe('guardActingProfile', () => {
 
 describe('guardBuddyLink', () => {
   const link = over => ['FROM buddy_links WHERE id', [{
-    id: 5, profileIdA: '1', profileIdB: '9', blockedByProfileId: null, ...over,
+    id: 5, profileIdA: '1', profileIdB: '9', blockedByProfileId: null,
+    removedByA: null, removedByB: null, ...over,
   }]];
 
   it('lets through the side stored as A, and says which side that is', async () => {
     const pool = fakePool([OWNS_1_AND_2, link()]);
     const req = reqFor({ id: 7 }, { params: { linkId: '5' } });
     expect((await run(guardBuddyLink(pool), req)).passed).toBe(true);
-    expect(req.link).toEqual({ id: '5', mine: '1', theirs: '9' });
+    expect(req.link).toEqual({ id: '5', mine: '1', theirs: '9', isA: true });
   });
 
   it('lets through the side stored as B, with mine and theirs the other way up', async () => {
@@ -277,7 +278,24 @@ describe('guardBuddyLink', () => {
     const pool = fakePool([OWNS_1_AND_2, link({ profileIdA: '9', profileIdB: '1' })]);
     const req = reqFor({ id: 7 }, { params: { linkId: '5' } });
     expect((await run(guardBuddyLink(pool), req)).passed).toBe(true);
-    expect(req.link).toEqual({ id: '5', mine: '1', theirs: '9' });
+    expect(req.link).toEqual({ id: '5', mine: '1', theirs: '9', isA: false });
+  });
+
+  it('closes the link once you have left, even though your row survives', async () => {
+    // Leaving keeps the row so the other side keeps their transcript. It must
+    // not keep the channel: a 404 here is what stops it being a friendship you
+    // already ended.
+    const pool = fakePool([OWNS_1_AND_2, link({ removedByA: new Date() })]);
+    const req = reqFor({ id: 7 }, { params: { linkId: '5' } });
+    expect((await run(guardBuddyLink(pool), req)).status).toBe(404);
+  });
+
+  it('closes the link when the other side left, so nobody writes into nothing', async () => {
+    // The asymmetry that matters: your copy survives their departure, but the
+    // channel does not, or you would be writing where nothing arrives.
+    const pool = fakePool([OWNS_1_AND_2, link({ removedByB: new Date() })]);
+    const req = reqFor({ id: 7 }, { params: { linkId: '5' } });
+    expect((await run(guardBuddyLink(pool), req)).status).toBe(404);
   });
 
   it('refuses a friendship between two other people', async () => {

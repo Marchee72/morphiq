@@ -319,11 +319,20 @@ export function guardBuddyLink(pool, param = 'linkId') {
     const onB = owned.includes(String(link.profileIdB));
     if (!onA && !onB) return res.status(403).json(DENIED);
     if (link.blockedByProfileId != null) return res.status(403).json(DENIED);
+    // Either side having left ends the friendship for both. Their transcript
+    // survives on their own device's account, but the channel does not — the
+    // alternative leaves someone writing into a link that silently goes nowhere.
+    if (link.removedByA != null || link.removedByB != null) {
+      return res.status(404).json({ error: 'No such link' });
+    }
 
     req.link = {
       id: String(link.id),
       mine: String(onA ? link.profileIdA : link.profileIdB),
       theirs: String(onA ? link.profileIdB : link.profileIdA),
+      // Which stored column is yours. The pair is held in canonical order, so
+      // "am I A or B" is not derivable from the ids without repeating the sort.
+      isA: onA,
     };
     next();
   };
@@ -348,7 +357,8 @@ export async function visibleProfileIds(pool, req) {
       .query(
         `SELECT "profileIdA", "profileIdB" FROM buddy_links
           WHERE ("profileIdA" = ANY($1) OR "profileIdB" = ANY($1))
-            AND "blockedByProfileId" IS NULL`,
+            AND "blockedByProfileId" IS NULL
+            AND "removedByA" IS NULL AND "removedByB" IS NULL`,
         [owned],
       )
       .then(({ rows }) => {

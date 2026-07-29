@@ -121,10 +121,12 @@ export function socialRoutes(pool) {
     return rows[0].n >= REDEEM_ATTEMPTS_PER_HOUR;
   }
 
+  /** Live friendships only — a link somebody has left must not eat the ceiling. */
   async function buddyCount(profileId) {
     const { rows } = await pool.query(
       `SELECT COUNT(*)::int AS n FROM buddy_links
-        WHERE "profileIdA" = $1 OR "profileIdB" = $1`,
+        WHERE ("profileIdA" = $1 OR "profileIdB" = $1)
+          AND "removedByA" IS NULL AND "removedByB" IS NULL`,
       [String(profileId)],
     );
     return rows[0].n;
@@ -136,7 +138,9 @@ export function socialRoutes(pool) {
     try {
       const profileId = String(req.query.profileId);
       const { rows } = await pool.query(
-        `${LINK_SELECT} WHERE l."profileIdA" = $1 OR l."profileIdB" = $1
+        `${LINK_SELECT}
+          WHERE (l."profileIdA" = $1 OR l."profileIdB" = $1)
+            AND l."removedByA" IS NULL AND l."removedByB" IS NULL
           ORDER BY l."createdAt" ASC`,
         [profileId],
       );
@@ -145,16 +149,32 @@ export function socialRoutes(pool) {
   });
 
   /**
-   * Ends a friendship outright.
+   * Leaves a friendship, taking only your own copy of it.
    *
-   * Everything hanging off the link goes with it, for both people. That is the
-   * stated position rather than an accident of `ON DELETE CASCADE`: a one-sided
-   * delete would leave the other person holding a copy of a conversation you
-   * were told had been removed. The client says so before it calls this.
+   * Not a DELETE. Your transcript is yours and theirs is theirs, so removing a
+   * partner must not reach across and destroy what they hold — which is exactly
+   * what `ON DELETE CASCADE` would do.
+   *
+   * The friendship itself does end for both, and that asymmetry is deliberate:
+   * a relationship one person has left is over, but ending it *silently* for
+   * the other would leave them writing into a channel that goes nowhere. So the
+   * link closes for everyone while each side keeps their own record.
+   *
+   * Once both have left, nobody can reach any of it and the row is collected.
    */
   router.delete('/buddies/:linkId', buddyLink, async (req, res) => {
     try {
-      await pool.query('DELETE FROM buddy_links WHERE id = $1', [req.link.id]);
+      const column = req.link.isA ? 'removedByA' : 'removedByB';
+      const { rows } = await pool.query(
+        `UPDATE buddy_links SET "${column}" = NOW() WHERE id = $1 RETURNING *`,
+        [req.link.id],
+      );
+
+      const link = rows[0];
+      if (link.removedByA != null && link.removedByB != null) {
+        // Unreachable by either account now, so there is nothing left to keep.
+        await pool.query('DELETE FROM buddy_links WHERE id = $1', [req.link.id]);
+      }
       res.status(204).end();
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
@@ -325,8 +345,47 @@ export function socialRoutes(pool) {
         [profileId, profileIdA, profileIdB],
       );
       if (existing.length > 0) {
+        const found = existing[0];
+
+        // A row somebody had left. Both of them have now said otherwise — one
+        // minted a fresh code, the other redeemed it — so the friendship comes
+        // back rather than colliding with the UNIQUE constraint forever.
+        //
+        // What does *not* come back is either side's cleared transcript: the
+        // conversation they deleted stays deleted. That is the messages layer's
+        // job, and the reason it must clear by cursor rather than by row.
+        if (found.removedByA != null || found.removedByB != null) {
+          // Reviving is a real outcome, so it spends the code — same conditional
+          // claim as the fresh path, for the same reason: two phones must not
+          // both succeed on one code.
+          const { rows: claimed } = await pool.query(
+            `UPDATE buddy_invites
+                SET "redeemedAt" = NOW(), "redeemedByUserId" = $2, "redeemedByProfileId" = $3
+              WHERE code = $1
+                AND "redeemedAt" IS NULL AND "revokedAt" IS NULL AND "expiresAt" > NOW()
+              RETURNING code`,
+            [code, req.user.id, profileId],
+          );
+          if (claimed.length === 0) {
+            await recordAttempt(req.user.id, 'redeem', false);
+            return res.status(404).json({ error: 'That code is not valid' });
+          }
+
+          await pool.query(
+            `UPDATE buddy_links SET "removedByA" = NULL, "removedByB" = NULL WHERE id = $1`,
+            [found.id],
+          );
+          const { rows: fresh } = await pool.query(
+            `${LINK_SELECT} WHERE l.id = $2`,
+            [profileId, found.id],
+          );
+          await recordAttempt(req.user.id, 'redeem', true);
+          return res.status(201).json(toBuddyLink(fresh[0], profileId));
+        }
+
+        // Already partners, and nothing changed — so the code is not spent.
         await recordAttempt(req.user.id, 'redeem', true);
-        return res.status(200).json(toBuddyLink(existing[0], profileId));
+        return res.status(200).json(toBuddyLink(found, profileId));
       }
 
       if (await buddyCount(profileId) >= MAX_BUDDIES
