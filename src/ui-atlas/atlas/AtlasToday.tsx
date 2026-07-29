@@ -1,5 +1,5 @@
-import React from 'react';
-import { ArrowRight, Check, Dumbbell, Heart, Scale, Sparkles, UtensilsCrossed } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowRight, Check, Dumbbell, Heart, Scale, Sparkles, Trophy, UtensilsCrossed } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { useElapsedSeconds } from '../components/useTicker';
@@ -7,6 +7,8 @@ import { ExerciseThumb } from '../components/ExerciseThumb';
 import { metricByKey } from '../derive/bodyMetrics';
 import { daypart } from '../derive/profile';
 import { AtlasStates } from './AtlasStates';
+import { AtlasSessionDetail } from './AtlasSessionDetail';
+import { AtlasTodayDetail, type TodayDetail } from './AtlasTodayDetail';
 
 /**
  * Today — the screen that answers "what do I need to know right now".
@@ -33,6 +35,16 @@ export const AtlasToday: React.FC = () => {
 
   const heroImage = sessionExercises[0]?.image;
   const heroName = sessionExercises[0]?.name ?? session?.title ?? '';
+
+  // Tapping a card explains its number before it offers the tab that owns it.
+  const [detail, setDetail] = useState<TodayDetail | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  /**
+   * The volume card read `0.0 t` on every rest day, because it only ever showed
+   * the live session. With nothing running the week is the honest number.
+   */
+  const volumeKg = session ? sessionTotals.volumeKg : training.weeklyStats.volumeKg;
 
   return (
     <>
@@ -77,25 +89,32 @@ export const AtlasToday: React.FC = () => {
         <button onClick={() => actions.navigate('body')}>{t('common.seeAll')}</button>
       </div>
       <div className="at-rail">
-        <button className="at-moment" onClick={() => actions.navigate('body')}>
+        <button className="at-moment" onClick={() => setDetail({ kind: 'weight' })}>
           <span className="at-moment-icon"><Scale size={17} /></span>
           <b>{body.hasData ? fmt.n(weight?.value ?? 0, 1) : '—'}<small>{t('unit.kg')}</small></b>
           <span>
             {t('today.weight')}
-            {weight?.delta30d != null && ` · ${t('body.overMonth', { delta: fmt.signed(weight.delta30d), unit: t('unit.kg') })}`}
+            {weight?.delta7d != null && ` · ${fmt.signed(weight.delta7d)} ${t('unit.kg')} / ${t('today.change7d')}`}
+            {weight?.delta7d == null && weight?.delta30d != null
+              && ` · ${t('body.overMonth', { delta: fmt.signed(weight.delta30d), unit: t('unit.kg') })}`}
           </span>
         </button>
-        <button className="at-moment" onClick={() => actions.openOverlay('addFood')}>
+        <button className="at-moment" onClick={() => setDetail({ kind: 'nutrition', macro: 'protein' })}>
           <span className="at-moment-icon"><UtensilsCrossed size={17} /></span>
           <b>{fmt.n(nutrition.protein.eaten)}<small>{t('unit.g')}</small></b>
           <span>{t('today.protein')} · {fmt.n(Math.max(0, nutrition.protein.target - nutrition.protein.eaten))} {t('unit.g')}</span>
         </button>
-        <button className="at-moment" onClick={() => actions.navigate('train')}>
+        <button className="at-moment" onClick={() => setDetail({ kind: 'volume' })}>
           <span className="at-moment-icon"><Dumbbell size={17} /></span>
-          <b>{fmt.n(sessionTotals.volumeKg / 1000, 1)}<small>{t('unit.tonnes')}</small></b>
-          <span>{t('today.volume')}{sessionTotals.prs > 0 ? ` · ${sessionTotals.prs} PR` : ''}</span>
+          <b>{fmt.n(volumeKg / 1000, 1)}<small>{t('unit.tonnes')}</small></b>
+          <span>
+            {session ? t('today.sessionVolume') : t('today.weekVolume')}
+            {session
+              ? sessionTotals.prs > 0 ? ` · ${sessionTotals.prs} PR` : ''
+              : ` · ${tp('history.sessions', training.weeklyStats.workouts)}`}
+          </span>
         </button>
-        <button className="at-moment" onClick={() => actions.openOverlay('addFood')}>
+        <button className="at-moment" onClick={() => setDetail({ kind: 'nutrition', macro: 'calories' })}>
           <span className="at-moment-icon"><Heart size={17} /></span>
           <b>{fmt.n(nutrition.calories.eaten)}<small>{t('unit.kcal')}</small></b>
           <span>{t('today.calories')} · {fmt.n(nutrition.calories.target)}</span>
@@ -106,18 +125,26 @@ export const AtlasToday: React.FC = () => {
         <h3>{t('today.thisWeek')}</h3>
         <button onClick={() => actions.navigate('train')}>
           {t('today.weeklyGoal', { done: training.streak.weekDone, goal: training.streak.weekGoal })}
+          {training.streak.current > 0 && ` · ${t('today.streak', { n: training.streak.current })}`}
         </button>
       </div>
       <div className="at-pad">
         <div className="at-card">
           <div className="at-week">
             {training.streak.week.map(day => (
-              <div key={day.date.toISOString()} className="at-day">
+              // A day is a tap target now: the ring says whether you trained,
+              // the sheet says what you did.
+              <button
+                key={day.date.toISOString()}
+                className="at-day"
+                onClick={() => setDetail({ kind: 'day', date: day.date })}
+                aria-label={t('today.openDay', { date: fmt.shortDate(day.date) })}
+              >
                 <div className="at-day-ring" data-done={day.done} data-today={day.isToday}>
                   {day.done ? <Check size={14} strokeWidth={3} /> : ''}
                 </div>
                 <span>{fmt.weekdayShort(day.date).charAt(0).toUpperCase()}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -130,7 +157,12 @@ export const AtlasToday: React.FC = () => {
       <div className="at-pad" style={{ paddingBottom: 22 }}>
         <div className="at-card" style={{ padding: '8px 20px' }}>
           {training.muscleLoad.rows.map((row, i) => (
-            <div key={row.group} className="at-routine-item" style={{ borderTop: i === 0 ? 'none' : undefined }}>
+            <button
+              key={row.group}
+              className="at-routine-item"
+              style={{ borderTop: i === 0 ? 'none' : undefined, width: '100%' }}
+              onClick={() => setDetail({ kind: 'muscle', group: row.group })}
+            >
               <span>
                 {t(row.labelKey)}
                 <small>
@@ -140,7 +172,7 @@ export const AtlasToday: React.FC = () => {
                 </small>
               </span>
               <b data-met={row.sets >= row.target}>{row.sets}/{row.target}</b>
-            </div>
+            </button>
           ))}
           {training.muscleLoad.unmappedSets > 0 && (
             <div className="at-routine-note">
@@ -154,18 +186,29 @@ export const AtlasToday: React.FC = () => {
         <>
           <div className="at-rail-head">
             <h3>{t('today.recent')}</h3>
-            <button onClick={() => actions.navigate('train')}>{t('common.seeAll')}</button>
+            <button onClick={() => actions.openOverlay('history')}>{t('common.seeAll')}</button>
           </div>
           <div className="at-pad" style={{ paddingBottom: 22 }}>
             <div className="at-card" style={{ padding: '8px 20px' }}>
               {training.history.slice(0, 3).map((entry, i) => (
-                <div key={entry.id} className="at-routine-item" style={{ borderTop: i === 0 ? 'none' : undefined }}>
+                <button
+                  key={entry.id}
+                  className="at-routine-item"
+                  style={{ borderTop: i === 0 ? 'none' : undefined, width: '100%' }}
+                  onClick={() => setSessionId(entry.id)}
+                  aria-label={t('history.openSession', { name: entry.title })}
+                >
                   <span>
                     {entry.title}
-                    <small>{fmt.relativeDay(entry.at, now)} · {entry.durationMin} min</small>
+                    <small>
+                      {fmt.relativeDay(entry.at, now)} · {entry.durationMin} min · {tp('unit.sets', entry.sets)}
+                    </small>
                   </span>
-                  <b>{fmt.n(entry.volumeKg / 1000, 1)} {t('unit.tonnes')}</b>
-                </div>
+                  <b>
+                    {entry.prs > 0 && <Trophy size={13} color="var(--clay)" />}
+                    {fmt.n(entry.volumeKg / 1000, 1)} {t('unit.tonnes')}
+                  </b>
+                </button>
               ))}
             </div>
           </div>
@@ -179,6 +222,13 @@ export const AtlasToday: React.FC = () => {
           body={t('today.noSessionSub')}
         />
       )}
+
+      <AtlasTodayDetail
+        detail={detail}
+        onClose={() => setDetail(null)}
+        onOpenSession={setSessionId}
+      />
+      <AtlasSessionDetail workoutLogId={sessionId} onClose={() => setSessionId(null)} />
     </>
   );
 };

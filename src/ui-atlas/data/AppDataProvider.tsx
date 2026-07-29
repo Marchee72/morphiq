@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Exercise } from '../../core/entities/Exercise';
+import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import { getExerciseCatalog, type ExerciseCatalog, type FacetCounts } from '../../data/exercises/ExerciseCatalog';
 import { useStore } from '../../presentation/state/store';
 import type { SessionVM } from '../types';
@@ -15,6 +16,7 @@ import { buildHistory, buildWeeklyStats, buildWeeklyVolume } from '../derive/his
 import { buildSessionExercises, buildSessionTotals, findCursor } from '../derive/session';
 import { toCatalogItem } from '../derive/catalog';
 import { buildExerciseHistory } from '../derive/exerciseHistory';
+import { buildSessionDetail } from '../derive/sessionDetail';
 
 /**
  * One provider, composed once per mount.
@@ -101,6 +103,26 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     [allSets, activeWorkoutSets],
   );
 
+  /**
+   * Sets keyed by the workout they belong to.
+   *
+   * `activeWorkoutSets` is filled by an N+1 loop inside `loadWorkoutHistory` and
+   * only ever covers that window, so a session older than it rendered as zero
+   * volume. Grouping `allSets` — one query for everything ever — covers the whole
+   * year of logs the history panel can reach. Falls back to the store's map for
+   * the same reason `setsForDerivation` does: `allSets` comes from an endpoint an
+   * older server deployment may not have.
+   */
+  const setsByLog = useMemo(() => {
+    if (allSets.length === 0) return activeWorkoutSets;
+    const grouped: Record<string, WorkoutSet[]> = {};
+    for (const set of allSets) {
+      if (!set.workoutLogId) continue;
+      (grouped[set.workoutLogId] ??= []).push(set);
+    }
+    return grouped;
+  }, [allSets, activeWorkoutSets]);
+
   const profile = useMemo(() => buildProfile(activeProfile), [activeProfile]);
 
   const body = useMemo(
@@ -142,20 +164,36 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     [recentSets, resolveExerciseByName, at],
   );
 
+  /**
+   * A year of sessions, not 120 days.
+   *
+   * `yearLogs` is already fetched for the best-streak calculation, and now that
+   * `setsByLog` can supply sets for any of them the history panel can reach back
+   * a full year for free. Today and the Train hub slice this, so nothing else
+   * changes. Merged rather than picked: `workoutHistory` holds anything
+   * `extendWorkoutHistory` has since pulled in from beyond that year, and is the
+   * only source at all if the range call failed.
+   */
+  const logsForHistory = useMemo(() => {
+    const byId = new Map(yearLogs.map(log => [log.id, log]));
+    for (const log of workoutHistory) byId.set(log.id, log);
+    return [...byId.values()];
+  }, [yearLogs, workoutHistory]);
+
   const history = useMemo(
-    () => buildHistory(workoutHistory, activeWorkoutSets, prSetIds),
-    [workoutHistory, activeWorkoutSets, prSetIds],
+    () => buildHistory(logsForHistory, setsByLog, prSetIds),
+    [logsForHistory, setsByLog, prSetIds],
   );
 
   const training = useMemo(() => ({
     history,
     records: buildPersonalRecords(setsForDerivation),
     muscleLoad,
-    streak: buildStreak(yearLogs.length ? yearLogs : workoutHistory, activeProfile?.weeklyWorkoutGoalDays, at),
-    weeklyVolumeKg: buildWeeklyVolume(workoutHistory, activeWorkoutSets, at),
-    weeklyStats: buildWeeklyStats(workoutHistory, activeWorkoutSets, at),
+    streak: buildStreak(logsForHistory, activeProfile?.weeklyWorkoutGoalDays, at),
+    weeklyVolumeKg: buildWeeklyVolume(logsForHistory, setsByLog, at),
+    weeklyStats: buildWeeklyStats(logsForHistory, setsByLog, at),
     routines: savedRoutines,
-  }), [history, setsForDerivation, muscleLoad, yearLogs, workoutHistory, activeWorkoutSets, activeProfile?.weeklyWorkoutGoalDays, savedRoutines, at]);
+  }), [history, setsForDerivation, muscleLoad, logsForHistory, setsByLog, activeProfile?.weeklyWorkoutGoalDays, savedRoutines, at]);
 
   const nutrition = useMemo(
     () => buildNutrition(foodLogs, workoutLogs, activeProfile, latestMeasurement, at),
@@ -209,6 +247,15 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     [setsForDerivation],
   );
 
+  const sessionDetail = useCallback(
+    (workoutLogId: string) => {
+      const log = logsForHistory.find(entry => entry.id === workoutLogId);
+      if (!log) return null;
+      return buildSessionDetail(log, setsByLog[workoutLogId] ?? [], prSetIds, resolveExerciseByName);
+    },
+    [logsForHistory, setsByLog, prSetIds, resolveExerciseByName],
+  );
+
   const value: AppData = useMemo(() => ({
     ready: Boolean(activeProfile),
     profile,
@@ -222,7 +269,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     catalog: catalogSlice,
     coach: { thread: chatHistory, isLoading: isAiLoading },
     exerciseHistory,
-  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, catalogSlice, chatHistory, isAiLoading, exerciseHistory]);
+    sessionDetail,
+  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, catalogSlice, chatHistory, isAiLoading, exerciseHistory, sessionDetail]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 };

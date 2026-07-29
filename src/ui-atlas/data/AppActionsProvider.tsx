@@ -49,6 +49,12 @@ export const AppActionsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     logWeight: kg => useStore.getState().addManualMeasurement(kg),
     toggleFavorite: id => useStore.getState().toggleFavorite(id),
     sendCoachMessage: text => useStore.getState().sendChatMessage(text),
+
+    loadOlderHistory: async (from, to) => {
+      await useStore.getState().extendWorkoutHistory(from, to);
+      // The logs arrive without their sets; this is what gives them a volume.
+      await useStore.getState().loadAllSets();
+    },
   }), []);
 
   return (

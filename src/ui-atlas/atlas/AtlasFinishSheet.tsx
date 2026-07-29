@@ -24,8 +24,10 @@ export const AtlasFinishSheet: React.FC<{
   /** Frozen by the caller when the sheet opens — a ticking clock behind a modal is noise. */
   elapsedSec: number;
   initialFeeling?: FeelingId;
+  /** A write is already in flight, so confirming again would file the session twice. */
+  busy?: boolean;
   onConfirm: (feeling: FeelingId | undefined) => void;
-}> = ({ open, onClose, totals, elapsedSec, initialFeeling, onConfirm }) => {
+}> = ({ open, onClose, totals, elapsedSec, initialFeeling, busy = false, onConfirm }) => {
   const { t, tp, fmt } = useT();
   const [feeling, setFeeling] = useState<FeelingId | undefined>(initialFeeling);
 
@@ -54,8 +56,8 @@ export const AtlasFinishSheet: React.FC<{
           <button className="at-btn" data-ghost="true" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          <button className="at-btn" onClick={() => onConfirm(feeling)}>
-            <Check size={15} strokeWidth={3} /> {t('train.finishNow')}
+          <button className="at-btn" disabled={busy} onClick={() => onConfirm(feeling)}>
+            <Check size={15} strokeWidth={3} /> {busy ? t('train.finishing') : t('train.finishNow')}
           </button>
         </>
       }

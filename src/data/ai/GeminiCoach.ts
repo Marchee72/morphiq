@@ -2,6 +2,7 @@ import type { ICoachAgentService, AgentContext } from '../../core/interfaces/IAg
 import { getAge } from '../../core/entities/UserProfile';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
+import { COACH_TOOLS, runCoachTool } from './coachTools';
 
 export function parseRoutineFromMessage(content: string): RoutineTemplate | null {
   if (!content) return null;
@@ -118,11 +119,163 @@ export async function chatCompletion(
   return answer.trim();
 }
 
+// ─── Tool Calling ─────────────────────────────────────────────────────────
+
+/** One turn in an OpenAI-compatible exchange, including the tool roles. */
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+}
+
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+
+/** Enough rounds for "what did I do today, and how does it compare to last week". */
+export const MAX_TOOL_ROUNDS = 4;
+
+/** Providers word this differently; all we need to know is that tools are unsupported. */
+function isToolsUnsupported(message: string): boolean {
+  return /tool|function[_ ]call/i.test(message);
+}
+
+interface CompletionChoice {
+  message?: { content?: string | null; tool_calls?: ToolCall[] };
+  finish_reason?: string;
+}
+
+async function postChat(
+  provider: LLMProviderConfig,
+  body: Record<string, unknown>,
+): Promise<CompletionChoice> {
+  const response = await fetch(`${provider.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${provider.apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      (errorData as { error?: { message?: string } }).error?.message ?? `HTTP error ${response.status}`,
+    );
+  }
+
+  const data = await response.json() as { choices?: CompletionChoice[] };
+  const choice = data.choices?.[0];
+  if (!choice) throw new Error('Empty response from LLM provider.');
+  return choice;
+}
+
+/**
+ * A chat completion the model can interrupt to go and look something up.
+ *
+ * Every tool result is fed back and the model asked again, up to `MAX_TOOL_ROUNDS`;
+ * the last round is forced to answer so a model that keeps calling tools still
+ * produces a reply rather than nothing. Tool failures come back as `{ error }`
+ * instead of throwing — one unavailable query should cost a sentence, not the turn.
+ *
+ * Falls back to a plain completion when the provider rejects `tools` outright.
+ * Support is not universal across the OpenAI-compatible endpoints this app can be
+ * pointed at, and the coach has to keep working on the ones that lack it.
+ */
+export async function chatCompletionWithTools(
+  provider: LLMProviderConfig,
+  systemPrompt: string,
+  messages: ChatMessage[],
+  tools: unknown[],
+  execute: (name: string, args: Record<string, unknown>) => unknown,
+  options: { temperature?: number; maxTokens?: number } = {},
+): Promise<string> {
+  if (!provider.apiKey && !provider.baseUrl.includes('localhost')) {
+    throw new Error('No API key configured. Set VITE_LLM_API_KEY in your .env file.');
+  }
+
+  const thread: ChatMessage[] = [{ role: 'system', content: systemPrompt }, ...messages];
+  const base = {
+    model: provider.model,
+    temperature: options.temperature ?? 0.7,
+    // Tool results are verbose and the answer still has to fit after them.
+    max_tokens: options.maxTokens ?? 2000,
+  };
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const last = round === MAX_TOOL_ROUNDS - 1;
+
+    let choice: CompletionChoice;
+    try {
+      choice = await postChat(provider, {
+        ...base,
+        messages: thread,
+        tools,
+        // The final round must produce prose, whatever the model would prefer.
+        tool_choice: last ? 'none' : 'auto',
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (round === 0 && isToolsUnsupported(message)) {
+        console.warn('MorphIQ Coach: provider rejected tools, falling back to a plain completion.', message);
+        return await chatCompletion(provider, systemPrompt, messages.map(m => ({
+          role: m.role,
+          content: m.content ?? '',
+        })), options);
+      }
+      throw err;
+    }
+
+    const calls = choice.message?.tool_calls ?? [];
+    if (calls.length === 0) {
+      const answer = choice.message?.content;
+      if (!answer) throw new Error('Empty response from LLM provider.');
+      return answer.trim();
+    }
+
+    thread.push({ role: 'assistant', content: choice.message?.content ?? null, tool_calls: calls });
+
+    for (const call of calls) {
+      let result: unknown;
+      try {
+        const args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+        result = execute(call.function.name, args as Record<string, unknown>);
+      } catch (err) {
+        result = { error: err instanceof Error ? err.message : String(err) };
+      }
+      thread.push({ role: 'tool', tool_call_id: call.id, content: JSON.stringify(result) });
+    }
+  }
+
+  throw new Error('The coach kept looking things up without answering.');
+}
+
 // ─── Coach Prompt Builder ─────────────────────────────────────────────────
 function buildCoachPrompt(context: AgentContext, userMessage: string): string {
   const { profile, latestMeasurement, measurementHistory, recentFoodLogs, recentWorkoutLogs, recentWorkoutSets } = context;
+  const now = context.now ?? new Date();
 
-  let prompt = `=== USER PROFILE ===
+  /**
+   * The date anchor, first.
+   *
+   * Without it "how was my routine today" is unanswerable: workouts are printed
+   * with a calendar date and the model has no way to know which of them is
+   * today's. This was the whole reason the coach used to say it could not see
+   * the user's routine.
+   */
+  let prompt = `=== NOW ===
+- Current date and time: ${now.toLocaleString(undefined, {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })}
+- Today's date in ISO form: ${now.getFullYear()}-${`${now.getMonth() + 1}`.padStart(2, '0')}-${`${now.getDate()}`.padStart(2, '0')}
+Resolve "today", "yesterday" and "this week" against this.
+
+=== USER PROFILE ===
 - Name: ${profile.name}
 - Gender: ${profile.gender}
 - Age: ${getAge(profile.birthDate)} years
@@ -234,8 +387,44 @@ ${profile.availableEquipment && profile.availableEquipment.length > 0
     prompt += `No workouts logged recently.\n`;
   }
 
+  /**
+   * The session in progress, which used to be invisible.
+   *
+   * It is not a `WorkoutLog` until the user presses finish, so asking about the
+   * routine mid-session found nothing at all in the section above.
+   */
+  prompt += `\n=== SESSION IN PROGRESS ===\n`;
+  if (context.activeSession) {
+    const session = context.activeSession;
+    const start = new Date(session.startTime);
+    const elapsed = Math.max(0, Math.round((now.getTime() - start.getTime()) / 60_000));
+    const logged = session.sets.filter(s => (s.reps ?? 0) > 0);
+
+    prompt += `Started ${start.toLocaleTimeString()} (${elapsed} min ago) — ${session.workoutType}. `;
+    prompt += `${logged.length} sets logged so far.\n`;
+    for (const exercise of session.routineExercises ?? []) {
+      const done = session.sets
+        .filter(s => s.exerciseName === exercise.exerciseName && (s.reps ?? 0) > 0)
+        .map(s => `${(s.weight ?? 0).toFixed(1)}kg x ${s.reps}`)
+        .join(', ');
+      prompt += `  * ${exercise.exerciseName} (target ${exercise.targetSets} sets): ${done || 'nothing logged yet'}\n`;
+    }
+  } else {
+    prompt += `No session running right now.\n`;
+  }
+
+  prompt += `\n=== SAVED ROUTINES ===\n`;
+  if (context.savedRoutines && context.savedRoutines.length > 0) {
+    for (const routine of context.savedRoutines) {
+      prompt += `- ${routine.title}: ${routine.exercises.map(e => `${e.exerciseName} ${e.targetSets}x${e.targetReps ?? '?'}`).join(', ')}\n`;
+    }
+  } else {
+    prompt += `No saved routines.\n`;
+  }
+
   prompt += `
 === CONVERSATION RULES ===
+0. Everything above is the user's own logged data, read from their app. Answer from it. You also have tools to look up sessions, exercise progression, records, routines and scale readings on demand — call them rather than saying you cannot see the user's training.
 1. BE HIGHLY CONCISE, DIRECT, AND CONCISE. Avoid long conversational preambles, repeated greetings, or verbose introductory fluff.
 2. Keep responses personalized using exact user BIA metrics (BMR, body fat %, muscle mass, protein targets).
 3. Ground all advice in sports science (progressive overload, 1.6-2.2g protein/kg, calorie targets).
@@ -284,9 +473,9 @@ export class MorphIQCoach implements ICoachAgentService {
     const coachPromptContext = buildCoachPrompt(context, '');
     const systemInstruction = `${COACH_SYSTEM_PROMPT}\n\n${coachPromptContext}`;
 
-    const messages = context.chatHistory.map(m => ({
-      role: m.sender === 'user' ? 'user' : 'assistant',
-      content: m.content
+    const messages: ChatMessage[] = context.chatHistory.map(m => ({
+      role: m.sender === 'user' ? 'user' as const : 'assistant' as const,
+      content: m.content,
     }));
 
     if (messages.length === 0 || messages[messages.length - 1].content !== userMessage) {
@@ -294,7 +483,23 @@ export class MorphIQCoach implements ICoachAgentService {
     }
 
     try {
-      return await chatCompletion(provider, systemInstruction, messages);
+      // Without a data source there is nothing to look up, so the fixed prompt
+      // above is all the model gets — the same behaviour as before tools existed.
+      if (!context.dataSource) {
+        return await chatCompletion(provider, systemInstruction, messages.map(m => ({
+          role: m.role,
+          content: m.content ?? '',
+        })));
+      }
+
+      const source = context.dataSource;
+      return await chatCompletionWithTools(
+        provider,
+        systemInstruction,
+        messages,
+        COACH_TOOLS,
+        (name, args) => runCoachTool(name, args, source),
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('MorphIQ Coach LLM Error:', msg);

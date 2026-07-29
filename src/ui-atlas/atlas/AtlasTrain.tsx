@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Check, Flag, Plus, Trash2, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
+import { useStore } from '../../presentation/state/store';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { useLiveSession } from '../data/useLiveSession';
 import { useSetDraft } from '../components/useSetDraft';
 import { useFocusOnAdd } from '../components/useFocusOnAdd';
 import { useSessionSummary } from '../state/sessionSummary';
 import { buildSessionSummary } from '../derive/summary';
-import type { FeelingId, SessionCursor } from '../types';
+import type { FeelingId, SessionCursor, SessionSetVM } from '../types';
 import type { Exercise } from '../../core/entities/Exercise';
 import { AtlasGymHub } from './AtlasGymHub';
 import { AtlasSessionEditor } from './AtlasSessionEditor';
@@ -50,16 +51,47 @@ export const AtlasTrain: React.FC = () => {
   useFocusOnAdd(sessionExercises.length, setCursor);
 
   const showSummary = useSessionSummary(s => s.show);
+  const dismissSummary = useSessionSummary(s => s.dismiss);
+  const finishing = useStore(s => s.isFinishingSession);
 
   const exercise = live.exercise;
   const set = exercise?.sets[live.setIdx];
-  const draft = useSetDraft(`${live.cursor.exerciseIdx}:${live.cursor.setIdx}`, set);
+
+  /**
+   * The last thing actually put on the bar for this exercise today, which is
+   * what the next set should open on. See `useSetDraft` for why.
+   */
+  const carry = exercise?.sets
+    .slice(0, live.setIdx)
+    .reduce<SessionSetVM | undefined>((found, s) => (s.done ? s : found), undefined);
+  const draft = useSetDraft(
+    `${live.cursor.exerciseIdx}:${live.cursor.setIdx}`,
+    set,
+    carry && { weightKg: carry.weightKg, reps: carry.reps },
+  );
+
+  /**
+   * Which set of this exercise has its row open for editing. Held here rather
+   * than inside the list because a finished set pill hands its set down to the
+   * list instead of putting the wheels on it — a set you have logged is
+   * corrected in one place, not two.
+   */
+  const [editRow, setEditRow] = useState<number | null>(null);
+  const [editRowFor, setEditRowFor] = useState(live.cursor.exerciseIdx);
+  if (editRowFor !== live.cursor.exerciseIdx) {
+    setEditRowFor(live.cursor.exerciseIdx);
+    setEditRow(null);
+  }
 
   if (!session) return <AtlasGymHub />;
 
   /**
    * Snapshot, then write, then show. `finishActiveSession` nulls the session, so
    * a summary derived after the call would describe nothing.
+   *
+   * If the write fails the summary has to come back down — a recap of a session
+   * that was never saved is the most misleading screen the app could show — and
+   * the confirm sheet reopens so the attempt can be repeated.
    */
   const finish = async (feeling: FeelingId | undefined) => {
     const endedAt = finishingAt ?? new Date();
@@ -71,7 +103,12 @@ export const AtlasTrain: React.FC = () => {
       sessionTotals,
       endedAt,
     ));
-    await live.finish();
+    try {
+      await live.finish();
+    } catch {
+      dismissSummary();
+      setFinishingAt(endedAt);
+    }
   };
 
   const header = (
@@ -98,6 +135,7 @@ export const AtlasTrain: React.FC = () => {
       <AtlasFinishSheet
         open={finishingAt !== null}
         onClose={() => setFinishingAt(null)}
+        busy={finishing}
         totals={sessionTotals}
         elapsedSec={finishingAt
           ? Math.max(0, Math.floor((finishingAt.getTime() - session.startedAt.getTime()) / 1000))
@@ -198,6 +236,12 @@ export const AtlasTrain: React.FC = () => {
         </div>
       </div>
 
+      {/* A pill for a set still to do moves the wheels onto it. A pill for a set
+          already logged opens that set's row in the list below instead: once a
+          set is recorded there is exactly one place to change it, and it is the
+          place showing the numbers. Putting the wheels back on a finished set
+          was the confusing part — the pills said done and the button underneath
+          offered to complete it again. */}
       <div className="at-setpills">
         {exercise.sets.map((s, i) => (
           <button
@@ -206,8 +250,10 @@ export const AtlasTrain: React.FC = () => {
             data-done={s.done}
             data-cur={i === live.setIdx}
             data-pr={s.isPr}
-            onClick={() => live.goTo(live.cursor.exerciseIdx, i)}
-            aria-label={t('train.setOf', { n: s.setNum, total: exercise.sets.length })}
+            onClick={() => (s.done ? setEditRow(i) : live.goTo(live.cursor.exerciseIdx, i))}
+            aria-label={s.done
+              ? t('train.editSetValues', { n: s.setNum })
+              : t('train.setOf', { n: s.setNum, total: exercise.sets.length })}
           >
             {s.isPr ? <Trophy size={13} /> : s.done ? <Check size={14} strokeWidth={3} /> : s.setNum}
           </button>
@@ -268,6 +314,8 @@ export const AtlasTrain: React.FC = () => {
         <AtlasSetList
           sets={exercise.sets}
           currentIdx={live.setIdx}
+          editing={editRow}
+          onEditing={setEditRow}
           onUpdate={live.updateSet}
         />
       </div>
@@ -302,8 +350,13 @@ export const AtlasTrain: React.FC = () => {
           after a single exercise is how people end sessions by accident. */}
       <div className="at-train-actions">
         {sessionComplete ? (
-          <button className="at-btn" data-block="true" onClick={() => setFinishingAt(new Date())}>
-            <Flag size={16} /> {t('train.finish')}
+          <button
+            className="at-btn"
+            data-block="true"
+            disabled={finishing}
+            onClick={() => setFinishingAt(new Date())}
+          >
+            <Flag size={16} /> {finishing ? t('train.finishing') : t('train.finish')}
           </button>
         ) : exerciseComplete && nextExercise ? (
           <button

@@ -19,9 +19,26 @@ export interface SetDraft {
  * as the way to derive state from props, and doing it in an effect renders one
  * frame with stale numbers and triggers a cascading re-render.
  */
-export function useSetDraft(key: string, set: SessionSetVM | undefined): SetDraft {
-  const seedWeight = set?.weightKg || set?.lastWeightKg || 0;
-  const seedReps = set?.reps || set?.lastReps || 10;
+/**
+ * @param carry What was just done on this exercise, if anything — see below.
+ */
+export function useSetDraft(
+  key: string,
+  set: SessionSetVM | undefined,
+  carry?: { weightKg: number; reps: number },
+): SetDraft {
+  /**
+   * Order matters: what this set already holds, then what the set before it held
+   * *today*, then what it held last time.
+   *
+   * The middle one was missing. Set 2 of an exercise you have not done in a
+   * month opened on the month-old number even though set 1 had just gone in at
+   * something else entirely — so every set after the first meant dialling the
+   * same weight back in. You nearly always repeat the previous set or nudge it,
+   * and a nudge from the right number is one flick.
+   */
+  const seedWeight = set?.weightKg || carry?.weightKg || set?.lastWeightKg || 0;
+  const seedReps = set?.reps || carry?.reps || set?.lastReps || 10;
 
   /**
    * The stored values are part of the identity, not just the cursor position.

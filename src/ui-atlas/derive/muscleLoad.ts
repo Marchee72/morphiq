@@ -137,7 +137,14 @@ export function buildMuscleLoad(
   resolveExercise: (set: WorkoutSet) => Exercise | undefined,
   now: Date,
 ): MuscleLoadVM {
-  const counts = new Map<MuscleGroupId, { sets: number; lastHitAt: Date | null }>();
+  interface GroupTally {
+    sets: number;
+    lastHitAt: Date | null;
+    /** Keyed by display name — what the detail sheet lists under the group. */
+    exercises: Map<string, { name: string; sets: number; volumeKg: number }>;
+  }
+
+  const counts = new Map<MuscleGroupId, GroupTally>();
   let unmappedSets = 0;
 
   for (const set of sets) {
@@ -148,9 +155,17 @@ export function buildMuscleLoad(
     const group = resolveGroup(set, resolveExercise(set));
     if (!group) { unmappedSets++; continue; }
 
-    const entry = counts.get(group) ?? { sets: 0, lastHitAt: null };
+    const entry = counts.get(group) ?? { sets: 0, lastHitAt: null, exercises: new Map() };
     entry.sets++;
     if (!entry.lastHitAt || at > entry.lastHitAt) entry.lastHitAt = at;
+
+    const name = set.exerciseName.trim();
+    const key = name.toLowerCase();
+    const tally = entry.exercises.get(key) ?? { name, sets: 0, volumeKg: 0 };
+    tally.sets++;
+    tally.volumeKg += (set.weight ?? 0) * (set.reps ?? 0);
+    entry.exercises.set(key, tally);
+
     counts.set(group, entry);
   }
 
@@ -167,6 +182,9 @@ export function buildMuscleLoad(
         ? clamp(Math.round((hoursBetween(lastHitAt, now) / RECOVERY_HOURS[group]) * 100), 0, 100)
         : 100,
       lastHitAt,
+      exercises: [...(entry?.exercises.values() ?? [])]
+        .map(ex => ({ ...ex, volumeKg: Math.round(ex.volumeKg) }))
+        .sort((a, b) => b.sets - a.sets || b.volumeKg - a.volumeKg),
     };
   });
 

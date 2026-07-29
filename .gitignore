@@ -38,3 +38,6 @@ scratch/
 test-results/
 playwright-report/
 e2e/screenshots/
+
+# Local recovery dumps from scripts/repair-workout-data.mjs — contain personal training data.
+workout-repair-backup-*.json

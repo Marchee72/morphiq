@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowRight, Dumbbell, Play } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { AtlasStates } from './AtlasStates';
+import { AtlasSessionDetail } from './AtlasSessionDetail';
 
 /**
  * The Train tab when no session is running.
@@ -16,6 +17,9 @@ export const AtlasGymHub: React.FC = () => {
   const actions = useAppActions();
   const { t, tp, fmt } = useT();
   const now = new Date();
+
+  // Local, as in AtlasLibrary: the sheet belongs to the list that opened it.
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   return (
     <>
@@ -94,12 +98,23 @@ export const AtlasGymHub: React.FC = () => {
         </>
       )}
 
-      <div className="at-rail-head"><h3>{t('gym.history')}</h3></div>
+      <div className="at-rail-head">
+        <h3>{t('gym.history')}</h3>
+        {training.history.length > 0 && (
+          <button onClick={() => actions.openOverlay('history')}>{t('common.seeAll')}</button>
+        )}
+      </div>
       {training.history.length > 0 ? (
         <div className="at-pad" style={{ paddingBottom: 24 }}>
           <div className="at-card" style={{ padding: '8px 20px' }}>
             {training.history.slice(0, 10).map((entry, i) => (
-              <div key={entry.id} className="at-routine-item" style={{ borderTop: i === 0 ? 'none' : undefined }}>
+              <button
+                key={entry.id}
+                className="at-routine-item"
+                style={{ borderTop: i === 0 ? 'none' : undefined, width: '100%' }}
+                onClick={() => setSessionId(entry.id)}
+                aria-label={t('history.openSession', { name: entry.title })}
+              >
                 <span>
                   {entry.title}
                   <small>
@@ -108,13 +123,15 @@ export const AtlasGymHub: React.FC = () => {
                   </small>
                 </span>
                 <b>{fmt.n(entry.volumeKg / 1000, 1)} {t('unit.tonnes')}</b>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       ) : (
         <AtlasStates title={t('gym.noHistory')} body={t('today.noSessionSub')} />
       )}
+
+      <AtlasSessionDetail workoutLogId={sessionId} onClose={() => setSessionId(null)} />
     </>
   );
 };

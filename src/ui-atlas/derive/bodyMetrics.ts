@@ -105,7 +105,14 @@ export function buildMetricPoint(
     if (Number.isFinite(v) && v !== 0) { value = v; break; }
   }
 
-  const past = valueNear(sorted, spec.field, new Date(now.getTime() - DELTA_WINDOW_DAYS * MS_PER_DAY));
+  /**
+   * A shorter window needs a tighter tolerance, or the 7-day delta reaches far
+   * enough back to be the 30-day one — `DELTA_TOLERANCE_DAYS` is 7 by default.
+   */
+  const deltaOver = (days: number, toleranceDays = DELTA_TOLERANCE_DAYS): number | null => {
+    const past = valueNear(sorted, spec.field, new Date(now.getTime() - days * MS_PER_DAY), toleranceDays);
+    return past === null ? null : +(value - past).toFixed(2);
+  };
 
   return {
     key: spec.key,
@@ -113,7 +120,9 @@ export function buildMetricPoint(
     value,
     unitKey: spec.unitKey,
     decimals: spec.decimals,
-    delta30d: past === null ? null : +(value - past).toFixed(2),
+    delta30d: deltaOver(DELTA_WINDOW_DAYS),
+    delta7d: deltaOver(7, 3),
+    delta90d: deltaOver(90, 14),
     lowerIsBetter: resolveDirection(spec, value, profile),
     series: buildSeries(sorted, spec.field, now),
   };

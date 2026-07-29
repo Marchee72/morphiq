@@ -29,6 +29,8 @@ import {
 import type { RoutineTemplate, RoutineExerciseItem } from '../../core/entities/RoutineTemplate';
 import { normalizeName } from '../../ui-atlas/derive/records';
 import { DeepSeekCoach, chatCompletion, buildProviderFromEnv } from '../../data/ai/GeminiCoach';
+import type { AgentContext } from '../../core/interfaces/IAgent';
+import { isStrengthActivity, overlaps } from '../../data/health/activityTypes';
 import { generateMockMeasurements, generateMockFoodLogs, generateMockWorkouts } from '../../data/mock/mockData';
 
 import { Capacitor } from '@capacitor/core';
@@ -156,6 +158,13 @@ interface StoreState {
     feelingTag?: 'feeling_100' | 'good' | 'sore' | 'pain' | 'low_energy';
     bodyNotes?: string;
   } | null;
+  /**
+   * True from the moment finish is confirmed until the workout is written.
+   *
+   * Exists because that gap is not instant over the network, and the session
+   * stays on screen for all of it. See `finishActiveSession`.
+   */
+  isFinishingSession: boolean;
 
   // Actions
   setActiveTab: (tab: AppScreenId) => void;
@@ -196,6 +205,15 @@ interface StoreState {
   deleteWorkoutLog: (id: string) => Promise<void>;
   loadWorkoutHistory: (days?: number) => Promise<void>;
   loadWorkoutRange: (start: Date, end: Date) => Promise<WorkoutLog[]>;
+  /**
+   * Merge an older range into `workoutHistory` instead of replacing it.
+   *
+   * `loadWorkoutHistory` always fetches a window ending today and fetches each
+   * log's sets one by one, so widening it to reach a date years back is both
+   * destructive to the current window and an N+1. This only adds logs; `allSets`
+   * already holds every set there is.
+   */
+  extendWorkoutHistory: (start: Date, end: Date) => Promise<void>;
   importWorkouts: (logs: Omit<WorkoutLog, 'profileId'>[]) => Promise<void>;
 
   loadSetsForWorkout: (workoutLogId: string) => Promise<void>;
@@ -275,6 +293,7 @@ export const useStore = create<StoreState>((set, get) => ({
   activeWorkout: null,
   isGymModeOpen: false,
   activeSession: null,
+  isFinishingSession: false,
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedWorkoutForCoach: (workout) => set({ selectedWorkoutForCoach: workout }),
@@ -512,27 +531,46 @@ export const useStore = create<StoreState>((set, get) => ({
     };
   },
 
+  /**
+   * Ends the session and writes it, once.
+   *
+   * Two things were wrong here and they fed each other. The writes went through
+   * `addWorkoutLog`/`addWorkoutSet`, each of which reads the whole lot back
+   * afterwards — three sequential round trips per set, plus a thirty-day history
+   * refresh — so on a phone a twenty-set session took the better part of a
+   * minute with nothing on screen changing. And `activeSession` was only cleared
+   * at the very end of all that, so finishing again during the wait ran the
+   * whole thing a second time and filed a *duplicate workout*. There are
+   * sessions in the database logged three times over from exactly that.
+   *
+   * So: one guarded pass, the sets written in parallel against the repository
+   * directly, the session released as soon as the data is safe, and every
+   * read-back deferred until after that.
+   */
   finishActiveSession: async () => {
     const session = get().activeSession;
     const profile = get().activeProfile;
-    if (!session || !profile) return;
+    if (!session || !profile || get().isFinishingSession) return;
+    set({ isFinishingSession: true });
 
-    const startMs = session.startTime ? new Date(session.startTime).getTime() : Date.now();
-    const durationMinutes = Math.max(1, Math.round((new Date().getTime() - startMs) / 60000));
-    const logId = await get().addWorkoutLog({
-      type: session.workoutType,
-      // The real clock, not `selectedDate` — finishing a session while browsing a
-      // past day used to file the workout on that day instead of today.
-      timestamp: new Date(),
-      duration: durationMinutes,
-      description: session.bodyNotes ? `${session.sets.length} sets completed. Note: ${session.bodyNotes}` : `${session.sets.length} sets completed`,
-      source: 'manual',
-      feelingTag: session.feelingTag,
-      bodyNotes: session.bodyNotes,
-    });
+    try {
+      const startMs = session.startTime ? new Date(session.startTime).getTime() : Date.now();
+      const durationMinutes = Math.max(1, Math.round((new Date().getTime() - startMs) / 60000));
+      const logId = await workoutRepo.add({
+        type: session.workoutType,
+        // The real clock, not `selectedDate` — finishing a session while browsing a
+        // past day used to file the workout on that day instead of today.
+        timestamp: new Date(),
+        duration: durationMinutes,
+        description: session.bodyNotes ? `${session.sets.length} sets completed. Note: ${session.bodyNotes}` : `${session.sets.length} sets completed`,
+        source: 'manual',
+        feelingTag: session.feelingTag,
+        bodyNotes: session.bodyNotes,
+        profileId: profile.id!,
+      });
 
-    for (const setItem of session.sets) {
-      await get().addWorkoutSet({
+      const writtenAt = new Date();
+      await Promise.all(session.sets.map(setItem => workoutSetRepo.add({
         workoutLogId: logId,
         exerciseName: setItem.exerciseName,
         exerciseId: setItem.exerciseId,
@@ -542,10 +580,20 @@ export const useStore = create<StoreState>((set, get) => ({
         notes: setItem.notes,
         biserieGroupId: setItem.biserieGroupId,
         isCompleted: setItem.isCompleted,
-      });
-    }
+        profileId: profile.id!,
+        timestamp: writtenAt,
+      })));
 
-    set({ activeSession: null, isGymModeOpen: false });
+      // Safe on disk: hand the screen back before refreshing anything, so
+      // finishing costs one round trip rather than the whole read-back.
+      set({ activeSession: null, isGymModeOpen: false });
+
+      const workouts = await workoutRepo.getAll(profile.id!, get().selectedDate);
+      set({ workoutLogs: workouts });
+      await get().loadWorkoutHistory(30);
+    } finally {
+      set({ isFinishingSession: false });
+    }
   },
 
   dismissActiveSession: () => {
@@ -789,24 +837,50 @@ export const useStore = create<StoreState>((set, get) => ({
       const history = get().measurements;
       const latest = history.length > 0 ? history[history.length - 1] : undefined;
       const foods = get().foodLogs;
-      
-      const recentWorkouts = get().workoutHistory.slice(0, 5);
+
+      // Every workout the prompt prints, not the first five of ten — the rest
+      // used to appear as bare one-liners with no exercises under them.
+      const recentWorkouts = get().workoutHistory.slice(0, 10);
       const recentWorkoutSets: WorkoutSet[] = [];
       for (const w of recentWorkouts) {
-        if (w.id) {
-          const sets = get().activeWorkoutSets[w.id] || await workoutSetRepo.getForWorkout(w.id);
-          recentWorkoutSets.push(...sets);
-        }
+        if (!w.id) continue;
+        // A length check, not `||`: an empty array is truthy, and `addWorkoutLog`
+        // seeds the cache with one — so `||` never re-fetched and those workouts
+        // silently lost their exercises.
+        const cached = get().activeWorkoutSets[w.id];
+        const sets = cached?.length ? cached : await workoutSetRepo.getForWorkout(w.id);
+        recentWorkoutSets.push(...sets);
       }
 
-      const context = {
+      // Everything ever logged has to be loaded before the tools can read it.
+      if (get().allSets.length === 0) {
+        await get().loadAllSets().catch(() => undefined);
+      }
+
+      const context: AgentContext = {
         profile,
         latestMeasurement: latest,
         measurementHistory: history,
         recentFoodLogs: foods,
-        recentWorkoutLogs: get().workoutHistory.slice(0, 10),
+        recentWorkoutLogs: recentWorkouts,
         chatHistory: get().chatHistory,
         recentWorkoutSets,
+        now: new Date(),
+        activeSession: get().activeSession,
+        savedRoutines: get().savedRoutines,
+        /**
+         * Reads through `get()` on every call rather than capturing a snapshot:
+         * the tool loop runs across several round trips, and the user may well
+         * log another set while it does.
+         */
+        dataSource: {
+          now: () => new Date(),
+          workoutLogs: () => get().workoutHistory,
+          allSets: () => get().allSets,
+          activeSession: () => get().activeSession,
+          routines: () => get().savedRoutines,
+          measurements: () => get().measurements,
+        },
       };
 
       // 3. Request Gemini Coach response
@@ -879,6 +953,19 @@ export const useStore = create<StoreState>((set, get) => ({
     return await workoutRepo.getRange(profile.id!, start, end);
   },
 
+  extendWorkoutHistory: async (start: Date, end: Date) => {
+    const profile = get().activeProfile;
+    if (!profile) return;
+    const logs = await workoutRepo.getRange(profile.id!, start, end);
+    const byId = new Map(get().workoutHistory.map(w => [w.id, w]));
+    for (const log of logs) byId.set(log.id, log);
+    set({
+      workoutHistory: [...byId.values()].sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      ),
+    });
+  },
+
   importWorkouts: async (logs: Omit<WorkoutLog, 'profileId'>[]) => {
     const profile = get().activeProfile;
     if (!profile) return;
@@ -907,36 +994,57 @@ export const useStore = create<StoreState>((set, get) => ({
       });
       addedCount++;
 
-      // Automatically check for overlapping manual workouts on the same day with sets to merge
-      const syncDate = new Date(log.timestamp);
-      // We will look for manual workouts logged within 4 hours of the synced workout
-      const candidateWorkouts = existing.filter(w => 
+      /**
+       * Fold the synced record into the session you logged, when they are the
+       * same event.
+       *
+       * Two rules, both of which this used to get wrong:
+       *
+       * 1. The synced activity must itself be strength work. It previously
+       *    merged into *any* record within four hours, so a walk logged between
+       *    gym sessions absorbed 30 sets of pull-ups and rows.
+       * 2. Your session is what survives. It previously kept the synced record
+       *    and deleted the manual one, which threw away the session's name,
+       *    feeling tag and notes and left the walk's 14-minute duration
+       *    standing in front of an hour of lifting. The watch only contributes
+       *    what it actually knows: calories, heart rate, distance.
+       *
+       * The synced row is then dropped and its `externalId` moved onto the
+       * surviving session, so the next sync dedupes against it instead of
+       * importing the same activity again.
+       */
+      if (!isStrengthActivity(log.type)) continue;
+
+      const candidateWorkouts = existing.filter(w =>
         w.source === 'manual' &&
         w.id !== newLogId &&
-        Math.abs(new Date(w.timestamp).getTime() - syncDate.getTime()) < 4 * 60 * 60 * 1000
+        overlaps(w, { ...log, source: 'health-connect' })
       );
 
       for (const candidate of candidateWorkouts) {
-        if (candidate.id) {
-          const candidateSets = await workoutSetRepo.getForWorkout(candidate.id);
-          if (candidateSets.length > 0) {
-            console.log(`MorphIQ Store: Merging ${candidateSets.length} sets from manual workout ${candidate.id} to synced workout ${newLogId}`);
-            // Re-associate sets to newLogId
-            for (const s of candidateSets) {
-              if (s.id) {
-                await workoutSetRepo.delete(s.id);
-                await workoutSetRepo.add({
-                  ...s,
-                  id: undefined, // let DB generate new ID
-                  workoutLogId: newLogId,
-                });
-              }
-            }
-            // Delete the manual candidate workout
-            await workoutRepo.delete(candidate.id);
-            console.log(`MorphIQ Store: Deleted manual workout ${candidate.id}`);
-          }
-        }
+        if (!candidate.id) continue;
+        // Only a session with sets is a session worth protecting.
+        const candidateSets = await workoutSetRepo.getForWorkout(candidate.id);
+        if (candidateSets.length === 0) continue;
+
+        console.log(`MorphIQ Store: Folding synced ${log.type} ${newLogId} into manual session ${candidate.id} (${candidateSets.length} sets)`);
+
+        await workoutRepo.update({
+          ...candidate,
+          // Keep the session's own duration when it recorded one; a session
+          // saved before durations were tracked can take the watch's.
+          duration: candidate.duration > 0 ? candidate.duration : log.duration,
+          caloriesBurned: candidate.caloriesBurned ?? log.caloriesBurned,
+          avgHeartRate: candidate.avgHeartRate ?? log.avgHeartRate,
+          maxHeartRate: candidate.maxHeartRate ?? log.maxHeartRate,
+          distanceKm: candidate.distanceKm ?? log.distanceKm,
+          externalId: candidate.externalId ?? log.externalId,
+        });
+
+        await workoutRepo.delete(newLogId);
+        addedCount--;
+        // The synced row is gone; nothing else may merge into it.
+        break;
       }
     }
     console.log('MorphIQ Store: Finished inserting new workouts. Total added:', addedCount);

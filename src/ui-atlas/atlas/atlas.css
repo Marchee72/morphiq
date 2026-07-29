@@ -356,7 +356,19 @@
 
 .at-week { display: flex; justify-content: space-between; gap: 4px; }
 
-.at-day { text-align: center; flex: 1; min-width: 0; }
+/* A `<button>` since each day opens what you did on it — reset so it still
+   looks like the ring-and-letter it was. */
+.at-day {
+  text-align: center;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
 
 .at-day-ring {
   /* Seven fixed 36px rings plus gaps overflowed a 320px screen. */
@@ -908,12 +920,24 @@
 
 .at-map figure { margin: 0; flex-shrink: 0; }
 
+/* The body behind the regions — see the note in BodyMap.tsx. Without it the
+   card shows through the gaps between region shapes as a white halo. */
+.at-map-figure { fill: var(--at-figure-limb); pointer-events: none; }
+
 .at-map-region {
   fill: var(--at-figure-skin);
-  stroke: none;
+  /* Seats the shape into the silhouette, so a picked region never meets the
+     card directly at its edge. */
+  stroke: var(--at-figure-limb);
+  stroke-width: 1.5;
   cursor: pointer;
   transition: fill 0.15s;
 }
+
+/* The `<g>` is keyboard-focusable, so the ring has to stay — but only for
+   keyboard. A tap must not leave one behind. */
+.at-map-region:focus { outline: none; }
+.at-map-region:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
 
 .at-map-region:hover { fill: var(--at-figure-hover); }
 .at-map-region[data-on='true'] { fill: var(--clay); }
@@ -1138,18 +1162,38 @@
 
 .at-routine-meta { font-size: 11.5px; color: var(--muted); font-weight: 600; margin-bottom: 14px; }
 
+/* Rendered as a `<div>` where it only reports and as a `<button>` where it opens
+   something. The reset has to be here rather than at each call site, or the
+   button variants pick up the UA's grey fill, centred text and border. */
 .at-routine-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 11px 0;
+  border: 0;
   border-top: 1px solid var(--hair);
+  width: 100%;
+  background: none;
+  font-family: inherit;
   font-size: 13px;
+  color: inherit;
+  text-align: left;
 }
 
+button.at-routine-item { cursor: pointer; }
+
+.at-routine-item > span { flex: 1; min-width: 0; }
 .at-routine-item small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
-.at-routine-item b { font-size: 13px; font-weight: 700; white-space: nowrap; }
+
+.at-routine-item b {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
 
 /* ---------- dock nav ---------- */
 
@@ -1896,6 +1940,57 @@
 
 .at-past-set[data-pr='true'] { background: var(--clay); color: var(--at-on-clay); }
 
+/* A past-session block that opens the exercise behind it. */
+.at-past-tap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.at-past-thumb {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  overflow: hidden;
+  background: var(--at-figure-skin);
+}
+
+.at-past-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.at-past-body { flex: 1; min-width: 0; }
+
+/* ---------- history panel ---------- */
+
+.at-history-day { margin-bottom: 16px; }
+
+.at-history-dayhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 4px 7px;
+}
+
+.at-history-dayhead b {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: capitalize;
+}
+
+.at-history-dayhead span { font-size: 11px; font-weight: 600; color: var(--muted); }
+
+/* The native picker's own indicator is the only affordance the input has, and it
+   is invisible against the card in dark mode. */
+.at-searchpill input[type='date'] { color-scheme: light dark; }
+
 /* ---------- exercise detail ---------- */
 
 .at-detail-gif {
@@ -1960,9 +2055,48 @@
 
 .at-splash.exiting { opacity: 0; transform: scale(1.04); pointer-events: none; }
 
-.at-splash-mark { animation: at-splash-in 0.8s cubic-bezier(0.2, 0.9, 0.25, 1.2) forwards; }
+/* A slow clay bloom behind the figure. Sized in vmax so it fills the gap on a
+   tablet without swamping a phone. */
+.at-splash-glow {
+  position: absolute;
+  width: 62vmax;
+  height: 62vmax;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--at-clay-light) 0%, transparent 62%);
+  opacity: 0.16;
+  animation: at-splash-breathe 3.4s ease-in-out infinite;
+}
 
-.at-splash-word { text-align: center; opacity: 0; animation: at-splash-up 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.2) 0.2s forwards; }
+.at-splash-mark {
+  position: relative;
+  animation: at-splash-in 0.8s cubic-bezier(0.2, 0.9, 0.25, 1.2) forwards;
+}
+
+/**
+ * The mark assembles from the ground up — legs, torso, shoulders — which is the
+ * order the figure reads in and gives the launch a beat instead of a single pop.
+ * `transform-box: fill-box` makes the transform origin the shape's own box
+ * rather than the SVG viewport, or each rect would swing in from the corner.
+ */
+.at-splash-mark rect[data-piece] {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  opacity: 0;
+  animation: at-splash-piece 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.2) forwards;
+}
+
+.at-splash-mark rect[data-piece='leg-left'] { animation-delay: 0.05s; }
+.at-splash-mark rect[data-piece='leg-right'] { animation-delay: 0.12s; }
+.at-splash-mark rect[data-piece='torso'] { animation-delay: 0.22s; }
+.at-splash-mark rect[data-piece='shoulders'] { animation-delay: 0.32s; }
+
+.at-splash-word {
+  position: relative;
+  text-align: center;
+  opacity: 0;
+  animation: at-splash-up 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.2) 0.42s forwards;
+}
+
 .at-splash-word h1 { font-size: 27px; font-weight: 600; letter-spacing: -0.025em; color: var(--cocoa); }
 
 .at-splash-word span {
@@ -1975,10 +2109,35 @@
   color: var(--muted);
 }
 
+.at-splash-bar {
+  position: relative;
+  width: 104px;
+  height: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--hair);
+  opacity: 0;
+  animation: at-splash-up 0.5s ease-out 0.7s forwards;
+}
+
+.at-splash-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  border-radius: inherit;
+  background: var(--clay);
+  animation: at-splash-sweep 1.25s cubic-bezier(0.65, 0, 0.35, 1) 0.7s infinite;
+}
+
 @keyframes at-splash-in {
   0% { transform: scale(0.9); opacity: 0; }
   60% { transform: scale(1.04); opacity: 1; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes at-splash-piece {
+  from { transform: translateY(9px) scaleY(0.72); opacity: 0; }
+  to { transform: none; opacity: 1; }
 }
 
 @keyframes at-splash-up {
@@ -1986,8 +2145,30 @@
   to { transform: none; opacity: 1; }
 }
 
+@keyframes at-splash-breathe {
+  0%, 100% { transform: scale(0.94); opacity: 0.12; }
+  50% { transform: scale(1.06); opacity: 0.2; }
+}
+
+@keyframes at-splash-sweep {
+  0% { left: -45%; }
+  100% { left: 100%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .at-splash-mark, .at-splash-word { animation: none; opacity: 1; }
+  .at-splash-mark,
+  .at-splash-word,
+  .at-splash-bar,
+  .at-splash-mark rect[data-piece] { animation: none; opacity: 1; }
+  /* The sweep is the only thing still saying "working", so it stays — slowed,
+     and as a fade rather than travel. */
+  .at-splash-glow { animation: none; opacity: 0.14; }
+  .at-splash-bar i { animation: at-splash-pulse 2s ease-in-out infinite; left: 0; width: 100%; }
+}
+
+@keyframes at-splash-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
 }
 
 /* ---------- number dial ----------

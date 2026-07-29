@@ -34,6 +34,28 @@ const BACK_REGIONS: Region[] = [
 
 const REGIONS: Record<Side, Region[]> = { front: FRONT_REGIONS, back: BACK_REGIONS };
 
+/**
+ * The body behind the regions.
+ *
+ * The regions are separate rects and ellipses with gaps between them, and the
+ * map sits on a near-white card — so picking one used to draw a clay shape with
+ * a white halo where the card showed through. This layer fills the union of both
+ * sides' geometry, slightly outset, so those gaps read as body rather than page.
+ * One shape covers front and back: the torso runs to the front's core, the lower
+ * block starts at the back's higher leg line, and each side's regions paint over
+ * whichever part of it they cover.
+ */
+const SILHOUETTE = (
+  <g className="at-map-figure" aria-hidden="true">
+    <ellipse cx="33" cy="46" rx="14" ry="10" />
+    <ellipse cx="87" cy="46" rx="14" ry="10" />
+    <rect x="20" y="46" width="15" height="61" rx="7.5" />
+    <rect x="85" y="46" width="15" height="61" rx="7.5" />
+    <rect x="39" y="36" width="42" height="67" rx="12" />
+    <rect x="42" y="84" width="36" height="93" rx="9" />
+  </g>
+);
+
 export const BodyMap: React.FC<{
   side: Side;
   active: MuscleGroupId | null;
@@ -42,6 +64,7 @@ export const BodyMap: React.FC<{
   <svg viewBox="0 0 120 186" width="96" height="150" role="group" aria-label="body map">
     <circle cx="60" cy="16" r="13" fill="var(--at-figure-skin)" />
     <rect x="54" y="27" width="12" height="9" rx="4" fill="var(--at-figure-skin)" />
+    {SILHOUETTE}
     {REGIONS[side].map(region => (
       <g
         key={region.id}

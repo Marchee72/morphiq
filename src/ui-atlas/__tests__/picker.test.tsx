@@ -92,6 +92,21 @@ describe('exercise picker', () => {
     });
   });
 
+  it('hands you back to the session rather than to the list you searched in', async () => {
+    // Closing the picker only uncovers what was underneath it. Opened from the
+    // session's exercise list, that meant searching for a lift, picking it, and
+    // landing back in a list instead of in front of the lift.
+    await openPicker();
+    useStore.setState({ activeTab: 'library' });
+    await waitFor(
+      () => expect(document.querySelectorAll('.at-ex-tap, .st-row-tap').length).toBeGreaterThan(0),
+      { timeout: 20000 },
+    );
+
+    fireEvent.click(document.querySelectorAll('.at-ex-tap, .st-row-tap')[0] as HTMLElement);
+    await waitFor(() => expect(useStore.getState().activeTab).toBe('train'));
+  });
+
   it('can favourite straight from the picker', async () => {
     await openPicker();
     await waitFor(

@@ -452,6 +452,110 @@ describe('Train — the set list', () => {
   });
 });
 
+/**
+ * Where the cursor lands, which is what the set pills are describing.
+ *
+ * Every case here was reported off the gym floor: the pills and the button
+ * underneath them disagreed about which set you were on, and the disagreement
+ * always resolved in favour of a set already logged.
+ */
+describe('Train — where the cursor lands', () => {
+  beforeEach(() => useStore.setState(initialState, true));
+
+  /** The dot rail in the header — one per exercise, each a way to that exercise. */
+  const goTo = (name: RegExp) => fireEvent.click(screen.getAllByRole('button', { name })[0]);
+
+  it('returns to the set still to log, not to the top of the exercise', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+    expect(text()).toMatch(/Complete set 2/i);
+
+    goTo(/go to barbell row/i);
+    await waitFor(() => expect(text()).toMatch(/2 (of|de) 2/));
+
+    // Leaving an exercise half done and coming back used to offer set 1 again.
+    goTo(/go to barbell bench press/i);
+    await waitFor(() => expect(text()).toMatch(/Complete set 2/i));
+  });
+
+  it('moves on to the exercise with work left when this one is finished', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        sets: [
+          { exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+          { exerciseName: 'Barbell Bench Press', setNumber: 2, weight: 80, reps: 8, isCompleted: true },
+        ],
+      },
+    });
+    expect(text()).toMatch(/Complete set 3/i);
+
+    fireEvent.click(logButton());
+    // The last set of the bench went in, so the screen belongs to the row now.
+    await waitFor(() => expect(text()).toMatch(/2 (of|de) 2/));
+    expect(text()).toContain('Barbell Row');
+  });
+
+  it('goes back to an unfinished exercise rather than stopping at the last one', async () => {
+    // "Next" is a position in a list, not a direction of travel: finish the last
+    // exercise with the first still outstanding and the only useful move is back.
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        sets: [
+          { exerciseName: 'Barbell Row', setNumber: 1, weight: 60, reps: 10, isCompleted: true },
+          { exerciseName: 'Barbell Row', setNumber: 2, weight: 60, reps: 10, isCompleted: true },
+        ],
+      },
+    });
+
+    goTo(/go to barbell row/i);
+    await waitFor(() => expect(text()).toMatch(/Complete set 3/i));
+
+    fireEvent.click(logButton());
+    await waitFor(() => expect(text()).toMatch(/1 (of|de) 2/));
+    expect(text()).toContain('Barbell Bench Press');
+  });
+
+  it('opens the next set on the weight just lifted, not on last month\'s', async () => {
+    // No history at all for this lift, so nothing but the set before it can be
+    // the source of the number.
+    renderScreen('train', {
+      data: 'empty',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Zercher Squat', targetSets: 3 }],
+        sets: [{ exerciseName: 'Zercher Squat', setNumber: 1, weight: 62.5, reps: 6, isCompleted: true }],
+      },
+    });
+
+    expect(text()).toMatch(/Complete set 2/i);
+    const dials = document.querySelectorAll('.at-dial');
+    expect(dials[0].querySelector('.at-dial-value')?.textContent).toMatch(/62[.,]5/);
+    expect(dials[1].querySelector('.at-dial-value')?.textContent).toMatch(/^6$/);
+  });
+
+  it('sends a finished set to the list to be corrected, not back to the wheels', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    const pills = document.querySelector('.at-setpills') as HTMLElement;
+    fireEvent.click(within(pills).getByRole('button', { name: /edit set 1/i }));
+
+    // The row opens for editing...
+    await waitFor(() => expect(screen.getByLabelText('Weight 1')).toBeInTheDocument());
+    // ...and the wheels stay on the set you have yet to do.
+    expect(text()).toMatch(/Complete set 2/i);
+  });
+});
+
 describe('Train — the exercise list', () => {
   beforeEach(() => {
     useStore.setState(initialState, true);

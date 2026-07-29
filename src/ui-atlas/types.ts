@@ -44,6 +44,9 @@ export interface MetricPointVM {
   decimals: number;
   /** Null when no reading falls in the comparison window — renders as an em-dash, never a fake zero. */
   delta30d: number | null;
+  /** The same comparison over shorter and longer windows, for the detail sheet. */
+  delta7d: number | null;
+  delta90d: number | null;
   lowerIsBetter: boolean;
   /** Always 12 points, oldest → newest. Null when there is nothing to plot. */
   series: number[] | null;
@@ -65,6 +68,8 @@ export interface MuscleLoadRow {
   target: number;
   recoveredPct: number;
   lastHitAt: Date | null;
+  /** What actually produced those sets, heaviest contributor first. */
+  exercises: { name: string; sets: number; volumeKg: number }[];
 }
 
 export interface MuscleLoadVM {

@@ -51,6 +51,20 @@ export interface LiveSession {
   discard(): Promise<void>;
 }
 
+/**
+ * The set you would actually be doing on this exercise: the first one still to
+ * log, or the last one when the exercise is finished.
+ *
+ * Arriving at an exercise used to mean arriving at set 1 regardless. Leave an
+ * exercise half done, come back, and it offered to log a set you had already
+ * logged — the set pills said one thing and the button said another.
+ */
+export function outstandingSetOf(exercise: SessionExerciseVM | undefined): number {
+  if (!exercise || exercise.sets.length === 0) return 0;
+  const idx = exercise.sets.findIndex(s => !s.done);
+  return idx === -1 ? exercise.sets.length - 1 : idx;
+}
+
 /** Holds a cursor inside the list it points into, whatever happened to that list. */
 export function clampCursor(cursor: SessionCursor, exercises: SessionExerciseVM[]): SessionCursor {
   if (exercises.length === 0) return { exerciseIdx: 0, setIdx: 0 };
@@ -113,17 +127,42 @@ export function useLiveSession(
     store.updateActiveSessionSets(next);
   }, [sessionExercises]);
 
+  /**
+   * Where the cursor belongs once the set at `justDone` is logged.
+   *
+   * Within the exercise first — and by "still outstanding", not by "+1", so
+   * finishing set 4 after going back for set 2 does not park you on a set that
+   * is already done. Then, when the exercise is finished, on to the next one
+   * that is not: forward through the list and wrapping, because the exercise
+   * with work left in it is as often behind you as ahead. `undefined` means the
+   * session has nothing left, and the cursor stays where it is.
+   *
+   * `sessionExercises` is still the pre-write list here, so the set just logged
+   * has to be excluded by index rather than by its `done` flag.
+   */
+  const nextOutstanding = useCallback((
+    exerciseIdx: number,
+    justDone: number,
+  ): SessionCursor | undefined => {
+    const target = sessionExercises[exerciseIdx];
+    const within = target?.sets.findIndex((s, i) => i !== justDone && !s.done) ?? -1;
+    if (within !== -1) return { exerciseIdx, setIdx: within };
+
+    for (let step = 1; step < sessionExercises.length; step++) {
+      const i = (exerciseIdx + step) % sessionExercises.length;
+      const candidate = sessionExercises[i];
+      if (candidate.sets.some(s => !s.done)) {
+        return { exerciseIdx: i, setIdx: outstandingSetOf(candidate) };
+      }
+    }
+    return undefined;
+  }, [sessionExercises]);
+
   const logSet = useCallback((weightKg: number, reps: number) => {
     writeSet(cursor.exerciseIdx, cursor.setIdx, { weight: weightKg, reps, isCompleted: true });
-
-    // Advance to whatever is still outstanding after this write.
-    const target = sessionExercises[cursor.exerciseIdx];
-    if (target && cursor.setIdx + 1 < target.sets.length) {
-      onCursorChange?.({ exerciseIdx: cursor.exerciseIdx, setIdx: cursor.setIdx + 1 });
-    } else if (cursor.exerciseIdx + 1 < sessionExercises.length) {
-      onCursorChange?.({ exerciseIdx: cursor.exerciseIdx + 1, setIdx: 0 });
-    }
-  }, [writeSet, cursor, sessionExercises, onCursorChange]);
+    const next = nextOutstanding(cursor.exerciseIdx, cursor.setIdx);
+    if (next) onCursorChange?.(next);
+  }, [writeSet, cursor, nextOutstanding, onCursorChange]);
 
   const editSet = useCallback((weightKg: number, reps: number) => {
     writeSet(cursor.exerciseIdx, cursor.setIdx, { weight: weightKg, reps });
@@ -143,12 +182,9 @@ export function useLiveSession(
     // exactly as logging it with the wheels would. Otherwise the primary action
     // keeps offering to complete a set that is already done.
     if (patch.done !== true || setIdx !== cursor.setIdx) return;
-    const target = sessionExercises[cursor.exerciseIdx];
-    const nextOutstanding = target?.sets.findIndex((s, i) => i !== setIdx && !s.done) ?? -1;
-    if (nextOutstanding !== -1) {
-      onCursorChange?.({ exerciseIdx: cursor.exerciseIdx, setIdx: nextOutstanding });
-    }
-  }, [writeSet, cursor, sessionExercises, onCursorChange]);
+    const next = nextOutstanding(cursor.exerciseIdx, setIdx);
+    if (next) onCursorChange?.(next);
+  }, [writeSet, cursor, nextOutstanding, onCursorChange]);
 
   const addSet = useCallback(() => {
     const target = sessionExercises[cursor.exerciseIdx];
@@ -201,7 +237,10 @@ export function useLiveSession(
     addSet,
     removeSet,
     goTo: (exerciseIdx, setIdx) => onCursorChange?.({ exerciseIdx, setIdx }),
-    goToExercise: exerciseIdx => onCursorChange?.({ exerciseIdx, setIdx: 0 }),
+    goToExercise: exerciseIdx => onCursorChange?.({
+      exerciseIdx,
+      setIdx: outstandingSetOf(sessionExercises[exerciseIdx]),
+    }),
     addExercise: ex => useStore.getState().addActiveSessionExercise(ex),
     swapExercise: (index, ex) => useStore.getState().swapActiveSessionExercise(index, ex),
     removeExercise: index => useStore.getState().removeActiveSessionExercise(index),

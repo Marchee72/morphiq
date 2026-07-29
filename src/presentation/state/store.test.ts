@@ -190,7 +190,7 @@ describe('Zustand store state management', () => {
     expect(storeAfterDelete.exerciseStats['Bench Press']?.avgReps).toBe(6);
   });
 
-  it('should auto-merge manual routine sets to synced workouts during import', async () => {
+  it('folds a synced strength activity into the session you logged, keeping the session', async () => {
     const store = useStore.getState();
     await store.createProfile({
       name: 'Diana Prince',
@@ -233,21 +233,118 @@ describe('Zustand store state management', () => {
     ]);
 
     const finalStore = useStore.getState();
-    // Synced workout should be added
-    const syncedWorkout = finalStore.workoutLogs.find(w => w.externalId === 'sh_workout_123');
-    expect(syncedWorkout).toBeDefined();
-    const newLogId = syncedWorkout!.id!;
 
-    // Manual workout should be deleted/merged
+    /**
+     * The session survives, not the synced record. It used to be the other way
+     * round, which threw away the session's name, feeling and notes and left the
+     * watch's duration standing in front of the work that was actually done.
+     */
     const manualWorkout = finalStore.workoutLogs.find(w => w.id === manualLogId);
-    expect(manualWorkout).toBeUndefined();
+    expect(manualWorkout).toBeDefined();
+    expect(manualWorkout!.description).toBe('Active Gym Session');
 
-    // Sets should now be associated with the synced workout ID
-    const mergedSets = finalStore.activeWorkoutSets[newLogId];
-    expect(mergedSets).toBeDefined();
-    expect(mergedSets.length).toBe(1);
-    expect(mergedSets[0].exerciseName).toBe('Squat');
-    expect(mergedSets[0].weight).toBe(100);
+    // Only the watch's own contribution is taken across.
+    expect(manualWorkout!.caloriesBurned).toBe(400);
+    // And the synced id, so the next sync dedupes instead of re-importing.
+    expect(manualWorkout!.externalId).toBe('sh_workout_123');
+
+    // The duplicate synced row is gone.
+    expect(finalStore.workoutLogs.find(w => w.id !== manualLogId && w.externalId === 'sh_workout_123'))
+      .toBeUndefined();
+
+    // The sets never move, so they cannot land on the wrong log.
+    const sets = finalStore.activeWorkoutSets[manualLogId];
+    expect(sets).toHaveLength(1);
+    expect(sets[0].exerciseName).toBe('Squat');
+    expect(sets[0].weight).toBe(100);
+  });
+
+  it('never merges a session into a walk, however close in time', async () => {
+    await useStore.getState().createProfile({
+      name: 'Barry Allen',
+      gender: 'male',
+      birthDate: new Date('1995-03-14'),
+      height: 180,
+    });
+
+    const manualLogId = await useStore.getState().addWorkoutLog({
+      type: 'Chest & Triceps',
+      duration: 52,
+      description: 'Real session',
+      source: 'manual',
+    });
+    await useStore.getState().addWorkoutSet({
+      workoutLogId: manualLogId,
+      exerciseName: 'Barbell Bench Press',
+      setNumber: 1,
+      weight: 82.5,
+      reps: 8,
+    });
+
+    // The exact shape that swallowed a gym session: a short walk logged minutes
+    // away, which the old ±4-hour type-blind filter accepted as the same event.
+    await useStore.getState().importWorkouts([
+      {
+        type: 'WALKING',
+        duration: 14,
+        description: 'WALKING via Health Connect',
+        caloriesBurned: 60,
+        source: 'health-connect',
+        externalId: 'hc_walk_1',
+        timestamp: new Date(),
+      },
+      {
+        type: 'OTHER',
+        duration: 83,
+        description: 'OTHER via Health Connect',
+        source: 'health-connect',
+        externalId: 'hc_other_1',
+        timestamp: new Date(),
+      },
+    ]);
+
+    const store = useStore.getState();
+
+    // Both stay as their own records...
+    expect(store.workoutLogs.find(w => w.externalId === 'hc_walk_1')).toBeDefined();
+    expect(store.workoutLogs.find(w => w.externalId === 'hc_other_1')).toBeDefined();
+    // ...and the session is untouched, sets included.
+    const session = store.workoutLogs.find(w => w.id === manualLogId);
+    expect(session).toBeDefined();
+    expect(session!.type).toBe('Chest & Triceps');
+    expect(store.activeWorkoutSets[manualLogId]).toHaveLength(1);
+
+    // Nothing was re-pointed onto the walk.
+    const walkId = store.workoutLogs.find(w => w.externalId === 'hc_walk_1')!.id!;
+    expect(await useStore.getState().getSetsForExercise('Barbell Bench Press'))
+      .toEqual([expect.objectContaining({ workoutLogId: manualLogId })]);
+    expect(store.activeWorkoutSets[walkId] ?? []).toHaveLength(0);
+  });
+
+  it('leaves a synced strength activity alone when no session overlaps it', async () => {
+    await useStore.getState().createProfile({
+      name: 'Kara Danvers',
+      gender: 'female',
+      birthDate: new Date('1994-09-22'),
+      height: 170,
+    });
+
+    const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000);
+    await useStore.getState().importWorkouts([
+      {
+        type: 'STRENGTH_TRAINING',
+        duration: 45,
+        description: 'Gym via watch',
+        caloriesBurned: 320,
+        source: 'health-connect',
+        externalId: 'hc_strength_1',
+        timestamp: twoDaysAgo,
+      },
+    ]);
+
+    const synced = useStore.getState().workoutHistory.find(w => w.externalId === 'hc_strength_1');
+    expect(synced).toBeDefined();
+    expect(synced!.caloriesBurned).toBe(320);
   });
 
   it('should import body composition measurements and filter out duplicate entries', async () => {
@@ -514,6 +611,98 @@ describe('active session — exercise list and sets stay in step', () => {
     const list = useStore.getState().activeSession?.routineExercises ?? [];
     expect(list.map(e => e.exerciseName)).toEqual(['Deadlift', 'Bench Press']);
     expect(list[0].targetSets).toBe(2);
+  });
+});
+
+/**
+ * Finishing is the one action in the app that can lose or duplicate a whole
+ * session, and it had been doing the second: the writes ran set by set with a
+ * read-back after each, and `activeSession` was only released once every one of
+ * them had landed. Over a phone connection that gap is long enough to press
+ * finish again, and pressing it again filed the workout a second time. Real
+ * sessions in the database are recorded three times over.
+ */
+describe('finishing the active session', () => {
+  const profile = {
+    id: 'p1',
+    name: 'Marche',
+    gender: 'male' as const,
+    birthDate: new Date(1990, 0, 1),
+    height: 178,
+    createdAt: new Date(2024, 0, 1),
+  };
+
+  beforeEach(async () => {
+    await Promise.all([db.workoutLogs.clear(), db.workoutSets.clear()]);
+    useStore.setState({
+      activeProfile: profile,
+      profiles: [profile],
+      workoutLogs: [],
+      workoutHistory: [],
+      activeWorkoutSets: {},
+      isFinishingSession: false,
+      activeSession: {
+        startTime: new Date(Date.now() - 40 * 60_000),
+        workoutType: 'Push A',
+        routineExercises: [{ id: 'e1', exerciseName: 'Bench Press', targetSets: 2 }],
+        sets: [
+          { exerciseName: 'Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+          { exerciseName: 'Bench Press', setNumber: 2, weight: 82.5, reps: 6, isCompleted: true },
+        ],
+      },
+    });
+  });
+
+  it('writes the workout and every set of it', async () => {
+    await useStore.getState().finishActiveSession();
+
+    const logs = await db.workoutLogs.toArray();
+    expect(logs).toHaveLength(1);
+
+    const written = await db.workoutSets.toArray();
+    expect(written.map(s => s.setNumber).sort()).toEqual([1, 2]);
+    // Written in parallel, so they must still all be filed under the one log.
+    // Dexie hands back a numeric key and the repository stringifies it.
+    expect(new Set(written.map(s => String(s.workoutLogId)))).toEqual(new Set([String(logs[0].id)]));
+    expect(useStore.getState().activeSession).toBeNull();
+  });
+
+  it('files one workout however many times finish is pressed', async () => {
+    // Both calls start before either finishes — exactly the double-tap that
+    // produced the duplicates.
+    await Promise.all([
+      useStore.getState().finishActiveSession(),
+      useStore.getState().finishActiveSession(),
+    ]);
+
+    expect(await db.workoutLogs.count()).toBe(1);
+    expect(await db.workoutSets.count()).toBe(2);
+  });
+
+  it('has nothing left to duplicate once the writes have landed', async () => {
+    await useStore.getState().finishActiveSession();
+    await useStore.getState().finishActiveSession();
+
+    expect(await db.workoutLogs.count()).toBe(1);
+    expect(useStore.getState().isFinishingSession).toBe(false);
+  });
+
+  it('lets go of the session before reading anything back', async () => {
+    // The refresh is the slow part and the user is waiting on it for no reason:
+    // the data is safe the moment the sets are written.
+    let clearedBeforeRefresh = false;
+    const realLoad = useStore.getState().loadWorkoutHistory;
+    useStore.setState({
+      loadWorkoutHistory: async (days?: number) => {
+        clearedBeforeRefresh = useStore.getState().activeSession === null;
+        await realLoad(days);
+      },
+    });
+
+    await useStore.getState().finishActiveSession();
+    useStore.setState({ loadWorkoutHistory: realLoad });
+
+    expect(clearedBeforeRefresh).toBe(true);
   });
 });
 

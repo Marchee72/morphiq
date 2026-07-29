@@ -4,6 +4,7 @@ import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
 import type { ExerciseFilters, FacetCounts } from '../../data/exercises/ExerciseCatalog';
 import type { WeeklyStatsVM } from '../derive/history';
 import type { ExerciseSessionVM } from '../derive/exerciseHistory';
+import type { SessionDetailVM } from '../derive/sessionDetail';
 import type {
   BodyVM, CatalogItemVM, HistoryEntryVM, MuscleLoadVM, NutritionVM, PrRecordVM,
   ProfileVM, ScreenId, SessionCursor, SessionExerciseVM, SessionTotalsVM, SessionVM, StreakVM,
@@ -51,12 +52,18 @@ export interface AppData {
    * all 1,324 up front would be absurd.
    */
   exerciseHistory(exerciseName: string): ExerciseSessionVM[];
+  /**
+   * One past session opened up — every exercise and every set. Null when the id
+   * falls outside the loaded window. A function for the same reason
+   * `exerciseHistory` is: only ever asked for one session at a time.
+   */
+  sessionDetail(workoutLogId: string): SessionDetailVM | null;
 }
 
 /** Overlays the shell can open. Any screen can request one. */
 export type OverlayId =
   | 'settings' | 'logWeight' | 'addFood' | 'exercisePicker'
-  | 'dayNote' | 'sessionEditor' | 'quickAdd';
+  | 'dayNote' | 'sessionEditor' | 'quickAdd' | 'history';
 
 /**
  * What an overlay is being opened *for*.
@@ -83,6 +90,12 @@ export interface AppActions {
   logWeight(kg: number): Promise<void>;
   toggleFavorite(exerciseId: string): Promise<void>;
   sendCoachMessage(text: string): Promise<void>;
+
+  /**
+   * Pull in workouts older than the year the provider loads at mount, for when
+   * the history date picker reaches past it.
+   */
+  loadOlderHistory(from: Date, to: Date): Promise<void>;
 }
 
 export interface AppUiState {
