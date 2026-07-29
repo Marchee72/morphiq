@@ -68,8 +68,8 @@ export interface MuscleLoadRow {
   target: number;
   recoveredPct: number;
   lastHitAt: Date | null;
-  /** What actually produced those sets, heaviest contributor first. */
-  exercises: { name: string; sets: number; volumeKg: number }[];
+  /** What actually produced those sets, latest first. */
+  exercises: { name: string; sets: number; volumeKg: number; lastHitAt: Date | null; bestSet: { weightKg: number; reps: number } | null }[];
 }
 
 export interface MuscleLoadVM {

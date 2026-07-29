@@ -150,4 +150,30 @@ describe('buildMuscleLoad', () => {
     // Outside the 168 h count window? No — 100 h is inside, so it still registers.
     expect(buildMuscleLoad([old], resolve, NOW).rows.find(r => r.group === 'chest')!.recoveredPct).toBe(100);
   });
+
+  it('tracks the most recent set timestamp per exercise', () => {
+    const older = set({ timestamp: new Date(NOW.getTime() - 48 * HOURS) });
+    const newer = set({ setNumber: 2, timestamp: new Date(NOW.getTime() - 2 * HOURS) });
+    const chest = buildMuscleLoad([older, newer], resolve, NOW)
+      .rows.find(r => r.group === 'chest')!;
+    expect(chest.exercises).toHaveLength(1);
+    expect(chest.exercises[0].lastHitAt).toEqual(newer.timestamp);
+  });
+
+  it('tracks the best set by weight × reps per exercise', () => {
+    const light = set({ weight: 60, reps: 10, timestamp: new Date(NOW.getTime() - 48 * HOURS) });
+    const heavy = set({ setNumber: 2, weight: 85, reps: 5, timestamp: new Date(NOW.getTime() - 2 * HOURS) });
+    const chest = buildMuscleLoad([light, heavy], resolve, NOW)
+      .rows.find(r => r.group === 'chest')!;
+    expect(chest.exercises[0].bestSet).toEqual({ weightKg: 85, reps: 5 });
+  });
+
+  it('sorts exercises latest-to-oldest by lastHitAt', () => {
+    const older = set({ timestamp: new Date(NOW.getTime() - 72 * HOURS) });
+    const newer = set({ exerciseName: 'Incline Dumbbell Press', setNumber: 1, timestamp: new Date(NOW.getTime() - 2 * HOURS) });
+    const chest = buildMuscleLoad([older, newer], resolve, NOW)
+      .rows.find(r => r.group === 'chest')!;
+    expect(chest.exercises[0].name).toBe('Incline Dumbbell Press');
+    expect(chest.exercises[1].name).toBe('Barbell Bench Press');
+  });
 });

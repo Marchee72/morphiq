@@ -141,7 +141,14 @@ export function buildMuscleLoad(
     sets: number;
     lastHitAt: Date | null;
     /** Keyed by display name — what the detail sheet lists under the group. */
-    exercises: Map<string, { name: string; sets: number; volumeKg: number }>;
+    exercises: Map<string, {
+      name: string;
+      sets: number;
+      volumeKg: number;
+      lastHitAt: Date | null;
+      bestWeightKg: number;
+      bestReps: number;
+    }>;
   }
 
   const counts = new Map<MuscleGroupId, GroupTally>();
@@ -161,9 +168,23 @@ export function buildMuscleLoad(
 
     const name = set.exerciseName.trim();
     const key = name.toLowerCase();
-    const tally = entry.exercises.get(key) ?? { name, sets: 0, volumeKg: 0 };
+    const tally = entry.exercises.get(key) ?? {
+      name, sets: 0, volumeKg: 0,
+      lastHitAt: null as Date | null,
+      bestWeightKg: 0, bestReps: 0,
+    };
     tally.sets++;
     tally.volumeKg += (set.weight ?? 0) * (set.reps ?? 0);
+    if (!tally.lastHitAt || at > tally.lastHitAt) tally.lastHitAt = at;
+    // Best set = heaviest load on the bar; volume breaks ties at equal weight.
+    const setWeight = set.weight ?? 0;
+    const setReps = set.reps ?? 0;
+    const setVolume = setWeight * setReps;
+    const bestVolume = tally.bestWeightKg * tally.bestReps;
+    if (setWeight > tally.bestWeightKg || (setWeight === tally.bestWeightKg && setVolume > bestVolume)) {
+      tally.bestWeightKg = setWeight;
+      tally.bestReps = setReps;
+    }
     entry.exercises.set(key, tally);
 
     counts.set(group, entry);
@@ -183,8 +204,13 @@ export function buildMuscleLoad(
         : 100,
       lastHitAt,
       exercises: [...(entry?.exercises.values() ?? [])]
-        .map(ex => ({ ...ex, volumeKg: Math.round(ex.volumeKg) }))
-        .sort((a, b) => b.sets - a.sets || b.volumeKg - a.volumeKg),
+        .map(ex => ({
+          ...ex,
+          volumeKg: Math.round(ex.volumeKg),
+          lastHitAt: ex.lastHitAt,
+          bestSet: ex.bestWeightKg > 0 ? { weightKg: ex.bestWeightKg, reps: ex.bestReps } : null,
+        }))
+        .sort((a, b) => (b.lastHitAt?.getTime() ?? 0) - (a.lastHitAt?.getTime() ?? 0)),
     };
   });
 
