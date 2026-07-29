@@ -12,6 +12,14 @@ export interface UserProfile {
   createdAt: Date;
   trainingProfile?: string;
   availableEquipment?: string[]; // e.g. ["barbell","dumbbell","cable","body weight"]
+  /**
+   * Whether training partners see that you are training.
+   *
+   * On the profile rather than in localStorage because the server is what
+   * honours it: a preference the server cannot read cannot stop it sending your
+   * presence to somebody. Undefined reads as on, matching the column default.
+   */
+  sharePresence?: boolean;
 }
 
 /**

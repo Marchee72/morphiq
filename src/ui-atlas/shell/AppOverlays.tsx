@@ -12,6 +12,7 @@ import { AtlasHistory } from '../atlas/AtlasHistory';
 import { AtlasSessionDetail } from '../atlas/AtlasSessionDetail';
 import { AtlasStartSheet } from '../atlas/AtlasStartSheet';
 import { AtlasRoutineMergeSheet } from '../atlas/AtlasRoutineMergeSheet';
+import { AtlasBuddies } from '../atlas/AtlasBuddies';
 import type { Exercise } from '../../core/entities/Exercise';
 import type { FeelingId } from '../types';
 
@@ -53,6 +54,10 @@ export const AppOverlays: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
     <div className="app-overlays">
       {overlay === 'settings' && <AtlasSettings onClose={onClose} />}
+
+      {overlay === 'buddies' && (
+        <AtlasBuddies onClose={onClose} initialCode={payload.buddyCode} />
+      )}
 
       <AtlasAddFoodSheet
         open={overlay === 'addFood'}

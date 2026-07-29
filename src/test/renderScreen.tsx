@@ -9,6 +9,7 @@ import type { UserProfile } from '../core/entities/UserProfile';
 import { useStore } from '../presentation/state/store';
 import { AppDataProvider } from '../ui-atlas/data/AppDataProvider';
 import { AppActionsProvider } from '../ui-atlas/data/AppActionsProvider';
+import { SocialProvider } from '../ui-atlas/data/SocialProvider';
 import { AppOverlays } from '../ui-atlas/shell/AppOverlays';
 import { AtlasToday } from '../ui-atlas/atlas/AtlasToday';
 import { AtlasTrain } from '../ui-atlas/atlas/AtlasTrain';
@@ -192,12 +193,18 @@ export function renderScreen(
   return render(
     <AppDataProvider now={now}>
       <AppActionsProvider>
-        <div className="app at">
-          <Screen />
-          {/* Overlays are part of the shell, and flows like "add an exercise"
-              cross that boundary — a screen alone cannot be exercised. */}
-          <AppOverlays onClose={() => { /* the provider owns dismissal */ }} />
-        </div>
+        {/* Mounted for the same reason `AppOverlays` is: it is part of the shell
+            every screen actually runs inside. Under test `VITE_DB_TYPE` is
+            `local`, so it reports itself unavailable and does no work — which is
+            also the honest default for a screen that has no partners. */}
+        <SocialProvider>
+          <div className="app at">
+            <Screen />
+            {/* Overlays are part of the shell, and flows like "add an exercise"
+                cross that boundary — a screen alone cannot be exercised. */}
+            <AppOverlays onClose={() => { /* the provider owns dismissal */ }} />
+          </div>
+        </SocialProvider>
       </AppActionsProvider>
     </AppDataProvider>,
   );

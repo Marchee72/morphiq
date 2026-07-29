@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useT } from '../../i18n';
 import { useSocial } from '../data/useSocial';
 import { isCompleteCode, normalizeInviteCode } from '../derive/social';
@@ -13,23 +13,18 @@ import { AtlasInput } from './AtlasField';
  * apart would tell someone guessing which of their guesses were real codes.
  */
 export const AtlasBuddyRedeem: React.FC<{
-  open: boolean;
   onClose: () => void;
   /** Arrives from an invite link, so the common path needs no typing. */
   initialCode?: string;
-}> = ({ open, onClose, initialCode }) => {
+}> = ({ onClose, initialCode }) => {
   const { t } = useT();
   const { redeemInvite } = useSocial();
-  const [code, setCode] = useState('');
+  // Seeded once, at mount. The parent mounts this only while it is open, so a
+  // code arriving from a link arrives in a field that has never held another —
+  // no effect needed to clear the last attempt out of the way.
+  const [code, setCode] = useState(() => normalizeInviteCode(initialCode ?? ''));
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setCode(normalizeInviteCode(initialCode ?? ''));
-      setError(null);
-    }
-  }, [open, initialCode]);
 
   const submit = async () => {
     setWorking(true);
@@ -57,7 +52,7 @@ export const AtlasBuddyRedeem: React.FC<{
 
   return (
     <AtlasSheet
-      open={open}
+      open
       onClose={onClose}
       title={t('buddy.redeem')}
       subtitle={t('buddy.title')}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { PauseCircle, PlayCircle, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useStore } from '../../presentation/state/store';
@@ -6,6 +6,8 @@ import { useSocial } from '../data/useSocial';
 import type { BuddyRowVM } from '../derive/social';
 import { AtlasSheet } from './AtlasSheet';
 import { AtlasStates } from './AtlasStates';
+import { AtlasBuddyInvite } from './AtlasBuddyInvite';
+import { AtlasBuddyRedeem } from './AtlasBuddyRedeem';
 import { useDismissOnBack } from '../components/useDismissOnBack';
 
 type Panel = 'invite' | 'redeem' | null;
@@ -35,10 +37,6 @@ export const AtlasBuddies: React.FC<{
   const [confirming, setConfirming] = useState<BuddyRowVM | null>(null);
 
   useDismissOnBack(true, onClose, 'buddies');
-
-  useEffect(() => {
-    if (initialCode) setPanel('redeem');
-  }, [initialCode]);
 
   return (
     <div className="at-settings">
@@ -123,11 +121,12 @@ export const AtlasBuddies: React.FC<{
       </div>
 
       <AtlasBuddyInvite open={panel === 'invite'} onClose={() => setPanel(null)} />
-      <AtlasBuddyRedeem
-        open={panel === 'redeem'}
-        onClose={() => setPanel(null)}
-        initialCode={initialCode}
-      />
+
+      {/* Mounted only while open, so each visit starts on an empty field rather
+          than on the code that failed last time. */}
+      {panel === 'redeem' && (
+        <AtlasBuddyRedeem onClose={() => setPanel(null)} initialCode={initialCode} />
+      )}
 
       {/* Removal takes the conversation with it, for both people. That is worth
           one deliberate confirmation rather than an undo that cannot exist. */}
@@ -159,6 +158,3 @@ export const AtlasBuddies: React.FC<{
     </div>
   );
 };
-
-import { AtlasBuddyInvite } from './AtlasBuddyInvite';
-import { AtlasBuddyRedeem } from './AtlasBuddyRedeem';

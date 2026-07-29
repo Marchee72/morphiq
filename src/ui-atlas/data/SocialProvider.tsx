@@ -3,6 +3,7 @@ import { useStore } from '../../presentation/state/store';
 import { useSocialStore } from '../../presentation/state/socialStore';
 import { buildBuddyRows } from '../derive/social';
 import { SocialContext } from './contexts';
+import { useAppActions } from './useAppData';
 import type { SocialState } from './types';
 
 /**
@@ -27,6 +28,7 @@ const REFRESH_MS = 20_000;
  * every twenty seconds.
  */
 export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const actions = useAppActions();
   const profileId = useStore(state => state.activeProfile?.id);
   const available = useSocialStore(state => state.available);
   const ready = useSocialStore(state => state.ready);
@@ -60,6 +62,27 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [available, profileId]);
+
+  /**
+   * A code arriving in the URL, from an invite link opened in a browser.
+   *
+   * Consumed once and stripped from the address bar: leaving it there means a
+   * refresh reopens the sheet for a code that has already been spent, and the
+   * only thing that can report is "not valid".
+   */
+  useEffect(() => {
+    if (!available) return;
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('buddy');
+    if (!code) return;
+
+    params.delete('buddy');
+    const query = params.toString();
+    window.history.replaceState(
+      {}, '', `${window.location.pathname}${query ? `?${query}` : ''}`,
+    );
+    actions.openOverlay('buddies', { buddyCode: code });
+  }, [available, actions]);
 
   const rows = useMemo(() => buildBuddyRows(links), [links]);
 

@@ -2817,3 +2817,58 @@ button.at-routine-item { cursor: pointer; }
 .at-account > div { flex: 1; min-width: 0; }
 .at-account b { display: block; font-size: 14px; letter-spacing: -0.01em; }
 .at-account small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; word-break: break-all; }
+
+/* ---------- training partners ---------- */
+
+.at-buddy-row {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* A paused partner stays in the list and reads as set aside. Hiding them would
+   leave no way to lift a pause you set yourself. */
+.at-buddy-row[data-muted='true'] { opacity: 0.6; }
+
+.at-buddy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.at-buddy-actions .at-btn { flex: 1; justify-content: center; min-width: 130px; }
+
+.at-buddy-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 14px;
+  border: 1.5px dashed var(--hair);
+  border-radius: 18px;
+  background: var(--at-tonal);
+  text-align: center;
+}
+
+/* The code is read off one screen and retyped on another, so it gets the widest
+   tracking in the app. The alphabet already excludes 0/O and 1/I/L; this is the
+   other half of making it transcribable. */
+.at-buddy-code b {
+  font-size: 27px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  /* The trailing letter-space would otherwise push the whole code off-centre. */
+  text-indent: 0.22em;
+  color: var(--cocoa);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.at-buddy-code small { font-size: 12px; color: var(--muted); }
+
+.at-buddy-error {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--clay);
+}

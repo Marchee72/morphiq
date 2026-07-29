@@ -175,6 +175,67 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), authRequired });
 });
 
+/**
+ * TEMPORARY — delete once the transport decision is recorded.
+ *
+ * Partners need a push channel, and whether this platform can hold one open is
+ * the single unknown the whole design hangs on. Three questions, and none of
+ * them can be answered locally:
+ *
+ *   1. Does Vercel's edge buffer `text/event-stream`? If it does, nothing
+ *      arrives until the function returns and server-sent events are dead here.
+ *   2. What duration is actually reachable? `vercel.json` uses the legacy
+ *      `builds` array, which is mutually exclusive with the `functions` block,
+ *      so `maxDuration` cannot simply be set — it has to be measured.
+ *   3. Do the frames parse in the Capacitor WebView, not just desktop Chrome?
+ *
+ * Deploy to a preview and watch it:
+ *
+ *   curl -N https://<preview>.vercel.app/api/social/ping-stream
+ *
+ * Ticks should appear one at a time, two seconds apart. All at once at the end
+ * means buffered. Stopping early tells you the ceiling.
+ *
+ * Unauthenticated on purpose: it emits a counter and the clock, so there is
+ * nothing to protect, and a session token would only make it harder to test.
+ */
+app.get('/api/social/ping-stream', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Connection': 'keep-alive',
+    // Nginx and friends buffer event streams unless told not to.
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+
+  const startedAt = Date.now();
+  let tick = 0;
+
+  const send = () => {
+    tick += 1;
+    res.write(`id: ${tick}\n`);
+    res.write('event: tick\n');
+    res.write(`data: ${JSON.stringify({ tick, elapsedMs: Date.now() - startedAt })}\n\n`);
+  };
+
+  send();
+  const timer = setInterval(() => {
+    // Ends itself just under a minute, the shortest plausible ceiling. A stream
+    // that runs to the platform limit bills for the whole window.
+    if (Date.now() - startedAt > 55_000) {
+      clearInterval(timer);
+      res.write('event: bye\ndata: {}\n\n');
+      res.end();
+      return;
+    }
+    send();
+  }, 2000);
+
+  // Without this the invocation keeps ticking after the client hangs up, and
+  // pays for every second of it.
+  req.on('close', () => clearInterval(timer));
+});
+
 // From here down every route requires a session (once AUTH_REQUIRED is on), and
 // anything addressing a specific profile also has to belong to the caller.
 //
