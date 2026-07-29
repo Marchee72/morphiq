@@ -212,6 +212,6 @@ describe('goalNudge', () => {
   it('returns "goalRemaining" when trained but goal not met', () => {
     const state = goalNudge({ ...baseState, trainedToday: true }, []);
     expect(state.kind).toBe('goalRemaining');
-    expect(state.remaining).toBe(1);
+    if (state.kind === 'goalRemaining') expect(state.remaining).toBe(1);
   });
 });
