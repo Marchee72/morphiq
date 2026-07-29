@@ -6,9 +6,11 @@ import { CapacitorHealthProvider } from '../../data/health/CapacitorHealthProvid
 import { WebHealthProvider } from '../../data/health/WebHealthProvider';
 import { ALL_EQUIPMENT } from '../../features/settings/gymEquipmentData';
 import { LANGUAGES, MODES } from '../../presentation/state/preferences';
+import { MAX_HEIGHT_CM, MIN_HEIGHT_CM, parseHeightCm } from '../../core/entities/UserProfile';
 import { AtlasSheet } from './AtlasSheet';
 import { AtlasInput, AtlasChoice } from './AtlasField';
 import { AppMark } from './AppMark';
+import { AtlasInstallCard } from './AtlasInstallCard';
 import { GoogleButton } from './GoogleButton';
 import { getUser } from '../../data/auth/session';
 import { signOut, isGoogleConfigured } from '../../data/auth/googleSignIn';
@@ -111,6 +113,11 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             </div>
           )}
         </div>
+
+        {/* Install to the home screen. Above the account block on purpose: on
+            the web it is the first thing someone arriving from a shared link
+            wants, and it disappears entirely once taken up. */}
+        <AtlasInstallCard />
 
         {/* Account */}
         {isGoogleConfigured() && (
@@ -220,14 +227,23 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
   function ProfilePanel({ open, onClose: close }: { open: boolean; onClose: () => void }) {
     const [name, setName] = useState(activeProfile?.name ?? '');
+    const [height, setHeight] = useState(activeProfile?.height?.toString() ?? '');
     const [targetWeight, setTargetWeight] = useState(activeProfile?.targetWeight?.toString() ?? '');
     const [goalDays, setGoalDays] = useState(activeProfile?.weeklyWorkoutGoalDays?.toString() ?? '4');
 
+    /**
+     * Height was displayed on the settings card and editable nowhere — once
+     * onboarding was past, a typo in it was permanent, and it feeds every
+     * body-composition figure the app derives.
+     */
+    const heightCm = parseHeightCm(height);
+
     const save = async () => {
-      if (!activeProfile) return;
+      if (!activeProfile || heightCm === null) return;
       await updateProfile({
         ...activeProfile,
         name: name.trim() || activeProfile.name,
+        height: heightCm,
         targetWeight: Number(targetWeight) || undefined,
         weeklyWorkoutGoalDays: Number(goalDays) || undefined,
       });
@@ -240,9 +256,25 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
         onClose={close}
         title={t('settings.edit')}
         subtitle={t('settings.profile')}
-        footer={<button className="at-btn" onClick={save}>{t('settings.save')}</button>}
+        footer={
+          <button className="at-btn" onClick={save} disabled={heightCm === null}>
+            {t('settings.save')}
+          </button>
+        }
       >
         <AtlasInput label={t('onboarding.name')} value={name} onChange={setName} />
+        <AtlasInput
+          label={t('onboarding.height')}
+          value={height}
+          onChange={setHeight}
+          inputMode="decimal"
+          suffix="cm"
+          // Shown only when it is wrong, so the rule appears when it is needed
+          // rather than as permanent noise under a field that is usually fine.
+          hint={height && heightCm === null
+            ? t('onboarding.heightRange', { min: MIN_HEIGHT_CM, max: MAX_HEIGHT_CM })
+            : undefined}
+        />
         <AtlasInput label={t('settings.targetWeight')} value={targetWeight} onChange={setTargetWeight} inputMode="decimal" suffix={t('unit.kg')} />
         <AtlasInput label={t('settings.weeklyGoal')} value={goalDays} onChange={setGoalDays} inputMode="numeric" />
       </AtlasSheet>

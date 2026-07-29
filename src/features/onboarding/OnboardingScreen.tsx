@@ -5,9 +5,7 @@ import { AtlasInput, AtlasChoice, AtlasField } from '../../ui-atlas/atlas/AtlasF
 import { AppMark } from '../../ui-atlas/atlas/AppMark';
 import { GoogleButton } from '../../ui-atlas/atlas/GoogleButton';
 import { useStore } from '../../presentation/state/store';
-
-const MIN_HEIGHT_CM = 100;
-const MAX_HEIGHT_CM = 230;
+import { MAX_HEIGHT_CM, MIN_HEIGHT_CM, parseHeightCm } from '../../core/entities/UserProfile';
 
 /**
  * The first screen a new user ever sees, in Atlas's language.
@@ -29,12 +27,15 @@ export const OnboardingScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const heightCm = Number(height);
-  const heightValid = Number.isFinite(heightCm) && heightCm >= MIN_HEIGHT_CM && heightCm <= MAX_HEIGHT_CM;
-  const ready = Boolean(name.trim() && gender && birthDate && heightValid);
+  // Shared with the profile editor rather than re-stated here: the two used to
+  // carry their own copies of the same bounds, free to drift apart.
+  const heightCm = parseHeightCm(height);
+  const ready = Boolean(name.trim() && gender && birthDate && heightCm !== null);
 
   const submit = async () => {
-    if (!ready || !gender) return;
+    // `heightCm` explicitly, not via `ready`: the compiler cannot narrow a
+    // `number | null` through a boolean computed elsewhere.
+    if (!ready || !gender || heightCm === null) return;
     setLoading(true);
     setError(null);
     try {
@@ -112,7 +113,7 @@ export const OnboardingScreen: React.FC = () => {
             inputMode="numeric"
             placeholder="178"
             suffix={t('onboarding.cm')}
-            hint={height && !heightValid ? t('onboarding.heightRange', { min: MIN_HEIGHT_CM, max: MAX_HEIGHT_CM }) : undefined}
+            hint={height && heightCm === null ? t('onboarding.heightRange', { min: MIN_HEIGHT_CM, max: MAX_HEIGHT_CM }) : undefined}
           />
 
           <button className="at-btn" type="submit" disabled={!ready || loading} style={{ justifyContent: 'center', marginTop: 4 }}>
