@@ -176,28 +176,39 @@ app.get('/api/health', (_req, res) => {
 });
 
 /**
- * TEMPORARY — delete once the transport decision is recorded.
+ * TEMPORARY — kept only until the Capacitor WebView is checked. See below.
  *
- * Partners need a push channel, and whether this platform can hold one open is
- * the single unknown the whole design hangs on. Three questions, and none of
- * them can be answered locally:
+ * Partners need a push channel, and whether this platform can hold one open was
+ * the single unknown the whole design hung on. Three questions, none of them
+ * answerable locally, where Node always streams fine:
  *
- *   1. Does Vercel's edge buffer `text/event-stream`? If it does, nothing
- *      arrives until the function returns and server-sent events are dead here.
+ *   1. Does Vercel's edge buffer `text/event-stream`?
+ *      **No.** Measured 2026-07-29 on a preview: 28 ticks two seconds apart,
+ *      and client arrival times tracked the server's own `elapsedMs` to within
+ *      ~50ms for the whole run. Nothing accumulates and flushes at the end.
+ *
  *   2. What duration is actually reachable? `vercel.json` uses the legacy
  *      `builds` array, which is mutually exclusive with the `functions` block,
- *      so `maxDuration` cannot simply be set — it has to be measured.
+ *      so `maxDuration` cannot simply be set — it had to be measured.
+ *      **At least 290s.** A second pass ran the full 290 and ended on its own
+ *      limit, never cut off, still unbuffered four minutes in. So the ceiling is
+ *      the platform's 300s rather than the 60s the design feared.
+ *
  *   3. Do the frames parse in the Capacitor WebView, not just desktop Chrome?
+ *      **Still unknown.** Needs an Android build pointed at a preview. This
+ *      endpoint exists for that one remaining check; delete it afterwards.
  *
- * Deploy to a preview and watch it:
+ * To repeat either measurement (`vercel curl` handles Deployment Protection,
+ * which makes a plain curl answer 302):
  *
- *   curl -N https://<preview>.vercel.app/api/social/ping-stream
+ *   npx vercel curl https://<preview>.vercel.app/api/social/ping-stream -N -s
  *
- * Ticks should appear one at a time, two seconds apart. All at once at the end
- * means buffered. Stopping early tells you the ceiling.
+ * `?limitMs=` overrides how long it runs. Comparing arrival times against the
+ * `elapsedMs` in each frame is what distinguishes streaming from buffering —
+ * buffered output arrives all at once with `elapsedMs` already spread out.
  *
- * Unauthenticated on purpose: it emits a counter and the clock, so there is
- * nothing to protect, and a session token would only make it harder to test.
+ * Unauthenticated and DB-free on purpose: it emits a counter and the clock, so
+ * there is nothing to protect, and it works on a bare preview with no env vars.
  */
 app.get('/api/social/ping-stream', (req, res) => {
   res.set({
@@ -218,18 +229,22 @@ app.get('/api/social/ping-stream', (req, res) => {
     res.write(`data: ${JSON.stringify({ tick, elapsedMs: Date.now() - startedAt })}\n\n`);
   };
 
+  // Deliberately past every plausible ceiling: the point of this pass is to be
+  // cut off by the platform, because where it cuts is the number the reconnect
+  // cadence has to be built around. The previous pass ended itself at 55s and
+  // so measured nothing but its own limit.
+  const limitMs = Number(req.query.limitMs ?? 290_000);
+
   send();
   const timer = setInterval(() => {
-    // Ends itself just under a minute, the shortest plausible ceiling. A stream
-    // that runs to the platform limit bills for the whole window.
-    if (Date.now() - startedAt > 55_000) {
+    if (Date.now() - startedAt > limitMs) {
       clearInterval(timer);
       res.write('event: bye\ndata: {}\n\n');
       res.end();
       return;
     }
     send();
-  }, 2000);
+  }, 5000);
 
   // Without this the invocation keeps ticking after the client hangs up, and
   // pays for every second of it.
