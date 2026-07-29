@@ -168,6 +168,50 @@ export interface HistoryEntryVM {
   sets: number;
   feeling?: FeelingId;
   prs: number;
+  /**
+   * Distinct exercises the session contained, in the order they were performed.
+   *
+   * A session row used to carry only its title — which is "Strength Training"
+   * for most of them — so neither the eye nor a search box could tell one from
+   * another. This is what the history filter matches on.
+   */
+  exercises: string[];
+}
+
+export interface DailyStepsVM {
+  date: Date;
+  steps: number;
+}
+
+export interface StepsVM {
+  /** Null when the health source has not answered — never rendered as a zero. */
+  today: number | null;
+  /** Days that reported anything, newest first. */
+  recent: DailyStepsVM[];
+  /** Mean over the days that reported, or null when none did. */
+  weeklyAvg: number | null;
+}
+
+/**
+ * What today actually contained, training-wise.
+ *
+ * Today's screen could say what week you were having and what was running right
+ * now, but not the one thing you open the app to check: whether you have
+ * trained yet, and what it was.
+ */
+export interface TodayTrainingVM {
+  /** Sessions finished today, newest first. Excludes the live one. */
+  sessions: HistoryEntryVM[];
+  /** Distinct exercises across those sessions, in the order performed. */
+  exercises: string[];
+  sets: number;
+  volumeKg: number;
+  minutes: number;
+  prs: number;
+  /** The most recent finished session before today, for the "last trained" read. */
+  previous: HistoryEntryVM | null;
+  /** Days since `previous`, or null when there is no earlier session at all. */
+  daysSincePrevious: number | null;
 }
 
 export interface MacroVM {

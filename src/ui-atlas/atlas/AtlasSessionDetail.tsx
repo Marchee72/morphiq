@@ -45,7 +45,7 @@ export const AtlasSessionDetail: React.FC<{
       open
       onClose={onClose}
       title={detail.title}
-      subtitle={`${fmt.relativeDay(detail.at, now)} · ${fmt.clock(detail.at)}`}
+      subtitle={`${fmt.dmy(detail.at)} · ${fmt.clock(detail.at)} · ${fmt.relativeDay(detail.at, now)}`}
       footer={<button className="at-btn" onClick={onClose}>{t('common.close')}</button>}
     >
       <div className="at-summary-stats">

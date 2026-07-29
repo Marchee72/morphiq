@@ -44,3 +44,20 @@ export function latestRoutine(turns: CoachTurn[]): RoutineTemplate | null {
   }
   return null;
 }
+
+/**
+ * The same answer, straight from the message log.
+ *
+ * `beginSession` has to know whether there is a routine worth offering before any
+ * component has rendered, and the start sheet needs the routine itself — neither
+ * can go through the hook. Parsing stops at the first hit rather than mapping the
+ * whole thread.
+ */
+export function latestRoutineIn(messages: Message[]): RoutineTemplate | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].sender !== 'assistant') continue;
+    const routine = parseRoutineFromMessage(messages[i].content);
+    if (routine) return routine;
+  }
+  return null;
+}

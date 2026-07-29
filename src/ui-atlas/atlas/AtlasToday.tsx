@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { ArrowRight, Check, Dumbbell, Heart, Scale, Sparkles, Trophy, UtensilsCrossed } from 'lucide-react';
+import {
+  ArrowRight, Check, Dumbbell, Footprints, Heart, Scale, Sparkles, Trophy, UtensilsCrossed,
+} from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { useElapsedSeconds } from '../components/useTicker';
 import { ExerciseThumb } from '../components/ExerciseThumb';
 import { metricByKey } from '../derive/bodyMetrics';
 import { daypart } from '../derive/profile';
+import { nextMuscleFocus } from '../derive/todayTraining';
 import { AtlasStates } from './AtlasStates';
 import { AtlasSessionDetail } from './AtlasSessionDetail';
 import { AtlasTodayDetail, type TodayDetail } from './AtlasTodayDetail';
@@ -19,7 +22,9 @@ import { AtlasTodayDetail, type TodayDetail } from './AtlasTodayDetail';
  * now goes somewhere.
  */
 export const AtlasToday: React.FC = () => {
-  const { profile, body, session, sessionExercises, sessionTotals, nutrition, training } = useAppData();
+  const {
+    profile, body, session, sessionExercises, sessionTotals, nutrition, training, steps,
+  } = useAppData();
   const actions = useAppActions();
   const { t, tp, fmt } = useT();
 
@@ -45,6 +50,16 @@ export const AtlasToday: React.FC = () => {
    * the live session. With nothing running the week is the honest number.
    */
   const volumeKg = session ? sessionTotals.volumeKg : training.weeklyStats.volumeKg;
+
+  /**
+   * The fold-level answer: what today has been, or — when it has been nothing
+   * yet — what the last session was and which group is furthest behind. The
+   * question people open this app with is "what do I train now", and until now
+   * the screen answered it only by implication, through a ring and a set count.
+   */
+  const doneToday = training.today;
+  const trainedToday = doneToday.sessions.length > 0;
+  const focus = nextMuscleFocus(training.muscleLoad.rows);
 
   return (
     <>
@@ -78,10 +93,102 @@ export const AtlasToday: React.FC = () => {
           <span className="at-hero-tag">{t('today.noSession')}</span>
           <h2>{t('today.startSession')}</h2>
           <p>{t('today.noSessionSub')}</p>
-          <button className="at-btn" onClick={() => actions.startSession()}>
+          <button className="at-btn" onClick={() => actions.beginSession()}>
             {t('common.start')} <i><ArrowRight size={16} /></i>
           </button>
         </div>
+      )}
+
+      {/* Directly under the hero, because it is the first thing you want and the
+          hero cannot carry it: once a session is finished the hero goes back to
+          offering a new one, as though the day were still empty.
+
+          Suppressed in the one case the hero does answer — a session running with
+          nothing finished yet — where this would otherwise say "not trained yet"
+          over the top of a live workout. */}
+      {(trainedToday || !session) && (
+      <div className="at-pad" style={{ paddingTop: 16 }}>
+        <div className="at-card at-todaytrain" data-trained={trainedToday}>
+          <div className="at-todaytrain-head">
+            <span className="at-todaytrain-icon"><Dumbbell size={16} /></span>
+            <div>
+              <small>{t('today.trainingToday')}</small>
+              <b>
+                {trainedToday
+                  ? doneToday.sessions.map(s => s.title).join(' · ')
+                  : t('today.notTrainedYet')}
+              </b>
+            </div>
+          </div>
+
+          {trainedToday ? (
+            <>
+              {/* The names, not just the count — "6 sets" does not tell you
+                  whether legs are done. */}
+              {doneToday.exercises.length > 0 && (
+                <p className="at-todaytrain-list">{doneToday.exercises.join(' · ')}</p>
+              )}
+              <div className="at-todaytrain-stats">
+                <div>
+                  <b>{tp('unit.sets', doneToday.sets)}</b>
+                  <small>{t('today.setsLogged')}</small>
+                </div>
+                <div>
+                  <b>{fmt.n(doneToday.volumeKg / 1000, 1)} {t('unit.tonnes')}</b>
+                  <small>{t('today.volume')}</small>
+                </div>
+                <div>
+                  <b>{doneToday.minutes} min</b>
+                  <small>{t('summary.duration')}</small>
+                </div>
+              </div>
+              {doneToday.prs > 0 && (
+                <p className="at-todaytrain-pr">
+                  <Trophy size={13} /> {tp('today.prsToday', doneToday.prs)}
+                </p>
+              )}
+              {/* One tap to the sets themselves, which is the next question. */}
+              <button
+                className="at-btn"
+                data-ghost="true"
+                style={{ width: '100%', justifyContent: 'center' }}
+                onClick={() => setSessionId(doneToday.sessions[0].id)}
+              >
+                {t('today.seeWhatYouDid')} <i><ArrowRight size={15} /></i>
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="at-todaytrain-list">
+                {doneToday.previous
+                  ? t('today.lastTrained', {
+                      name: doneToday.previous.title,
+                      when: fmt.relativeDay(doneToday.previous.at, now),
+                      date: fmt.dmy(doneToday.previous.at),
+                    })
+                  : t('today.neverTrained')}
+              </p>
+              {/* What the previous session actually was, so "chest tomorrow"
+                  is a decision you can make from this screen. */}
+              {doneToday.previous && doneToday.previous.exercises.length > 0 && (
+                <p className="at-todaytrain-list">{doneToday.previous.exercises.join(' · ')}</p>
+              )}
+              {focus && (
+                <p className="at-todaytrain-focus">
+                  {t('today.suggestFocus', {
+                    group: t(focus.labelKey),
+                    done: focus.sets,
+                    target: focus.target,
+                  })}
+                  {focus.lastHitAt
+                    ? ` · ${t('today.lastHit')} ${fmt.relativeDay(focus.lastHitAt, now)}`
+                    : ''}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </div>
       )}
 
       <div className="at-rail-head">
@@ -97,6 +204,22 @@ export const AtlasToday: React.FC = () => {
             {weight?.delta7d != null && ` · ${fmt.signed(weight.delta7d)} ${t('unit.kg')} / ${t('today.change7d')}`}
             {weight?.delta7d == null && weight?.delta30d != null
               && ` · ${t('body.overMonth', { delta: fmt.signed(weight.delta30d), unit: t('unit.kg') })}`}
+          </span>
+        </button>
+        {/* Steps sit next to weight rather than at the end of the rail: they are
+            the other thing that happened to your body today without you logging
+            anything. An em-dash when the phone has not answered — a zero would
+            read as "you did not move". */}
+        <button
+          className="at-moment"
+          onClick={() => setDetail({ kind: 'steps' })}
+          aria-label={t('today.stepsDetail')}
+        >
+          <span className="at-moment-icon"><Footprints size={17} /></span>
+          <b>{steps.today == null ? '—' : fmt.n(steps.today)}<small>{t('unit.steps')}</small></b>
+          <span>
+            {t('today.steps')}
+            {steps.weeklyAvg != null && ` · ${t('today.stepsAvg', { n: fmt.n(steps.weeklyAvg) })}`}
           </span>
         </button>
         <button className="at-moment" onClick={() => setDetail({ kind: 'nutrition', macro: 'protein' })}>

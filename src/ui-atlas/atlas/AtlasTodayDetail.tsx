@@ -22,6 +22,7 @@ export type TodayDetail =
   | { kind: 'weight' }
   | { kind: 'nutrition'; macro: 'protein' | 'calories' }
   | { kind: 'volume' }
+  | { kind: 'steps' }
   | { kind: 'day'; date: Date }
   | { kind: 'muscle'; group: MuscleGroupId };
 
@@ -32,7 +33,7 @@ export const AtlasTodayDetail: React.FC<{
   onOpenSession: (workoutLogId: string) => void;
 }> = ({ detail, onClose, onOpenSession }) => {
   const { t, tp, fmt } = useT();
-  const { body, nutrition, session, sessionExercises, training } = useAppData();
+  const { body, nutrition, session, sessionExercises, steps, training } = useAppData();
   const actions = useAppActions();
 
   if (!detail) return null;
@@ -183,6 +184,43 @@ export const AtlasTodayDetail: React.FC<{
       <button className="at-btn" onClick={go('train')}>
         {t('nav.train')} <i><ArrowRight size={16} /></i>
       </button>,
+    );
+  }
+
+  if (detail.kind === 'steps') {
+    return sheet(
+      t('today.stepsDetail'),
+      steps.today == null ? t('today.stepsNoSource') : t('today.steps'),
+      <>
+        <div className="at-summary-stats">
+          <div>
+            <b>{steps.today == null ? '—' : fmt.n(steps.today)}</b>
+            <small>{t('common.today')}</small>
+          </div>
+          <div>
+            <b>{steps.weeklyAvg == null ? '—' : fmt.n(steps.weeklyAvg)}</b>
+            <small>{t('today.stepsAvgLabel')}</small>
+          </div>
+          <div>
+            <b>{steps.recent.length}</b>
+            <small>{t('today.stepsDays')}</small>
+          </div>
+        </div>
+        {steps.recent.length > 0 ? (
+          <div className="at-card" style={{ padding: '8px 20px' }}>
+            {steps.recent.map((day, i) =>
+              row(
+                day.date.toISOString(),
+                fmt.dmy(day.date),
+                fmt.relativeDay(day.date, now),
+                fmt.n(day.steps),
+                i,
+              ))}
+          </div>
+        ) : (
+          <p className="at-summary-empty">{t('today.stepsNoSourceSub')}</p>
+        )}
+      </>,
     );
   }
 

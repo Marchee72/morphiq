@@ -109,6 +109,19 @@ describe('formatters', () => {
     // Beyond a month it falls back to an absolute date.
     expect(en_.relativeDay(new Date(2026, 3, 2), now)).toMatch(/Apr/);
   });
+
+  it('writes history dates as dd/mm/yyyy, padded, in both languages', () => {
+    // The history screens name a specific day, so the format must not drift with
+    // the locale: es-ES would render `9/7/2026` and en-US would flip the pair.
+    expect(en_.dmy(new Date(2026, 6, 9))).toBe('09/07/2026');
+    expect(es_.dmy(new Date(2026, 6, 9))).toBe('09/07/2026');
+    expect(en_.dmy(new Date(2026, 11, 25))).toBe('25/12/2026');
+  });
+
+  it('keeps the local day when the clock is near midnight', () => {
+    // `toISOString` would push a late-evening session onto the next day.
+    expect(en_.dmy(new Date(2026, 6, 29, 23, 45))).toBe('29/07/2026');
+  });
 });
 
 describe('upTo', () => {

@@ -92,9 +92,9 @@ export const AtlasExerciseDetail: React.FC<{
             {past.map(entry => (
               <div key={entry.workoutLogId} className="at-past-session">
                 <div className="at-past-head">
-                  <b>{fmt.relativeDay(entry.at, now)}</b>
+                  <b>{fmt.dmy(entry.at)}</b>
                   <span>
-                    {tp('unit.sets', entry.sets.length)}
+                    {fmt.relativeDay(entry.at, now)} · {tp('unit.sets', entry.sets.length)}
                     {entry.volumeKg > 0 && ` · ${fmt.n(entry.volumeKg)} ${t('unit.kg')}`}
                   </span>
                 </div>

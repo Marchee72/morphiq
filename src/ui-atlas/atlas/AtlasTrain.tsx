@@ -48,7 +48,7 @@ export const AtlasTrain: React.FC = () => {
   const [finishingAt, setFinishingAt] = useState<Date | null>(null);
   const [detail, setDetail] = useState<Exercise | null>(null);
   const live = useLiveSession(cursor, setCursor);
-  useFocusOnAdd(sessionExercises.length, setCursor);
+  useFocusOnAdd(sessionExercises, setCursor);
 
   const showSummary = useSessionSummary(s => s.show);
   const dismissSummary = useSessionSummary(s => s.dismiss);
@@ -77,10 +77,22 @@ export const AtlasTrain: React.FC = () => {
    * corrected in one place, not two.
    */
   const [editRow, setEditRow] = useState<number | null>(null);
+
+  /**
+   * A set already logged that the pills are showing back to you, read-only.
+   *
+   * Pressing a finished pill used to open its row in the list for editing, which
+   * meant a glance at "what did I put on the bar for set 1" was one stray tap
+   * away from overwriting it. Looking and changing are now separate: the pill
+   * shows, the list edits.
+   */
+  const [viewSet, setViewSet] = useState<number | null>(null);
+
   const [editRowFor, setEditRowFor] = useState(live.cursor.exerciseIdx);
   if (editRowFor !== live.cursor.exerciseIdx) {
     setEditRowFor(live.cursor.exerciseIdx);
     setEditRow(null);
+    setViewSet(null);
   }
 
   if (!session) return <AtlasGymHub />;
@@ -163,6 +175,14 @@ export const AtlasTrain: React.FC = () => {
 
   const done = exercise.sets.filter(s => s.done).length;
   const exerciseComplete = done === exercise.sets.length && exercise.sets.length > 0;
+
+  /**
+   * The earliest set still to log. Sets happen in order, so it is also the only
+   * one the wheels may be moved onto — see the pills below.
+   */
+  const firstOpenSet = exercise.sets.findIndex(s => !s.done);
+  /** The logged set being read back, if any. Never one you can type into here. */
+  const viewing = viewSet != null ? exercise.sets[viewSet] : undefined;
   const sessionComplete = sessionTotals.setsPlanned > 0 && sessionTotals.setsDone === sessionTotals.setsPlanned;
   const exerciseVolume = exercise.sets.reduce((sum, s) => (s.done ? sum + s.weightKg * s.reps : sum), 0);
 
@@ -218,9 +238,20 @@ export const AtlasTrain: React.FC = () => {
           and what you have put into it today. None of this reached the screen
           before, though every value was already derived. */}
       <div className="at-facts">
+        {/* The best set, and under it what that set implies you could lift for
+            one. The estimate has been derived since the beginning and had
+            nowhere to go — which left the strip showing "92.5 kg × 3" and
+            leaving the number people actually train off to be worked out in
+            their head. Suppressed on a true single, where the estimate is just
+            the same figure again. */}
         <div className="at-fact">
           <small><Trophy size={11} /> {t('train.yourPr')}</small>
           <b>{exercise.best ? fmt.kgReps(exercise.best.weightKg, exercise.best.reps) : t('train.noPrYet')}</b>
+          {exercise.best && exercise.best.reps > 1 && exercise.best.e1rm > 0 && (
+            <span className="at-fact-sub">
+              {t('train.estimated1rm', { weight: fmt.upTo(exercise.best.e1rm, 1) })}
+            </span>
+          )}
         </div>
         <div className="at-fact">
           <small>{t('train.lastTimeLabel')}</small>
@@ -236,34 +267,58 @@ export const AtlasTrain: React.FC = () => {
         </div>
       </div>
 
-      {/* A pill for a set still to do moves the wheels onto it. A pill for a set
-          already logged opens that set's row in the list below instead: once a
-          set is recorded there is exactly one place to change it, and it is the
-          place showing the numbers. Putting the wheels back on a finished set
-          was the confusing part — the pills said done and the button underneath
-          offered to complete it again. */}
+      {/* Three states, and the difference between them is the point.
+          - The next set still to do moves the wheels onto it.
+          - A set already logged reads back below, and cannot be typed into from
+            here — its row in the list is the one place that edits it.
+          - A set further ahead than the next one is locked. Sets are performed
+            in order, and jumping to 4 with 2 and 3 empty writes a session that
+            never happened; the empty sets in between then look deliberate. */}
       <div className="at-setpills">
-        {exercise.sets.map((s, i) => (
-          <button
-            key={s.setNum}
-            className="at-setpill"
-            data-done={s.done}
-            data-cur={i === live.setIdx}
-            data-pr={s.isPr}
-            onClick={() => (s.done ? setEditRow(i) : live.goTo(live.cursor.exerciseIdx, i))}
-            aria-label={s.done
-              ? t('train.editSetValues', { n: s.setNum })
-              : t('train.setOf', { n: s.setNum, total: exercise.sets.length })}
-          >
-            {s.isPr ? <Trophy size={13} /> : s.done ? <Check size={14} strokeWidth={3} /> : s.setNum}
-          </button>
-        ))}
+        {exercise.sets.map((s, i) => {
+          const locked = !s.done && firstOpenSet !== -1 && i > firstOpenSet;
+          return (
+            <button
+              key={s.setNum}
+              className="at-setpill"
+              data-done={s.done}
+              data-cur={i === (viewSet ?? live.setIdx)}
+              data-pr={s.isPr}
+              data-locked={locked}
+              disabled={locked}
+              onClick={() => {
+                if (s.done) { setViewSet(i); return; }
+                setViewSet(null);
+                live.goTo(live.cursor.exerciseIdx, i);
+              }}
+              aria-label={locked
+                ? t('train.setLocked', { n: s.setNum, next: firstOpenSet + 1 })
+                : s.done
+                  ? t('train.viewSetValues', { n: s.setNum })
+                  : t('train.setOf', { n: s.setNum, total: exercise.sets.length })}
+            >
+              {s.isPr ? <Trophy size={13} /> : s.done ? <Check size={14} strokeWidth={3} /> : s.setNum}
+            </button>
+          );
+        })}
         <button className="at-setpill" onClick={live.addSet} aria-label={t('train.addSet')}>
           <Plus size={13} />
         </button>
       </div>
 
-      {exerciseComplete ? (
+      {/* Read-only on purpose. The wheels are the one control that writes
+          without confirming, so they never point at a set that is already in the
+          book — the list below is where a logged set gets corrected. */}
+      {viewing ? (
+        <div className="at-pad">
+          <div className="at-card at-setview">
+            <small>{t('train.setOf', { n: viewing.setNum, total: exercise.sets.length })} · {t('train.logged')}</small>
+            <b>{fmt.kgReps(viewing.weightKg, viewing.reps)}</b>
+            {viewing.isPr && <span className="at-setview-pr"><Trophy size={12} /> {t('train.personalRecord')}</span>}
+            <p>{t('train.viewOnly')}</p>
+          </div>
+        </div>
+      ) : exerciseComplete ? (
         <div className="at-pad">
           <div className="at-card at-done">
             <span className="at-done-mark"><Check size={20} strokeWidth={3} /></span>
@@ -349,7 +404,17 @@ export const AtlasTrain: React.FC = () => {
           takes the slot once there is genuinely nothing left to log — offering it
           after a single exercise is how people end sessions by accident. */}
       <div className="at-train-actions">
-        {sessionComplete ? (
+        {viewing ? (
+          // While a past set is on screen the primary action cannot be "complete
+          // set 3" — the pills are highlighting set 1. It becomes the way back.
+          <button
+            className="at-btn"
+            data-block="true"
+            onClick={() => setViewSet(null)}
+          >
+            {t('train.backToSet', { n: live.setIdx + 1 })}
+          </button>
+        ) : sessionComplete ? (
           <button
             className="at-btn"
             data-block="true"

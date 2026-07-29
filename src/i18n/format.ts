@@ -29,6 +29,15 @@ export interface Formatters {
   duration(seconds: number): string;
   /** '24 Jul' / '24 jul' */
   shortDate(date: Date): string;
+  /**
+   * '29/07/2026' — zero-padded day/month/year, identical in every language.
+   *
+   * History screens name a specific day and have to be unambiguous about which
+   * one. `shortDate` drops the year and `relativeDay` stops being a date at all
+   * past a week ("3 weeks ago"), which is no use when you are looking for what
+   * you did on the 14th.
+   */
+  dmy(date: Date): string;
   /** 'Wed' / 'mié' */
   weekdayShort(date: Date): string;
   /** 'Jul' / 'jul' — chart axis labels. */
@@ -45,6 +54,10 @@ const MS_PER_DAY = 86_400_000;
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0');
 }
 
 export function makeFormatters(lang: Lang): Formatters {
@@ -83,6 +96,9 @@ export function makeFormatters(lang: Lang): Formatters {
       return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
     },
     shortDate: date => dayMonth.format(date),
+    // Built by hand rather than through `Intl`: es-ES renders `29/7/2026`
+    // unpadded and en-US would flip the day and month outright.
+    dmy: date => `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`,
     weekdayShort: date => weekday.format(date),
     monthShort: date => month.format(date),
     relativeDay: (date, now = new Date()) => {

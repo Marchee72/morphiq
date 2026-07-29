@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, ChevronRight, Trophy, X } from 'lucide-react';
+import { CalendarDays, ChevronRight, Search, Trophy, X } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppActions, useAppData } from '../data/useAppData';
 import { useDismissOnBack } from '../components/useDismissOnBack';
@@ -32,6 +32,17 @@ function fromDateInput(value: string): Date | null {
   return new Date(year, month - 1, day);
 }
 
+/**
+ * Accent- and case-insensitive, so "press" finds "Press" and "biceps" finds
+ * "Bíceps" — the catalogue and the coach both produce accented Spanish names.
+ */
+function foldForSearch(value: string): string {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+/** How many exercise names a session row lists before it summarises the rest. */
+const NAMES_SHOWN = 3;
+
 export const AtlasHistory: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -44,6 +55,8 @@ export const AtlasHistory: React.FC<{
   const [range, setRange] = useState<Range>(7);
   const [pickedDate, setPickedDate] = useState<Date | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  /** Free-text over the exercises a session contained, and over its title. */
+  const [query, setQuery] = useState('');
 
   /**
    * The clock the ranges are measured from, re-read each time the panel opens.
@@ -62,7 +75,7 @@ export const AtlasHistory: React.FC<{
 
   useDismissOnBack(open, onClose, 'history');
 
-  const visible = useMemo(() => {
+  const inRange = useMemo(() => {
     if (pickedDate) {
       const key = dayKey(pickedDate);
       return training.history.filter(entry => dayKey(entry.at) === key);
@@ -72,6 +85,20 @@ export const AtlasHistory: React.FC<{
     const since = startOfDay(new Date(now.getTime() - (range - 1) * MS_PER_DAY)).getTime();
     return training.history.filter(entry => entry.at.getTime() >= since);
   }, [training.history, range, pickedDate, now]);
+
+  /**
+   * Searching is about finding one lift, and the lift is almost never in the
+   * session's title — most sessions are called "Strength Training". Matching the
+   * exercises the session actually contained is what makes "when did I last
+   * squat" answerable; the title is matched too so routine names still work.
+   */
+  const visible = useMemo(() => {
+    const needle = foldForSearch(query);
+    if (!needle) return inRange;
+    return inRange.filter(entry =>
+      foldForSearch(entry.title).includes(needle)
+      || entry.exercises.some(name => foldForSearch(name).includes(needle)));
+  }, [inRange, query]);
 
   const days = useMemo(() => {
     const grouped = new Map<string, { date: Date; entries: HistoryEntryVM[] }>();
@@ -135,6 +162,28 @@ export const AtlasHistory: React.FC<{
         ))}
       </div>
 
+      {/* Sits above the date picker on purpose: "which day was that" is a rarer
+          question than "when did I last do this lift". */}
+      <div className="at-searchpill">
+        <Search size={17} color="var(--muted)" />
+        <input
+          type="search"
+          value={query}
+          placeholder={t('history.searchPlaceholder')}
+          onChange={e => setQuery(e.target.value)}
+          aria-label={t('history.searchExercise')}
+        />
+        {query && (
+          <button
+            className="at-round"
+            onClick={() => setQuery('')}
+            aria-label={t('history.clearSearch')}
+          >
+            <X size={15} />
+          </button>
+        )}
+      </div>
+
       <div className="at-searchpill">
         <CalendarDays size={17} color="var(--muted)" />
         <input
@@ -161,10 +210,14 @@ export const AtlasHistory: React.FC<{
         <div className="at-pad" style={{ paddingBottom: 40 }}>
           {days.map(day => (
             <div key={dayKey(day.date)} className="at-history-day">
+              {/* The date is the heading rather than "3 weeks ago": this is the
+                  screen you come to when you need to know *which* day. The
+                  relative reading keeps its place next to the totals, where it
+                  is still a useful orientation without being the label. */}
               <div className="at-history-dayhead">
-                <b>{fmt.relativeDay(day.date, now)}</b>
+                <b>{fmt.dmy(day.date)}</b>
                 <span>
-                  {t('history.dayTotal', {
+                  {fmt.relativeDay(day.date, now)} · {t('history.dayTotal', {
                     sessions: tp('history.sessions', day.entries.length),
                     volume: fmt.n(day.volumeKg / 1000, 1),
                     unit: t('unit.tonnes'),
@@ -186,6 +239,15 @@ export const AtlasHistory: React.FC<{
                         {fmt.clock(entry.at)} · {entry.durationMin} min · {tp('unit.sets', entry.sets)}
                         {entry.prs > 0 && ` · ${entry.prs} PR`}
                       </small>
+                      {/* What the session was, as opposed to what it was
+                          called. Most titles are "Strength Training". */}
+                      {entry.exercises.length > 0 && (
+                        <small className="at-history-exercises">
+                          {entry.exercises.slice(0, NAMES_SHOWN).join(' · ')}
+                          {entry.exercises.length > NAMES_SHOWN
+                            && ` +${entry.exercises.length - NAMES_SHOWN}`}
+                        </small>
+                      )}
                     </span>
                     <b>
                       {entry.prs > 0 && <Trophy size={13} color="var(--clay)" />}
@@ -200,9 +262,12 @@ export const AtlasHistory: React.FC<{
         </div>
       ) : (
         <AtlasStates
-          icon={<CalendarDays size={22} />}
-          title={t('history.empty')}
-          body={t('history.emptySub')}
+          icon={query ? <Search size={22} /> : <CalendarDays size={22} />}
+          title={query ? t('history.noMatch', { query }) : t('history.empty')}
+          body={query ? t('history.noMatchSub') : t('history.emptySub')}
+          action={query
+            ? { label: t('history.clearSearch'), onClick: () => setQuery('') }
+            : undefined}
         />
       )}
 

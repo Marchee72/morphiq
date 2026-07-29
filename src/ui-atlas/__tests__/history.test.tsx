@@ -163,6 +163,66 @@ describe('history panel', () => {
     for (const volume of volumes) expect(volume).not.toMatch(/^0(\.0)?\s*t/);
   });
 
+  it('heads every day with a dd/mm/yyyy date rather than a relative one', async () => {
+    // "3 weeks ago" is not an answer to "what did I do on the 14th", which is
+    // the only question this screen exists for.
+    await openHistory();
+    await waitFor(() => expect(sessionRows()).toHaveLength(3));
+
+    for (const head of dayHeads()) {
+      expect(head.querySelector('b')?.textContent).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+    }
+  });
+
+  it('names the exercises a session contained, not just what it was called', async () => {
+    // Every seeded session is called "Push A" or "Pull B"; the lifts are what
+    // tell them apart, and what the filter below matches on.
+    await openHistory();
+    await waitFor(() => expect(sessionRows()).toHaveLength(3));
+    expect(sessionRows()[0].textContent).toMatch(/Barbell Bench Press/i);
+  });
+
+  it('filters the sessions down to the ones using an exercise', async () => {
+    await openHistory();
+    await waitFor(() => expect(sessionRows()).toHaveLength(3));
+
+    fireEvent.change(screen.getByLabelText(/search by exercise|buscar por ejercicio/i), {
+      target: { value: 'bench' },
+    });
+    // Every seeded session has the bench in it.
+    await waitFor(() => expect(sessionRows()).toHaveLength(3));
+
+    fireEvent.change(screen.getByLabelText(/search by exercise|buscar por ejercicio/i), {
+      target: { value: 'deadlift' },
+    });
+    await waitFor(() => expect(sessionRows()).toHaveLength(0));
+    expect(text()).toMatch(/No session with|Ninguna sesion con/i);
+  });
+
+  it('matches a session title too, so routine names still find things', async () => {
+    await openHistory();
+    await waitFor(() => expect(sessionRows()).toHaveLength(3));
+
+    fireEvent.change(screen.getByLabelText(/search by exercise|buscar por ejercicio/i), {
+      target: { value: 'pull b' },
+    });
+    // One of the four seeded sessions is Pull B, and it is inside seven days.
+    await waitFor(() => expect(sessionRows()).toHaveLength(1));
+  });
+
+  it('restores every session when the search is cleared', async () => {
+    await openHistory();
+    await waitFor(() => expect(sessionRows()).toHaveLength(3));
+
+    fireEvent.change(screen.getByLabelText(/search by exercise|buscar por ejercicio/i), {
+      target: { value: 'deadlift' },
+    });
+    await waitFor(() => expect(sessionRows()).toHaveLength(0));
+
+    fireEvent.click(screen.getAllByRole('button', { name: /clear search|quitar busqueda/i })[0]);
+    await waitFor(() => expect(sessionRows()).toHaveLength(3));
+  });
+
   it('opens a session to show every exercise and set it contained', async () => {
     await openHistory();
     await waitFor(() => expect(sessionRows()).toHaveLength(3));

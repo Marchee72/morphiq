@@ -36,6 +36,7 @@ export const en = {
   'unit.idx': 'idx',
   'unit.yr': 'yr',
   'unit.tonnes': 't',
+  'unit.steps': 'steps',
   'unit.sets_one': '{n} set',
   'unit.sets_other': '{n} sets',
   'unit.reps_one': '{n} rep',
@@ -136,7 +137,6 @@ export const en = {
   'train.remove': 'Remove',
 
   // -- Gym hub (Train with no session running) -------------------
-  'gym.startEmpty': 'Start an empty session',
   'gym.routines': 'Your routines',
   'gym.noRoutines': 'No saved routines',
   'gym.noRoutinesSub': 'Ask the coach for one, or start empty and it will be here next time.',
@@ -145,6 +145,27 @@ export const en = {
   'gym.records': 'Records',
   'gym.workouts': 'Sessions',
   'gym.minutes': 'Minutes',
+
+  // -- Starting a session ----------------------------------------
+  'start.title': 'What are we starting?',
+  'start.subtitle': 'Pick a routine, or go without one',
+  'start.empty': 'Empty session',
+  'start.emptySub': 'Add exercises as you go',
+  'start.fromCoach': 'From the coach',
+
+  // -- Bringing a routine into a running session -----------------
+  'merge.title': 'You are already training',
+  'merge.subtitle': '{title}, {n} exercises in',
+  'merge.append_one': 'Add {n} exercise',
+  'merge.append_other': 'Add {n} exercises',
+  'merge.appendSub': 'They go after what you are doing now',
+  'merge.replace': 'Replace what is pending',
+  'merge.replaceSub_one': 'Keeps the {n} exercise you have logged, drops the untouched ones',
+  'merge.replaceSub_other': 'Keeps the {n} exercises you have logged, drops the untouched ones',
+  'merge.replaceEmpty': 'Nothing logged yet, so the session simply becomes this routine',
+  'merge.alreadyIn_one': '{n} of these is already in the session and will be skipped',
+  'merge.alreadyIn_other': '{n} of these are already in the session and will be skipped',
+  'merge.nothingNew': 'This routine is already in the session, all of it',
 
   // -- Library ---------------------------------------------------
   'library.heading': 'What are we training?',
@@ -220,9 +241,15 @@ export const en = {
   'train.lastTimeLabel': 'Last time',
   'train.markSetDone': 'Mark set {n} done',
   'train.editSetValues': 'Edit set {n}',
+  'train.viewSetValues': 'See set {n}',
+  'train.setLocked': 'Set {n} is locked — log set {next} first',
+  'train.viewOnly': 'Already logged. Edit it from the list below.',
+  'train.backToSet': 'Back to set {n}',
   'train.nextNamed': 'Next: {name}',
   'train.thisSession': 'This session',
   'train.noPrYet': 'No record yet',
+  /** Estimated, not lifted — the ≈ is doing real work here. */
+  'train.estimated1rm': '≈{weight} kg 1RM',
   'train.increase': 'Increase {label}',
   'train.decrease': 'Decrease {label}',
   'train.swipeHint': 'Swipe to change exercise',
@@ -375,6 +402,11 @@ export const en = {
   'history.emptySub': 'Try a wider range, or pick another date.',
   'history.loadingOlder': 'Looking further back',
   'history.openSession': 'Open {name}',
+  'history.searchExercise': 'Search by exercise',
+  'history.searchPlaceholder': 'Search an exercise',
+  'history.clearSearch': 'Clear search',
+  'history.noMatch': 'No session with “{query}”',
+  'history.noMatchSub': 'Nothing in this range used that exercise. Try a wider range.',
 
   // -- Past session detail ---------------------------------------
   'session.detail': 'Session',
@@ -405,4 +437,41 @@ export const en = {
   'today.setsThisWeek': 'Sets this week',
   'today.targetSets': 'Weekly target',
   'today.openDay': 'Open {date}',
+
+  // -- Today: what you have trained, and what is left ------------
+  'today.trainingToday': 'Today’s training',
+  'today.notTrainedYet': 'Not trained yet',
+  'today.setsLogged': 'Sets logged',
+  'today.prsToday_one': '1 personal record today',
+  'today.prsToday_other': '{n} personal records today',
+  'today.seeWhatYouDid': 'See what you did',
+  'today.lastTrained': 'Last session: {name} · {when} ({date})',
+  'today.neverTrained': 'No session logged yet. The first one starts here.',
+  'today.suggestFocus': 'Furthest behind: {group}, {done}/{target} sets this week',
+  'today.steps': 'Steps',
+  'today.stepsAvg': '{n} avg',
+  'today.stepsAvgLabel': 'Daily average',
+  'today.stepsDays': 'Days recorded',
+  'today.stepsDetail': 'Steps this week',
+  'today.stepsNoSource': 'No step data',
+  'today.stepsNoSourceSub': 'Steps come from Health Connect on your phone. Nothing has been read yet.',
+
+  // -- Sign-in wall ----------------------------------------------
+  'gate.tagline': 'Body Intelligence',
+  'gate.title': 'Sign in to continue',
+  'gate.body': 'This copy of MorphIQ keeps your training on a server, so it needs to know who you are.',
+  'gate.privacy': 'Your profiles, sessions and measurements are yours alone. Nobody else signing in can see them.',
+  'gate.notConfigured': 'This deployment requires an account but has no sign-in configured. Contact whoever set it up.',
+  'gate.offlineTitle': 'Cannot reach the server',
+  'gate.offlineBody': 'MorphIQ could not contact the API. Check your connection and try again.',
+  'gate.retry': 'Try again',
+
+  // -- Install to the home screen --------------------------------
+  'install.title': 'Install MorphIQ',
+  'install.body': 'Add it to your home screen and it opens like an app — full screen, and it still works offline.',
+  'install.action': 'Install app',
+  'install.dismissed': 'No problem. The offer stays here if you change your mind.',
+  'install.iosBody': 'On iPhone and iPad, Safari installs it from the share menu:',
+  'install.iosStep1': 'Tap Share at the bottom of Safari',
+  'install.iosStep2': 'Choose “Add to Home Screen”',
 } as const;

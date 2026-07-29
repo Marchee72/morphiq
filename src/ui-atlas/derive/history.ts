@@ -2,6 +2,7 @@ import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import type { FeelingId, HistoryEntryVM } from '../types';
 import { isCountedSet } from './muscleLoad';
+import { normalizeName } from './records';
 import { weeklyBuckets } from './buckets';
 
 export function setVolume(set: WorkoutSet): number {
@@ -11,6 +12,24 @@ export function setVolume(set: WorkoutSet): number {
 
 export function totalVolume(sets: WorkoutSet[]): number {
   return Math.round(sets.reduce((total, set) => total + setVolume(set), 0));
+}
+
+/**
+ * The names a session touched, deduped case-insensitively but shown as typed.
+ *
+ * Ordered by set number rather than by first appearance in the array: the sets
+ * of a session arrive in whatever order the store happened to load them, and
+ * the order they were performed in is the one worth reading.
+ */
+function distinctExercises(sets: WorkoutSet[]): string[] {
+  const byKey = new Map<string, string>();
+  for (const set of [...sets].sort((a, b) => a.setNumber - b.setNumber)) {
+    const name = set.exerciseName?.trim();
+    if (!name) continue;
+    const key = normalizeName(name);
+    if (!byKey.has(key)) byKey.set(key, name);
+  }
+  return [...byKey.values()];
 }
 
 /**
@@ -41,6 +60,7 @@ export function buildHistory(
         sets: counted.length,
         feeling: log.feelingTag as FeelingId | undefined,
         prs: counted.filter(s => s.id && prSetIds.has(s.id)).length,
+        exercises: distinctExercises(counted),
       };
     });
 }

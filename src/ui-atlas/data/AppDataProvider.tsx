@@ -17,6 +17,8 @@ import { buildSessionExercises, buildSessionTotals, findCursor } from '../derive
 import { toCatalogItem } from '../derive/catalog';
 import { buildExerciseHistory } from '../derive/exerciseHistory';
 import { buildSessionDetail } from '../derive/sessionDetail';
+import { buildSteps } from '../derive/steps';
+import { buildTodayTraining } from '../derive/todayTraining';
 
 /**
  * One provider, composed once per mount.
@@ -41,6 +43,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
   const workoutHistory = useStore(s => s.workoutHistory);
   const activeWorkoutSets = useStore(s => s.activeWorkoutSets);
   const allSets = useStore(s => s.allSets);
+  const dailySteps = useStore(s => s.dailySteps);
   const activeSession = useStore(s => s.activeSession);
   const savedRoutines = useStore(s => s.savedRoutines);
   const favoriteExerciseIds = useStore(s => s.favoriteExerciseIds);
@@ -187,6 +190,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
 
   const training = useMemo(() => ({
     history,
+    today: buildTodayTraining(history, at),
     records: buildPersonalRecords(setsForDerivation),
     muscleLoad,
     streak: buildStreak(logsForHistory, activeProfile?.weeklyWorkoutGoalDays, at),
@@ -194,6 +198,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     weeklyStats: buildWeeklyStats(logsForHistory, setsByLog, at),
     routines: savedRoutines,
   }), [history, setsForDerivation, muscleLoad, logsForHistory, setsByLog, activeProfile?.weeklyWorkoutGoalDays, savedRoutines, at]);
+
+  const steps = useMemo(() => buildSteps(dailySteps, at), [dailySteps, at]);
 
   const nutrition = useMemo(
     () => buildNutrition(foodLogs, workoutLogs, activeProfile, latestMeasurement, at),
@@ -266,11 +272,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     cursor,
     training,
     nutrition,
+    steps,
     catalog: catalogSlice,
     coach: { thread: chatHistory, isLoading: isAiLoading },
     exerciseHistory,
     sessionDetail,
-  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, catalogSlice, chatHistory, isAiLoading, exerciseHistory, sessionDetail]);
+  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, steps, catalogSlice, chatHistory, isAiLoading, exerciseHistory, sessionDetail]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 };

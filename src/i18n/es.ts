@@ -34,6 +34,7 @@ export const es: Translations = {
   'unit.idx': 'idx',
   'unit.yr': 'años',
   'unit.tonnes': 't',
+  'unit.steps': 'pasos',
   'unit.sets_one': '{n} serie',
   'unit.sets_other': '{n} series',
   'unit.reps_one': '{n} rep',
@@ -134,7 +135,6 @@ export const es: Translations = {
   'train.remove': 'Quitar',
 
   // -- Gimnasio (Entrenar sin sesion activa) ---------------------
-  'gym.startEmpty': 'Empezar sesion vacia',
   'gym.routines': 'Tus rutinas',
   'gym.noRoutines': 'Sin rutinas guardadas',
   'gym.noRoutinesSub': 'Pidele una al coach, o empieza vacio y quedara guardada.',
@@ -143,6 +143,27 @@ export const es: Translations = {
   'gym.records': 'Records',
   'gym.workouts': 'Sesiones',
   'gym.minutes': 'Minutos',
+
+  // -- Empezar una sesion ----------------------------------------
+  'start.title': 'Con que arrancamos?',
+  'start.subtitle': 'Elige una rutina, o ve sin ninguna',
+  'start.empty': 'Sesion vacia',
+  'start.emptySub': 'Anade ejercicios sobre la marcha',
+  'start.fromCoach': 'Del coach',
+
+  // -- Meter una rutina en la sesion en curso --------------------
+  'merge.title': 'Ya estas entrenando',
+  'merge.subtitle': '{title}, {n} ejercicios dentro',
+  'merge.append_one': 'Anadir {n} ejercicio',
+  'merge.append_other': 'Anadir {n} ejercicios',
+  'merge.appendSub': 'Van despues de lo que estas haciendo ahora',
+  'merge.replace': 'Reemplazar lo pendiente',
+  'merge.replaceSub_one': 'Conserva el {n} ejercicio que registraste, descarta los intactos',
+  'merge.replaceSub_other': 'Conserva los {n} ejercicios que registraste, descarta los intactos',
+  'merge.replaceEmpty': 'Aun no registraste nada, asi que la sesion pasa a ser esta rutina',
+  'merge.alreadyIn_one': '{n} de estos ya esta en la sesion y se omitira',
+  'merge.alreadyIn_other': '{n} de estos ya estan en la sesion y se omitiran',
+  'merge.nothingNew': 'Esta rutina ya esta en la sesion, entera',
 
   // -- Biblioteca ------------------------------------------------
   'library.heading': 'Que entrenamos?',
@@ -218,9 +239,14 @@ export const es: Translations = {
   'train.lastTimeLabel': 'La ultima vez',
   'train.markSetDone': 'Marcar serie {n} como hecha',
   'train.editSetValues': 'Editar serie {n}',
+  'train.viewSetValues': 'Ver serie {n}',
+  'train.setLocked': 'Serie {n} bloqueada: registra antes la serie {next}',
+  'train.viewOnly': 'Ya registrada. Editala desde la lista de abajo.',
+  'train.backToSet': 'Volver a la serie {n}',
   'train.nextNamed': 'Sigue: {name}',
   'train.thisSession': 'Esta sesion',
   'train.noPrYet': 'Aun sin record',
+  'train.estimated1rm': '≈{weight} kg 1RM',
   'train.increase': 'Subir {label}',
   'train.decrease': 'Bajar {label}',
   'train.swipeHint': 'Desliza para cambiar de ejercicio',
@@ -373,6 +399,11 @@ export const es: Translations = {
   'history.emptySub': 'Prueba un rango mas amplio, o elige otra fecha.',
   'history.loadingOlder': 'Buscando mas atras',
   'history.openSession': 'Abrir {name}',
+  'history.searchExercise': 'Buscar por ejercicio',
+  'history.searchPlaceholder': 'Busca un ejercicio',
+  'history.clearSearch': 'Quitar busqueda',
+  'history.noMatch': 'Ninguna sesion con “{query}”',
+  'history.noMatchSub': 'Nada en este rango uso ese ejercicio. Prueba un rango mas amplio.',
 
   // -- Detalle de sesion pasada ----------------------------------
   'session.detail': 'Sesion',
@@ -403,4 +434,41 @@ export const es: Translations = {
   'today.setsThisWeek': 'Series esta semana',
   'today.targetSets': 'Objetivo semanal',
   'today.openDay': 'Abrir {date}',
+
+  // -- Hoy: que has entrenado y que falta ------------------------
+  'today.trainingToday': 'Entrenamiento de hoy',
+  'today.notTrainedYet': 'Aun sin entrenar',
+  'today.setsLogged': 'Series registradas',
+  'today.prsToday_one': '1 record personal hoy',
+  'today.prsToday_other': '{n} records personales hoy',
+  'today.seeWhatYouDid': 'Ver lo que hiciste',
+  'today.lastTrained': 'Ultima sesion: {name} · {when} ({date})',
+  'today.neverTrained': 'Aun no hay ninguna sesion. La primera empieza aqui.',
+  'today.suggestFocus': 'Lo mas atrasado: {group}, {done}/{target} series esta semana',
+  'today.steps': 'Pasos',
+  'today.stepsAvg': '{n} de media',
+  'today.stepsAvgLabel': 'Media diaria',
+  'today.stepsDays': 'Dias con datos',
+  'today.stepsDetail': 'Pasos de la semana',
+  'today.stepsNoSource': 'Sin datos de pasos',
+  'today.stepsNoSourceSub': 'Los pasos vienen de Health Connect en tu movil. Todavia no se ha leido nada.',
+
+  // -- Pantalla de acceso ----------------------------------------
+  'gate.tagline': 'Body Intelligence',
+  'gate.title': 'Entra para continuar',
+  'gate.body': 'Esta copia de MorphIQ guarda tu entrenamiento en un servidor, asi que necesita saber quien eres.',
+  'gate.privacy': 'Tus perfiles, sesiones y mediciones son solo tuyos. Nadie mas que entre puede verlos.',
+  'gate.notConfigured': 'Este despliegue exige cuenta pero no tiene el acceso configurado. Habla con quien lo monto.',
+  'gate.offlineTitle': 'No se puede contactar con el servidor',
+  'gate.offlineBody': 'MorphIQ no ha podido llegar a la API. Revisa tu conexion e intentalo de nuevo.',
+  'gate.retry': 'Reintentar',
+
+  // -- Instalar en la pantalla de inicio -------------------------
+  'install.title': 'Instalar MorphIQ',
+  'install.body': 'Añadela a tu pantalla de inicio y se abre como una app: a pantalla completa, y sigue funcionando sin conexion.',
+  'install.action': 'Instalar app',
+  'install.dismissed': 'Sin problema. La oferta se queda aqui por si cambias de idea.',
+  'install.iosBody': 'En iPhone y iPad, Safari la instala desde el menu de compartir:',
+  'install.iosStep1': 'Pulsa Compartir abajo en Safari',
+  'install.iosStep2': 'Elige «Añadir a pantalla de inicio»',
 };

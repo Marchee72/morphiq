@@ -10,6 +10,8 @@ import { AtlasExerciseDetail } from '../atlas/AtlasExerciseDetail';
 import { AtlasSessionSummary } from '../atlas/AtlasSessionSummary';
 import { AtlasHistory } from '../atlas/AtlasHistory';
 import { AtlasSessionDetail } from '../atlas/AtlasSessionDetail';
+import { AtlasStartSheet } from '../atlas/AtlasStartSheet';
+import { AtlasRoutineMergeSheet } from '../atlas/AtlasRoutineMergeSheet';
 import type { Exercise } from '../../core/entities/Exercise';
 import type { FeelingId } from '../types';
 
@@ -78,6 +80,14 @@ export const AppOverlays: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         initialFeeling={activeSession?.feelingTag as FeelingId | undefined}
         initialNotes={activeSession?.bodyNotes}
         onSave={(feeling, notes) => { updateActiveSessionNote(feeling, notes); onClose(); }}
+      />
+
+      <AtlasStartSheet open={overlay === 'startSession'} onClose={onClose} />
+
+      <AtlasRoutineMergeSheet
+        open={overlay === 'routineMerge'}
+        routine={payload.routine}
+        onClose={onClose}
       />
 
       <AtlasHistory

@@ -34,8 +34,8 @@ export const AtlasGymHub: React.FC = () => {
         <span className="at-hero-tag">{t('today.noSession')}</span>
         <h2>{t('today.startSession')}</h2>
         <p>{t('today.noSessionSub')}</p>
-        <button className="at-btn" onClick={() => actions.startSession()}>
-          <Play size={15} /> {t('gym.startEmpty')} <i><ArrowRight size={16} /></i>
+        <button className="at-btn" onClick={() => actions.beginSession()}>
+          <Play size={15} /> {t('common.start')} <i><ArrowRight size={16} /></i>
         </button>
       </div>
 
@@ -118,7 +118,7 @@ export const AtlasGymHub: React.FC = () => {
                 <span>
                   {entry.title}
                   <small>
-                    {fmt.relativeDay(entry.at, now)} · {entry.durationMin} min · {tp('unit.sets', entry.sets)}
+                    {fmt.dmy(entry.at)} · {entry.durationMin} min · {tp('unit.sets', entry.sets)}
                     {entry.prs > 0 && ` · ${entry.prs} PR`}
                   </small>
                 </span>

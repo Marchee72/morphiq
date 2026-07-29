@@ -8,6 +8,13 @@ import { BodyComposition } from './BodyCompositionPlugin';
 import { BiaCalculator } from '../calculation/BiaCalculator';
 import { Capacitor } from '@capacitor/core';
 
+/** `YYYY-MM-DD` in the phone's own timezone — the day a user would call it. */
+export function localDayKey(date: Date): string {
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 export class CapacitorHealthProvider implements IHealthProvider {
   isAvailable(): boolean {
     return Capacitor.isNativePlatform() && (
@@ -107,6 +114,45 @@ export class CapacitorHealthProvider implements IHealthProvider {
       });
     } catch (e) {
       console.error('Failed to query workouts from Capacitor:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Steps per calendar day, newest day last, keyed `YYYY-MM-DD` in local time.
+   *
+   * The interface has declared this since the health layer was written and no
+   * provider ever implemented it, so "steps today" could not be shown at all.
+   * Health Connect aggregates day buckets itself; the only work here is turning
+   * a bucket's start instant into the local day it belongs to — `toISOString`
+   * would put an evening walk on the following day for anyone east of UTC.
+   */
+  async getDailySteps(since: Date): Promise<{ date: string; steps: number }[]> {
+    if (!this.isAvailable()) return [];
+    try {
+      const { Health } = await import('capacitor-health');
+      const result = await Health.queryAggregated({
+        startDate: since.toISOString(),
+        endDate: new Date().toISOString(),
+        dataType: 'steps',
+        bucket: 'day',
+      });
+
+      // Buckets can repeat a day when several sources report it, so they are
+      // summed per day rather than trusted one-to-one.
+      const byDay = new Map<string, number>();
+      for (const sample of result.aggregatedData ?? []) {
+        const at = new Date(sample.startDate);
+        if (Number.isNaN(at.getTime())) continue;
+        const key = localDayKey(at);
+        byDay.set(key, (byDay.get(key) ?? 0) + Math.max(0, Math.round(sample.value || 0)));
+      }
+
+      return [...byDay.entries()]
+        .map(([date, steps]) => ({ date, steps }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+    } catch (e) {
+      console.error('Failed to query steps from Capacitor:', e);
       return [];
     }
   }

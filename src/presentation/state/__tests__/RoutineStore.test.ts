@@ -127,3 +127,119 @@ describe('Zustand Store — Routine Integration', () => {
     expect(saved).toHaveLength(0);
   });
 });
+
+describe('mergeRoutineIntoActiveSession', () => {
+  const routine = {
+    title: 'Empuje',
+    exercises: [
+      { exerciseId: '0025', exerciseName: 'Bench Press', targetSets: 4, targetReps: 10 },
+      { exerciseId: '0300', exerciseName: 'Overhead Press', targetSets: 3, targetReps: 8, notes: 'Slow' },
+    ],
+  };
+
+  beforeEach(() => {
+    useStore.setState({ activeSession: null });
+  });
+
+  const sessionWith = (
+    exercises: { exerciseName: string; targetSets: number }[],
+    sets: { exerciseName: string; setNumber: number; isCompleted: boolean }[] = [],
+  ) => {
+    useStore.setState({
+      activeSession: {
+        startTime: new Date(),
+        workoutType: 'Strength Training',
+        routineExercises: exercises.map((ex, i) => ({ id: `e${i}`, ...ex })),
+        sets: sets.map(s => ({ ...s, weight: 60, reps: 8 })),
+      },
+    });
+  };
+
+  it('does nothing without a session — that case belongs to startActiveSessionWithRoutine', () => {
+    expect(useStore.getState().mergeRoutineIntoActiveSession(routine, 'append')).toEqual({ added: 0, skipped: 0 });
+    expect(useStore.getState().activeSession).toBeNull();
+  });
+
+  it('appends without touching a single logged set', () => {
+    // The whole reason this action exists: starting a routine mid-session used to
+    // replace `activeSession` outright and take every logged set with it.
+    sessionWith([{ exerciseName: 'Squat', targetSets: 3 }], [
+      { exerciseName: 'Squat', setNumber: 1, isCompleted: true },
+    ]);
+
+    const result = useStore.getState().mergeRoutineIntoActiveSession(routine, 'append');
+
+    expect(result).toEqual({ added: 2, skipped: 0 });
+    const session = useStore.getState().activeSession;
+    expect(session?.routineExercises?.map(e => e.exerciseName))
+      .toEqual(['Squat', 'Bench Press', 'Overhead Press']);
+    expect(session?.sets).toHaveLength(1);
+    expect(session?.workoutType).toBe('Strength Training');
+  });
+
+  it('carries the routine\'s reps and notes across, which addActiveSessionExercise cannot', () => {
+    sessionWith([{ exerciseName: 'Squat', targetSets: 3 }]);
+    useStore.getState().mergeRoutineIntoActiveSession(routine, 'append');
+
+    const added = useStore.getState().activeSession?.routineExercises?.[2];
+    expect(added).toMatchObject({ exerciseName: 'Overhead Press', targetSets: 3, targetReps: 8, notes: 'Slow' });
+  });
+
+  it('skips exercises already in the session rather than duplicating them', () => {
+    // Sets are keyed by exercise name, so two rows sharing a name share their sets.
+    sessionWith([{ exerciseName: '  bench   press ', targetSets: 3 }]);
+
+    const result = useStore.getState().mergeRoutineIntoActiveSession(routine, 'append');
+
+    expect(result).toEqual({ added: 1, skipped: 1 });
+    expect(useStore.getState().activeSession?.routineExercises).toHaveLength(2);
+  });
+
+  it('replacePending keeps what was logged and drops the untouched plan', () => {
+    sessionWith(
+      [
+        { exerciseName: 'Squat', targetSets: 3 },
+        { exerciseName: 'Leg Curl', targetSets: 3 },
+      ],
+      [
+        { exerciseName: 'Squat', setNumber: 1, isCompleted: true },
+        // Nudging the dial writes a row without completing it. No work, no reason to keep it.
+        { exerciseName: 'Leg Curl', setNumber: 1, isCompleted: false },
+      ],
+    );
+
+    const result = useStore.getState().mergeRoutineIntoActiveSession(routine, 'replacePending');
+
+    expect(result).toEqual({ added: 2, skipped: 0 });
+    const session = useStore.getState().activeSession;
+    expect(session?.routineExercises?.map(e => e.exerciseName))
+      .toEqual(['Squat', 'Bench Press', 'Overhead Press']);
+    expect(session?.sets.map(s => s.exerciseName)).toEqual(['Squat']);
+  });
+
+  it('takes the routine\'s name once nothing of the old session survives', () => {
+    sessionWith([{ exerciseName: 'Squat', targetSets: 3 }]);
+
+    useStore.getState().mergeRoutineIntoActiveSession(routine, 'replacePending');
+
+    expect(useStore.getState().activeSession?.workoutType).toBe('Empuje');
+    expect(useStore.getState().activeSession?.routineExercises).toHaveLength(2);
+  });
+
+  it('materialises a freestyle session\'s list before appending to it', () => {
+    // A freestyle session has no `routineExercises` — the list is implied by the
+    // logged sets. Skipping that step would wipe everything already logged.
+    useStore.setState({
+      activeSession: {
+        startTime: new Date(),
+        workoutType: 'Strength Training',
+        sets: [{ exerciseName: 'Deadlift', setNumber: 1, weight: 100, reps: 5, isCompleted: true }],
+      },
+    });
+
+    useStore.getState().mergeRoutineIntoActiveSession(routine, 'append');
+
+    expect(useStore.getState().activeSession?.routineExercises?.map(e => e.exerciseName))
+      .toEqual(['Deadlift', 'Bench Press', 'Overhead Press']);
+  });
+});

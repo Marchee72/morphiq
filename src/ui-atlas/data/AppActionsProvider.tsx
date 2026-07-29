@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useStore } from '../../presentation/state/store';
+import { latestRoutineIn } from '../components/useCoachThread';
 
 /**
  * Every callback both skins need, in one stable-identity object.
@@ -31,10 +32,33 @@ export const AppActionsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       useStore.getState().startActiveSession(type);
       useStore.getState().setActiveTab('train');
     },
+    beginSession: () => {
+      const store = useStore.getState();
+      // A sheet whose only option is "empty session" is a tap tax. It appears
+      // once there is something to choose between.
+      const hasChoices = store.savedRoutines.length > 0 || latestRoutineIn(store.chatHistory) !== null;
+      if (hasChoices) {
+        setUi({ overlay: 'startSession', payload: {} });
+        return;
+      }
+      store.startActiveSession();
+      store.setActiveTab('train');
+    },
     startRoutine: routine => {
-      useStore.getState().startActiveSessionWithRoutine(routine);
+      /**
+       * Every "start this routine" button in the app lands here, so this is the
+       * one place the guard has to exist. Starting a routine used to replace
+       * `activeSession` outright — sets and all — with no confirmation.
+       */
+      if (useStore.getState().activeSession) {
+        setUi({ overlay: 'routineMerge', payload: { routine } });
+        return;
+      }
+      useStore.getState().startActiveSessionWithRoutine(routine, routine.id ? 'template' : 'coach');
       useStore.getState().setActiveTab('train');
     },
+    applyRoutine: (routine, mode) =>
+      useStore.getState().mergeRoutineIntoActiveSession(routine, mode),
     finishSession: async () => {
       await useStore.getState().finishActiveSession();
       // Reload so the session that just ended appears in history and records.

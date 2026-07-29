@@ -27,7 +27,9 @@ describe('Train', () => {
 
   it('shows the gym hub when nothing is running', () => {
     renderScreen('train', { data: 'rich' });
-    expect(screen.getAllByRole('button', { name: /start an empty session/i }).length).toBeGreaterThan(0);
+    // The hero used to promise an empty session. It now opens the routine
+    // chooser when there is one to choose from, so the label is just "start".
+    expect(screen.getAllByRole('button', { name: /^(start|empezar|iniciar)$/i }).length).toBeGreaterThan(0);
   });
 
   it('shows the live session once one is running', () => {
@@ -325,6 +327,45 @@ describe('Train — what the lift is worth to you', () => {
     expect(facts).toMatch(/82[.,]5/);
   });
 
+  it('estimates the one-rep max from the best set, for a lift with history', () => {
+    // The rich fixture logs Barbell Bench Press at 82.5 × 8. Epley puts the
+    // single at 82.5 × (1 + 8/30) = 104.5, and that number — derived since the
+    // beginning — had nowhere to render until now.
+    renderScreen('train', { data: 'rich', session: {} });
+    const facts = document.querySelector('.at-facts')?.textContent ?? '';
+    expect(facts).toMatch(/≈\s*104[.,]5 kg 1RM/);
+  });
+
+  it('offers no estimate for a lift never done before', () => {
+    renderScreen('train', {
+      data: 'empty',
+      session: { exercises: [{ id: 'e1', exerciseName: 'Zercher Squat', targetSets: 3 }] },
+    });
+    expect(document.querySelector('.at-fact-sub')).toBeNull();
+  });
+
+  it('does not restate a true single as its own estimate', () => {
+    // Best set of one rep means the estimate *is* the weight; printing
+    // "100 kg × 1" above "≈100 kg 1RM" is the same fact twice.
+    renderScreen('train', {
+      data: 'empty',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Deadlift', targetSets: 3 }],
+        sets: [],
+      },
+      overrides: {
+        allSets: [{
+          id: 's1', workoutLogId: 'w9', profileId: 'p1', exerciseName: 'Deadlift',
+          setNumber: 1, weight: 100, reps: 1, isCompleted: true,
+          timestamp: new Date(Date.now() - 86_400_000),
+        }],
+      },
+    });
+
+    expect(document.querySelector('.at-facts')?.textContent).toMatch(/100 kg × 1/);
+    expect(document.querySelector('.at-fact-sub')).toBeNull();
+  });
+
   it('says so plainly when there is no record rather than showing a zero', () => {
     renderScreen('train', {
       data: 'empty',
@@ -538,7 +579,7 @@ describe('Train — where the cursor lands', () => {
     expect(dials[1].querySelector('.at-dial-value')?.textContent).toMatch(/^6$/);
   });
 
-  it('sends a finished set to the list to be corrected, not back to the wheels', async () => {
+  it('shows a finished set back read-only, with no way to type into it', async () => {
     renderScreen('train', {
       data: 'rich',
       session: {
@@ -547,12 +588,94 @@ describe('Train — where the cursor lands', () => {
     });
 
     const pills = document.querySelector('.at-setpills') as HTMLElement;
-    fireEvent.click(within(pills).getByRole('button', { name: /edit set 1/i }));
+    fireEvent.click(within(pills).getByRole('button', { name: /see set 1/i }));
 
-    // The row opens for editing...
-    await waitFor(() => expect(screen.getByLabelText('Weight 1')).toBeInTheDocument());
-    // ...and the wheels stay on the set you have yet to do.
+    // The numbers come back...
+    const view = await waitFor(() => document.querySelector('.at-setview') as HTMLElement);
+    expect(view.textContent).toMatch(/80 kg/);
+    // ...with nothing to type into, and the wheels gone rather than pointed at
+    // a set that is already in the book.
+    expect(within(view).queryAllByRole('textbox')).toHaveLength(0);
+    expect(document.querySelectorAll('.at-dial')).toHaveLength(0);
+    expect(screen.queryByLabelText('Weight 1')).toBeNull();
+  });
+
+  it('leaves the set list as the one place a logged set is corrected', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    // Same set, reached from the list rather than the pill: still editable.
+    const row = document.querySelectorAll('.at-setrow')[0] as HTMLElement;
+    fireEvent.click(within(row).getByRole('button', { name: /edit set 1/i }));
+
+    const weight = await waitFor(() => screen.getByLabelText('Weight 1'));
+    fireEvent.change(weight, { target: { value: '85' } });
+    fireEvent.keyDown(weight, { key: 'Enter' });
+
+    await waitFor(() => {
+      const sets = useStore.getState().activeSession?.sets ?? [];
+      expect(sets.find(s => s.setNumber === 1)?.weight).toBe(85);
+    });
+  });
+
+  it('goes back to the set you were on when the read-only view is dismissed', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    const pills = document.querySelector('.at-setpills') as HTMLElement;
+    fireEvent.click(within(pills).getByRole('button', { name: /see set 1/i }));
+    await waitFor(() => expect(document.querySelector('.at-setview')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /back to set 2/i }));
+    await waitFor(() => expect(document.querySelector('.at-setview')).toBeNull());
     expect(text()).toMatch(/Complete set 2/i);
+  });
+
+  it('locks a set further ahead than the next one still to log', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 4 }],
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    const pills = document.querySelector('.at-setpills') as HTMLElement;
+    // Set 2 is next, so 3 and 4 cannot be jumped to — logging set 4 with 2 and 3
+    // empty writes a session that never happened.
+    const locked = within(pills).getAllByRole('button', { name: /is locked/i });
+    expect(locked).toHaveLength(2);
+    for (const pill of locked) expect(pill).toBeDisabled();
+
+    fireEvent.click(locked[0]);
+    // The cursor did not move.
+    expect(text()).toMatch(/Complete set 2/i);
+  });
+
+  it('unlocks the next set as soon as the one before it goes in', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 4 }],
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    const pills = () => document.querySelector('.at-setpills') as HTMLElement;
+    expect(within(pills()).getAllByRole('button', { name: /is locked/i })).toHaveLength(2);
+
+    fireEvent.click(logButton());
+    // Set 2 logged, so 3 is now the next one and only 4 stays locked.
+    await waitFor(() =>
+      expect(within(pills()).getAllByRole('button', { name: /is locked/i })).toHaveLength(1));
   });
 });
 

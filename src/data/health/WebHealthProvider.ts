@@ -24,15 +24,15 @@ export class WebHealthProvider implements IHealthProvider {
     return false;
   }
 
+  /**
+   * Empty, not sample data.
+   *
+   * This used to answer with six hardcoded days ending 22 Jul 2026. Nothing read
+   * it, so nothing showed — but Today now puts steps on screen, and a browser
+   * has no pedometer. An honest blank is the only right answer here.
+   */
   async getDailySteps(_since: Date): Promise<{ date: string; steps: number }[]> {
-    return [
-      { date: '2026-07-22', steps: 8420 },
-      { date: '2026-07-21', steps: 10150 },
-      { date: '2026-07-20', steps: 9430 },
-      { date: '2026-07-19', steps: 11200 },
-      { date: '2026-07-18', steps: 8800 },
-      { date: '2026-07-17', steps: 10500 },
-    ];
+    return [];
   }
 
   async getStepStreak(stepGoal = 8000): Promise<{ currentSteps: number; targetGoal: number; streakDays: number; daysMetThisMonth: number; totalDaysInMonth: number }> {

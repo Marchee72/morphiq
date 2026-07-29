@@ -314,6 +314,97 @@
   line-height: 1.35;
 }
 
+/* ---------- today: what you have trained ----------
+   Sits between the hero and the rail. The hero says what is running; this says
+   what the day has actually contained, which survives the session ending. */
+
+.at-todaytrain {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+}
+
+.at-todaytrain-head { display: flex; align-items: center; gap: 12px; }
+
+.at-todaytrain-icon {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--at-tonal);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Trained is the state worth colouring. Not-trained is not a failure — it is
+   most of every morning — so it stays neutral rather than going red. */
+.at-todaytrain[data-trained='true'] .at-todaytrain-icon { background: var(--clay); color: var(--at-on-clay); }
+
+.at-todaytrain-head small {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.at-todaytrain-head b {
+  display: block;
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+}
+
+.at-todaytrain-list {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.at-todaytrain-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px 0 2px;
+  border-top: 1px solid var(--hair);
+}
+
+.at-todaytrain-stats b {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.at-todaytrain-stats small { font-size: 10.5px; color: var(--muted); }
+
+.at-todaytrain-pr {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--clay);
+}
+
+.at-todaytrain-focus {
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: var(--at-tonal-soft);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 /* ---------- coach note ---------- */
 
 .at-note {
@@ -627,6 +718,20 @@
 
 .at-fact b i { font-style: normal; font-size: 10px; font-weight: 500; color: var(--muted); margin-left: 2px; }
 
+/* The estimated one-rep max, under the set it is estimated from. Quieter than
+   the figure above it: it is a derived number, not something you lifted. */
+.at-fact-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--clay);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .at-setpills { display: flex; justify-content: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; padding: 0 18px; }
 
 .at-setpill {
@@ -646,6 +751,57 @@
 /* A set that beat your previous best. `isPr` has been computed since the derive
    layer was written and had nowhere to show. */
 .at-setpill[data-pr='true'] { background: var(--clay); border-color: var(--clay); color: var(--sand); }
+
+/* A set further ahead than the next one. Faded and dashed rather than hidden:
+   the session still has that many sets in it, you just cannot skip to them. */
+.at-setpill[data-locked='true'] {
+  border-style: dashed;
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- a logged set, read back ----------
+   Occupies the dials' place while a finished set pill is selected. Deliberately
+   has no input in it: this is the looking screen, the set list is the editing one. */
+
+.at-setview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  padding: 18px;
+}
+
+.at-setview small {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.at-setview b {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.at-setview-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--clay);
+  color: var(--at-on-clay);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.at-setview p { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
 
 .at-wells { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 18px; }
 
@@ -1987,6 +2143,15 @@ button.at-routine-item { cursor: pointer; }
 
 .at-history-dayhead span { font-size: 11px; font-weight: 600; color: var(--muted); }
 
+/* What the session contained, under what it was called. One line — a session
+   with nine exercises must not push the next row off the screen. */
+.at-history-exercises {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
 /* The native picker's own indicator is the only affordance the input has, and it
    is invisible against the card in dark mode. */
 .at-searchpill input[type='date'] { color-scheme: light dark; }
@@ -2039,6 +2204,109 @@ button.at-routine-item { cursor: pointer; }
 .at-error { padding-top: 40px; }
 
 /* ---------- splash ---------- */
+
+/* ---------- install offer ---------- */
+
+.at-install-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  counter-reset: step;
+}
+
+.at-install-steps span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border-radius: 13px;
+  background: var(--at-tonal-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.at-install-steps span::before {
+  counter-increment: step;
+  content: counter(step);
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--cocoa);
+  color: var(--sand);
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- sign-in wall ----------
+   Full-bleed like the splash it replaces, and scrollable, because the offline
+   variant is taller than a short landscape viewport. */
+
+.at-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  overflow-y: auto;
+  background: var(--sand);
+  color: var(--cocoa);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 22px;
+}
+
+.at-gate-inner {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.at-gate-word { margin-bottom: 10px; }
+.at-gate-word h1 { font-size: 27px; font-weight: 600; letter-spacing: -0.03em; margin: 8px 0 0; }
+
+.at-gate-word span {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.at-gate-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  background: var(--at-tonal);
+  color: var(--clay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.at-gate-icon[data-warn='true'] { color: var(--muted); }
+
+.at-gate h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; margin: 0; }
+
+.at-gate p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 32ch;
+}
+
+.at-gate .at-google, .at-gate .at-btn { margin-top: 8px; }
+
+.at-gate-note { font-size: 11.5px; opacity: 0.85; }
 
 .at-splash {
   position: fixed;

@@ -7,7 +7,8 @@ import type { ExerciseSessionVM } from '../derive/exerciseHistory';
 import type { SessionDetailVM } from '../derive/sessionDetail';
 import type {
   BodyVM, CatalogItemVM, HistoryEntryVM, MuscleLoadVM, NutritionVM, PrRecordVM,
-  ProfileVM, ScreenId, SessionCursor, SessionExerciseVM, SessionTotalsVM, SessionVM, StreakVM,
+  ProfileVM, ScreenId, SessionCursor, SessionExerciseVM, SessionTotalsVM, SessionVM,
+  StepsVM, StreakVM, TodayTrainingVM,
 } from '../types';
 
 export interface CatalogSlice {
@@ -36,6 +37,8 @@ export interface AppData {
   cursor: SessionCursor;
   training: {
     history: HistoryEntryVM[];
+    /** What today has contained so far, and what the last session was if nothing has. */
+    today: TodayTrainingVM;
     records: PrRecordVM[];
     muscleLoad: MuscleLoadVM;
     streak: StreakVM;
@@ -44,6 +47,8 @@ export interface AppData {
     routines: RoutineTemplate[];
   };
   nutrition: NutritionVM;
+  /** Steps from the phone's health source. Empty on the web, which has none. */
+  steps: StepsVM;
   catalog: CatalogSlice;
   coach: { thread: Message[]; isLoading: boolean };
   /**
@@ -63,7 +68,8 @@ export interface AppData {
 /** Overlays the shell can open. Any screen can request one. */
 export type OverlayId =
   | 'settings' | 'logWeight' | 'addFood' | 'exercisePicker'
-  | 'dayNote' | 'sessionEditor' | 'quickAdd' | 'history';
+  | 'dayNote' | 'sessionEditor' | 'quickAdd' | 'history'
+  | 'startSession' | 'routineMerge';
 
 /**
  * What an overlay is being opened *for*.
@@ -72,9 +78,14 @@ export type OverlayId =
  * exercise at a given index — and the picker itself sits in the shell, far from
  * the row whose swap button was pressed. Without this the shell can only guess,
  * which is why swapping used to append instead.
+ *
+ * `routine` travels the same way and for the same reason: the merge sheet is
+ * mounted in the shell, and the routine that raised it was tapped on the Coach
+ * screen or inside another sheet.
  */
 export interface OverlayPayload {
   swapIndex?: number;
+  routine?: RoutineTemplate;
 }
 
 export interface AppActions {
@@ -83,7 +94,20 @@ export interface AppActions {
   closeOverlay(): void;
 
   startSession(type?: string): void;
+  /**
+   * The front door to training: offers the saved routines when there are any,
+   * and otherwise starts empty rather than making you dismiss a sheet with one
+   * option in it.
+   */
+  beginSession(): void;
+  /**
+   * Starts the routine — or, when a session is already running, opens the merge
+   * sheet instead of overwriting it. Every "start this routine" button in the app
+   * goes through here, which is what makes that guard universal.
+   */
   startRoutine(routine: RoutineTemplate): void;
+  /** Folds a routine into the running session. Returns what changed. */
+  applyRoutine(routine: RoutineTemplate, mode: 'append' | 'replacePending'): { added: number; skipped: number };
   finishSession(): Promise<void>;
   discardSession(): void;
 
