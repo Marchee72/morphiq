@@ -8,8 +8,9 @@ import { dirname, join } from 'path';
 import {
   authRequired, authenticate, verifyGoogleToken, upsertUser, issueSession,
   adoptOrphanProfiles, guardProfile, guardBodyProfile, guardQueryProfile,
-  guardRow, guardWorkoutSets,
+  guardRow, guardWorkoutSets, requireUser,
 } from './auth.js';
+import { socialRoutes } from './social.js';
 
 const { Pool } = pg;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -188,6 +189,11 @@ app.use('/api/profiles/:profileId', guardProfile(pool));
 /** Writes whose profile is named in the body. */
 const ownBody = guardBodyProfile(pool);
 
+// The only routes where one account can see anything belonging to another, so
+// they are closed to anonymous callers whatever `AUTH_REQUIRED` says — the
+// staged rollout has no older client to protect here.
+app.use('/api/social', requireUser, socialRoutes(pool));
+
 // ─── Helper: parse numeric nulls from pg ─────────────────────────────────────
 const num = (v) => (v != null ? parseFloat(v) : undefined);
 
@@ -219,9 +225,13 @@ app.post('/api/profiles', async (req, res) => {
   const p = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO user_profiles (name, gender, "birthDate", height, "targetWeight", "targetBodyFat", "createdAt", "trainingProfile", user_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [p.name, p.gender, p.birthDate, p.height, p.targetWeight, p.targetBodyFat, p.createdAt || new Date(), p.trainingProfile, req.user?.id ?? null]
+      `INSERT INTO user_profiles (name, gender, "birthDate", height, "targetWeight", "targetBodyFat", "createdAt", "trainingProfile", user_id,
+                                 "targetCalories", "targetProtein", "weeklyWorkoutGoalDays", "availableEquipment", "sharePresence")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [p.name, p.gender, p.birthDate, p.height, p.targetWeight, p.targetBodyFat, p.createdAt || new Date(), p.trainingProfile, req.user?.id ?? null,
+       p.targetCalories, p.targetProtein, p.weeklyWorkoutGoalDays,
+       p.availableEquipment ? JSON.stringify(p.availableEquipment) : null,
+       p.sharePresence ?? true]
     );
     const r = rows[0];
     res.status(201).json({ ...r, id: r.id.toString(), height: num(r.height) });
@@ -232,9 +242,16 @@ app.put('/api/profiles/:id', async (req, res) => {
   const p = req.body;
   try {
     const { rows } = await pool.query(
-      `UPDATE user_profiles SET name=$1, gender=$2, "birthDate"=$3, height=$4, "targetWeight"=$5, "targetBodyFat"=$6, "trainingProfile"=$7
+      // Every column the client can edit has to be named here. Four of them were
+      // missing until now, so equipment and the weekly goal were silently
+      // discarded on every save in server mode — see migration 003.
+      `UPDATE user_profiles SET name=$1, gender=$2, "birthDate"=$3, height=$4, "targetWeight"=$5, "targetBodyFat"=$6, "trainingProfile"=$7,
+              "targetCalories"=$9, "targetProtein"=$10, "weeklyWorkoutGoalDays"=$11, "availableEquipment"=$12, "sharePresence"=$13
        WHERE id=$8 AND (is_deleted = false OR is_deleted IS NULL) RETURNING *`,
-      [p.name, p.gender, p.birthDate, p.height, p.targetWeight, p.targetBodyFat, p.trainingProfile, req.params.id]
+      [p.name, p.gender, p.birthDate, p.height, p.targetWeight, p.targetBodyFat, p.trainingProfile, req.params.id,
+       p.targetCalories, p.targetProtein, p.weeklyWorkoutGoalDays,
+       p.availableEquipment ? JSON.stringify(p.availableEquipment) : null,
+       p.sharePresence ?? true]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     const r = rows[0];

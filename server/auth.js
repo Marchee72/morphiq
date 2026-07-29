@@ -236,6 +236,133 @@ export function guardRow(pool, table, param = 'id') {
   };
 }
 
+// ─── Social ──────────────────────────────────────────────────────────────────
+//
+// Everything above answers one question: "is this row yours?". The social
+// routes need a second one — "is this row shared with you?" — and they must
+// answer it without inheriting the rollout concession baked into `owns()`.
+//
+// That concession is the whole reason these live apart. `owns()` returns true
+// when nobody is signed in, so that the app already on the phone keeps working
+// until `AUTH_REQUIRED` goes on. On single-owner data that is harmless: an
+// anonymous caller sees rows that were already unowned. On a friendship it
+// would mean an anonymous request reads a conversation between two people.
+
+/**
+ * Closes a route to anonymous callers, whatever `AUTH_REQUIRED` says.
+ *
+ * The staged rollout does not apply here: none of this existed before accounts
+ * did, so there is no older client to keep serving.
+ */
+export function requireUser(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Authentication required' });
+  next();
+}
+
+/** `owns`, without the branch that lets an anonymous request through. */
+export async function ownsStrict(pool, req, profileId) {
+  const owned = await ownedProfileIds(pool, req);
+  if (owned === null) return false;
+  return owned.includes(String(profileId));
+}
+
+/**
+ * Guard for social routes that name the acting profile in the body or query.
+ *
+ * Unlike `guardBodyProfile`, a missing profile is refused rather than left to
+ * the handler: every social route acts *as* one of your profiles, and one that
+ * does not say which cannot be authorised at all.
+ */
+export function guardActingProfile(pool) {
+  return async (req, res, next) => {
+    const requested = req.body?.profileId ?? req.query?.profileId;
+    if (requested == null) return res.status(400).json({ error: 'Missing profileId' });
+    if (!(await ownsStrict(pool, req, requested))) return res.status(403).json(DENIED);
+    next();
+  };
+}
+
+/**
+ * Guard for routes addressing one friendship, resolved through the link row.
+ *
+ * Attaches `req.link = { id, mine, theirs }` so handlers never re-derive which
+ * side of the row the caller is standing on — getting that backwards would send
+ * a message signed as the other person.
+ *
+ * Two deliberate differences from `guardRow`:
+ *
+ * A link that does not exist answers **404, not pass-through**. `guardRow` lets
+ * a missing row past because there is nothing to leak and refusing would break
+ * an idempotent DELETE. Here the existence of link 431 is itself a fact about
+ * two other people, and walking the id space to collect 403s would map out who
+ * is connected to whom.
+ *
+ * A blocked link answers 403 from **either** side. Blocking is not one-way
+ * silence: the person who blocked stops being visible too, or "block" would
+ * only mean "stop hearing from them" while still broadcasting to them.
+ */
+export function guardBuddyLink(pool, param = 'linkId') {
+  return async (req, res, next) => {
+    const id = String(req.params[param] ?? '');
+    // Ids are SERIAL; a non-numeric one cannot name a row, and handing it to
+    // Postgres raises an invalid-input error instead of matching nothing.
+    if (!/^\d+$/.test(id)) return res.status(404).json({ error: 'No such link' });
+
+    const { rows } = await pool.query('SELECT * FROM buddy_links WHERE id = $1', [id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'No such link' });
+
+    const link = rows[0];
+    const owned = await ownedProfileIds(pool, req);
+    if (owned === null) return res.status(403).json(DENIED);
+
+    const onA = owned.includes(String(link.profileIdA));
+    const onB = owned.includes(String(link.profileIdB));
+    if (!onA && !onB) return res.status(403).json(DENIED);
+    if (link.blockedByProfileId != null) return res.status(403).json(DENIED);
+
+    req.link = {
+      id: String(link.id),
+      mine: String(onA ? link.profileIdA : link.profileIdB),
+      theirs: String(onA ? link.profileIdB : link.profileIdA),
+    };
+    next();
+  };
+}
+
+/**
+ * The profiles the caller may legitimately *observe*: their own, plus the ones
+ * on the other end of an active friendship.
+ *
+ * Deliberately wider than `ownedProfileIds` and deliberately not a replacement
+ * for it — this set may read presence, and nothing else. Every route that reads
+ * training data keeps using the narrow one.
+ *
+ * Memoised on the request for the same reason: several handlers can ask, and
+ * the answer cannot change mid-request.
+ */
+export async function visibleProfileIds(pool, req) {
+  const owned = await ownedProfileIds(pool, req);
+  if (owned === null) return [];
+  if (!req._visibleProfileIds) {
+    req._visibleProfileIds = pool
+      .query(
+        `SELECT "profileIdA", "profileIdB" FROM buddy_links
+          WHERE ("profileIdA" = ANY($1) OR "profileIdB" = ANY($1))
+            AND "blockedByProfileId" IS NULL`,
+        [owned],
+      )
+      .then(({ rows }) => {
+        const seen = new Set(owned);
+        for (const row of rows) {
+          seen.add(String(row.profileIdA));
+          seen.add(String(row.profileIdB));
+        }
+        return [...seen];
+      });
+  }
+  return req._visibleProfileIds;
+}
+
 /**
  * Guard for the two routes keyed by `workoutLogId`.
  *

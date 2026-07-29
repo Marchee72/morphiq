@@ -2207,6 +2207,95 @@ button.at-routine-item { cursor: pointer; }
 
 /* ---------- install offer ---------- */
 
+.at-top-banner {
+  flex-shrink: 0;
+  background: var(--at-surface-raised, #25201b);
+  border-bottom: 1px solid var(--at-border, rgba(255, 255, 255, 0.08));
+  padding: 10px 16px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: at-slide-down 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes at-slide-down {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.at-top-banner-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.at-top-banner-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--cocoa, #ff6b35);
+  color: var(--sand, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.at-top-banner-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.at-top-banner-text b {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.at-top-banner-text small {
+  font-size: 11px;
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.at-btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+  height: 32px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.at-round-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.at-round-sm:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.at-top-banner-ios {
+  padding-top: 6px;
+  border-top: 1px dashed var(--at-border, rgba(255, 255, 255, 0.1));
+}
+
 .at-install-steps {
   display: flex;
   flex-direction: column;

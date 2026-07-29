@@ -1,6 +1,8 @@
+import type { BuddyInvite, BuddyLink } from '../../core/entities/Buddy';
 import type { Exercise } from '../../core/entities/Exercise';
 import type { Message } from '../../core/entities/Message';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
+import type { BuddyRowVM } from '../derive/social';
 import type { ExerciseFilters, FacetCounts } from '../../data/exercises/ExerciseCatalog';
 import type { WeeklyStatsVM } from '../derive/history';
 import type { ExerciseSessionVM } from '../derive/exerciseHistory';
@@ -65,11 +67,39 @@ export interface AppData {
   sessionDetail(workoutLogId: string): SessionDetailVM | null;
 }
 
+/**
+ * Training partners.
+ *
+ * Its own context rather than a slice of `AppData`: everything above is derived
+ * once per mount, and this is the one part of the app that changes on its own
+ * while nobody touches the screen.
+ *
+ * `available` is false whenever a friendship cannot exist — local mode has no
+ * server to be social against, and a signed-out session gets 401 from every
+ * social route. Entry points render nothing rather than offering a dead control.
+ */
+export interface SocialState {
+  available: boolean;
+  ready: boolean;
+  links: BuddyLink[];
+  invite: BuddyInvite | null;
+  error: string | null;
+  /** The partner list as rows, buddies first and blocked ones last. */
+  rows: BuddyRowVM[];
+
+  refresh(): Promise<void>;
+  createInvite(): Promise<void>;
+  revokeInvite(): Promise<void>;
+  redeemInvite(code: string): Promise<void>;
+  removeBuddy(linkId: string): Promise<void>;
+  setBlocked(linkId: string, blocked: boolean): Promise<void>;
+}
+
 /** Overlays the shell can open. Any screen can request one. */
 export type OverlayId =
   | 'settings' | 'logWeight' | 'addFood' | 'exercisePicker'
   | 'dayNote' | 'sessionEditor' | 'quickAdd' | 'history'
-  | 'startSession' | 'routineMerge';
+  | 'startSession' | 'routineMerge' | 'buddies';
 
 /**
  * What an overlay is being opened *for*.
@@ -86,6 +116,10 @@ export type OverlayId =
 export interface OverlayPayload {
   swapIndex?: number;
   routine?: RoutineTemplate;
+  /** Opens the partners overlay straight onto one friendship. */
+  buddyLinkId?: string;
+  /** A code arriving from an invite link, so redeeming needs no typing. */
+  buddyCode?: string;
 }
 
 export interface AppActions {

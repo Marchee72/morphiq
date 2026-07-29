@@ -1,0 +1,295 @@
+import { describe, expect, it, vi } from 'vitest';
+import { socialRoutes } from '../social.js';
+
+/**
+ * Redemption: the one route here that a stranger can reach with a guess.
+ *
+ * The guards in `ownership.test.js` decide who may touch an existing
+ * friendship. These decide who may *create* one, which is a different question
+ * and the one an invite code exists to answer. Each case below is either a way
+ * to spend somebody's code without becoming their partner, or a way to learn
+ * something about codes you do not have.
+ *
+ * The router is driven directly rather than over HTTP: what is worth pinning is
+ * the decision and the order the checks run in, not Express's routing.
+ */
+
+/** A pool that answers each query from the first matching pattern. */
+function fakePool(answers) {
+  return {
+    query: vi.fn(async (sql, params) => {
+      for (const [pattern, rows] of answers) {
+        if (sql.includes(pattern)) {
+          return { rows: typeof rows === 'function' ? rows(params) : rows };
+        }
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    }),
+  };
+}
+
+const OWNS_1_AND_2 = ['FROM user_profiles WHERE user_id', [{ id: 1 }, { id: 2 }]];
+const NO_ATTEMPTS = ['FROM social_attempts', [{ n: 0 }]];
+const RECORD_ATTEMPT = ['INSERT INTO social_attempts', []];
+const NO_BUDDIES = ['COUNT(*)::int AS n FROM buddy_links', [{ n: 0 }]];
+const NO_EXISTING_LINK = ['FROM buddy_links l', []];
+
+const HOUR = 3600_000;
+
+/** An invitation minted by user 42, whose profile is 9. */
+function invite(over = {}) {
+  return ['FROM buddy_invites WHERE code', [{
+    id: 1,
+    code: 'ABCD2345',
+    inviterUserId: 42,
+    inviterProfileId: '9',
+    expiresAt: new Date(Date.now() + HOUR),
+    redeemedAt: null,
+    revokedAt: null,
+    ...over,
+  }]];
+}
+
+/** Drives one request through the router and reports what came back. */
+function call(pool, { method, url, body = {}, query = {}, user = { id: 7 } }) {
+  const router = socialRoutes(pool);
+  return new Promise((resolve, reject) => {
+    const req = { method, url, body, query, user, headers: {} };
+    const res = {
+      statusCode: 200,
+      status(code) { res.statusCode = code; return res; },
+      json(payload) { resolve({ status: res.statusCode, body: payload }); return res; },
+      end() { resolve({ status: res.statusCode, body: undefined }); return res; },
+    };
+    router(req, res, err => (err ? reject(err) : resolve({ status: 404, body: null })));
+  });
+}
+
+const redeem = (pool, over = {}) => call(pool, {
+  method: 'POST', url: '/invites/ABCD2345/redeem', body: { profileId: '1' }, ...over,
+});
+
+describe('POST /invites/:code/redeem', () => {
+  it('creates the friendship with the pair in canonical order', async () => {
+    const created = {
+      id: 5, profileIdA: '1', profileIdB: '9', createdAt: new Date(),
+      blockedByProfileId: null, buddyName: 'Ana',
+    };
+    let inserted = null;
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      NO_ATTEMPTS,
+      RECORD_ATTEMPT,
+      invite(),
+      ['UPDATE buddy_invites', [{ code: 'ABCD2345' }]],
+      ['INSERT INTO buddy_links', params => { inserted = params; return []; }],
+      NO_BUDDIES,
+      // First call finds nothing, the read-back after the insert finds the row.
+      ['FROM buddy_links l', () => (inserted ? [created] : [])],
+    ]);
+
+    const result = await redeem(pool);
+
+    expect(result.status).toBe(201);
+    expect(result.body.buddyProfileId).toBe('9');
+    expect(result.body.buddyName).toBe('Ana');
+    // 1 before 9 whichever way round the two people arrived.
+    expect(inserted.slice(0, 2)).toEqual(['1', '9']);
+  });
+
+  it('refuses your own code', async () => {
+    // Not an attack, just the obvious mistake — and on an account with two
+    // profiles it would otherwise befriend you to yourself.
+    const pool = fakePool([
+      OWNS_1_AND_2, NO_ATTEMPTS, RECORD_ATTEMPT,
+      invite({ inviterUserId: 7 }),
+    ]);
+    expect((await redeem(pool)).status).toBe(400);
+  });
+
+  it('does not spend the code on a request it is going to refuse', async () => {
+    // Claiming is what burns a code. Refusing after the claim would leave the
+    // inviter's code spent on a friendship that never happened.
+    const pool = fakePool([
+      OWNS_1_AND_2, NO_ATTEMPTS, RECORD_ATTEMPT,
+      invite({ inviterUserId: 7 }),
+    ]);
+    await redeem(pool);
+    const claimed = pool.query.mock.calls.some(([sql]) => sql.includes('UPDATE buddy_invites'));
+    expect(claimed).toBe(false);
+  });
+
+  it('answers an expired code exactly as it answers an unknown one', async () => {
+    // Telling the two apart tells someone guessing which guesses were real
+    // codes, which is the only thing that makes guessing worth doing.
+    const expired = fakePool([
+      OWNS_1_AND_2, NO_ATTEMPTS, RECORD_ATTEMPT,
+      invite({ expiresAt: new Date(Date.now() - HOUR) }),
+    ]);
+    const unknown = fakePool([
+      OWNS_1_AND_2, NO_ATTEMPTS, RECORD_ATTEMPT,
+      ['FROM buddy_invites WHERE code', []],
+    ]);
+
+    expect(await redeem(expired)).toEqual(await redeem(unknown));
+    expect((await redeem(expired)).status).toBe(404);
+  });
+
+  it('refuses a code somebody already used', async () => {
+    const pool = fakePool([
+      OWNS_1_AND_2, NO_ATTEMPTS, RECORD_ATTEMPT,
+      invite({ redeemedAt: new Date() }),
+    ]);
+    expect((await redeem(pool)).status).toBe(404);
+  });
+
+  it('refuses a code that was withdrawn', async () => {
+    const pool = fakePool([
+      OWNS_1_AND_2, NO_ATTEMPTS, RECORD_ATTEMPT,
+      invite({ revokedAt: new Date() }),
+    ]);
+    expect((await redeem(pool)).status).toBe(404);
+  });
+
+  it('stops after too many tries in an hour', async () => {
+    // Guessing is impractical at 6.6e11 codes; this is what stops trying anyway.
+    // Counted in a table because two serverless invocations share no memory.
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['FROM social_attempts', [{ n: 10 }]],
+    ]);
+    expect((await redeem(pool)).status).toBe(429);
+  });
+
+  it('is idempotent when the two are already partners', async () => {
+    const existing = {
+      id: 5, profileIdA: '1', profileIdB: '9', createdAt: new Date(),
+      blockedByProfileId: null, buddyName: 'Ana',
+    };
+    const pool = fakePool([
+      OWNS_1_AND_2, NO_ATTEMPTS, RECORD_ATTEMPT,
+      invite(),
+      ['FROM buddy_links l', [existing]],
+    ]);
+
+    const result = await redeem(pool);
+
+    expect(result.status).toBe(200);
+    expect(result.body.id).toBe('5');
+  });
+
+  it('refuses to act as a profile that is not yours', async () => {
+    const pool = fakePool([OWNS_1_AND_2]);
+    const result = await redeem(pool, { body: { profileId: '9' } });
+    expect(result.status).toBe(403);
+  });
+});
+
+describe('POST /invites', () => {
+  it('withdraws the previous code before minting a new one', async () => {
+    // Otherwise "generate a new one" — which people press precisely because
+    // they want the old code dead — leaves it alive until it expires.
+    const order = [];
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      NO_BUDDIES,
+      ['UPDATE buddy_invites SET "revokedAt"', () => { order.push('revoke'); return []; }],
+      ['INSERT INTO buddy_invites', () => {
+        order.push('mint');
+        return [{ code: 'WXYZ6789', createdAt: new Date(), expiresAt: new Date() }];
+      }],
+    ]);
+
+    const result = await call(pool, { method: 'POST', url: '/invites', body: { profileId: '1' } });
+
+    expect(result.status).toBe(201);
+    expect(result.body.code).toBe('WXYZ6789');
+    expect(order).toEqual(['revoke', 'mint']);
+  });
+
+  it('never returns who the code belongs to', async () => {
+    // The code travels through WhatsApp; it must carry no account details.
+    const pool = fakePool([
+      OWNS_1_AND_2, NO_BUDDIES,
+      ['UPDATE buddy_invites SET "revokedAt"', []],
+      ['INSERT INTO buddy_invites', [{
+        code: 'WXYZ6789', createdAt: new Date(), expiresAt: new Date(),
+        inviterUserId: 7, inviterProfileId: '1',
+      }]],
+    ]);
+
+    const { body } = await call(pool, { method: 'POST', url: '/invites', body: { profileId: '1' } });
+
+    expect(Object.keys(body).sort()).toEqual(['code', 'createdAt', 'expiresAt']);
+  });
+
+  it('refuses once the partner ceiling is reached', async () => {
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['COUNT(*)::int AS n FROM buddy_links', [{ n: 20 }]],
+    ]);
+    const result = await call(pool, { method: 'POST', url: '/invites', body: { profileId: '1' } });
+    expect(result.status).toBe(409);
+  });
+});
+
+describe('GET /buddies', () => {
+  it('reports which side blocked, not merely that someone did', async () => {
+    // The UI offers "unblock" only to the person who blocked, so a single
+    // boolean would let the blocked side lift their own block.
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['FROM buddy_links l', [
+        { id: 5, profileIdA: '1', profileIdB: '9', createdAt: new Date(), blockedByProfileId: '1' },
+        { id: 6, profileIdA: '8', profileIdB: '1', createdAt: new Date(), blockedByProfileId: '8' },
+      ]],
+    ]);
+
+    const { body } = await call(pool, { method: 'GET', url: '/buddies', query: { profileId: '1' } });
+
+    expect(body[0]).toMatchObject({ buddyProfileId: '9', blockedByMe: true, blockedByThem: false });
+    expect(body[1]).toMatchObject({ buddyProfileId: '8', blockedByMe: false, blockedByThem: true });
+  });
+});
+
+describe('POST /buddies/:linkId/block', () => {
+  const link = over => ['SELECT * FROM buddy_links WHERE id', [{
+    id: 5, profileIdA: '1', profileIdB: '9', createdAt: new Date(),
+    blockedByProfileId: null, ...over,
+  }]];
+
+  it('lets the blocked side unblock nothing', async () => {
+    // Routed outside guardBuddyLink on purpose — that guard refuses an already
+    // blocked link, so unblocking through it would make every block permanent.
+    // Which means this route has to decide for itself who may lift one.
+    const pool = fakePool([OWNS_1_AND_2, link({ blockedByProfileId: '9' })]);
+    const result = await call(pool, {
+      method: 'POST', url: '/buddies/5/block', body: { profileId: '1', blocked: false },
+    });
+    expect(result.status).toBe(403);
+  });
+
+  it('lets the side that blocked lift it', async () => {
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      link({ blockedByProfileId: '1' }),
+      ['UPDATE buddy_links', [{
+        id: 5, profileIdA: '1', profileIdB: '9', createdAt: new Date(),
+        blockedByProfileId: null,
+      }]],
+    ]);
+    const result = await call(pool, {
+      method: 'POST', url: '/buddies/5/block', body: { profileId: '1', blocked: false },
+    });
+    expect(result.status).toBe(200);
+    expect(result.body.blockedByMe).toBe(false);
+  });
+
+  it("refuses to block on a friendship you are not part of", async () => {
+    const pool = fakePool([OWNS_1_AND_2, link({ profileIdA: '8', profileIdB: '9' })]);
+    const result = await call(pool, {
+      method: 'POST', url: '/buddies/5/block', body: { profileId: '1', blocked: true },
+    });
+    expect(result.status).toBe(403);
+  });
+});

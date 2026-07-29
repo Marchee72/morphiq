@@ -5,8 +5,10 @@ import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { Message } from '../../core/entities/Message';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import type { FavoriteExercise } from '../../core/entities/FavoriteExercise';
-import { authHeaders, clearSession } from '../auth/session';
-import { apiBaseUrl } from './mode';
+import { api } from './apiClient';
+// Re-exported so the name keeps its old home: callers catching a dead session
+// import it from here, and the move should not be their problem.
+export { UnauthorizedError } from './apiClient';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
 import type {
   IUserProfileRepository,
@@ -18,51 +20,6 @@ import type {
   IFavoriteExerciseRepository,
   IRoutineTemplateRepository,
 } from '../../core/interfaces/IDatabase';
-
-/**
- * Resolved centrally now — see `apiBaseUrl`.
- *
- * What stood here rewrote any `localhost` in the configured URL to a hardcoded
- * LAN address whenever the page was not itself on localhost. That was a
- * developer's convenience wired into the shipping client: served from anywhere
- * public, it pointed the app at a private IP on the visitor's network.
- */
-function getApiUrl(): string {
-  return apiBaseUrl();
-}
-
-export class UnauthorizedError extends Error {
-  constructor() { super('Session expired'); this.name = 'UnauthorizedError'; }
-}
-
-async function api<T>(path: string, options?: RequestInit): Promise<T> {
-  const baseUrl = getApiUrl();
-  const res = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    // Merged rather than spread over: `...options` used to sit after `headers`,
-    // so any caller passing its own headers would have dropped these.
-    headers: {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-      ...authHeaders(),
-      ...(options?.headers as Record<string, string> | undefined),
-    },
-  });
-
-  // A rejected session is not a normal failure: the app has to stop pretending
-  // it is signed in, or every subsequent call fails the same way.
-  if (res.status === 401) {
-    clearSession();
-    throw new UnauthorizedError();
-  }
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json() as T;
-}
 
 // Helpers to cast date strings from JSON responses back to Date objects
 function parseProfile(raw: Record<string, unknown>): UserProfile {

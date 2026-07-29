@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import {
   adoptOrphanProfiles, guardBodyProfile, guardProfile, guardQueryProfile,
   guardRow, guardWorkoutSets, ownedProfileIds,
+  guardActingProfile, guardBuddyLink, ownsStrict, requireUser, visibleProfileIds,
 } from '../auth.js';
 
 /**
@@ -191,6 +192,166 @@ describe('guardWorkoutSets', () => {
     const pool = fakePool([OWNS_1_AND_2, ['FROM workout_sets WHERE "workoutLogId"', []]]);
     const req = reqFor({ id: 7 }, { params: { workoutLogId: 'pending' } });
     expect((await run(guardWorkoutSets(pool), req)).passed).toBe(true);
+  });
+});
+
+// ─── Social ──────────────────────────────────────────────────────────────────
+//
+// The guards above are allowed to let an anonymous request through; these are
+// not. Everything below exists to pin that asymmetry, because it is the kind of
+// difference that looks like an inconsistency and gets "fixed" by someone
+// tidying up.
+
+describe('requireUser', () => {
+  it('refuses an anonymous request outright', async () => {
+    // The deliberate inverse of guardProfile's "stays out of the way while
+    // nobody is signed in". That concession exists so the app already on the
+    // phone keeps working until AUTH_REQUIRED goes on; none of the social
+    // routes predate accounts, so there is no older client to protect — and
+    // here it would mean an anonymous caller reading two people's friendship.
+    const result = await run(requireUser, reqFor(undefined));
+    expect(result.passed).toBe(false);
+    expect(result.status).toBe(401);
+  });
+
+  it('lets a signed-in request through', async () => {
+    expect((await run(requireUser, reqFor({ id: 7 }))).passed).toBe(true);
+  });
+});
+
+describe('ownsStrict', () => {
+  it('refuses when nobody is signed in, where owns() would allow', async () => {
+    const pool = fakePool([]);
+    expect(await ownsStrict(pool, reqFor(undefined), '9')).toBe(false);
+  });
+
+  it('allows a profile you own', async () => {
+    const pool = fakePool([OWNS_1_AND_2]);
+    expect(await ownsStrict(pool, reqFor({ id: 7 }), '1')).toBe(true);
+  });
+
+  it('compares as strings, so a numeric id is not a way past it', async () => {
+    const pool = fakePool([OWNS_1_AND_2]);
+    expect(await ownsStrict(pool, reqFor({ id: 7 }), 1)).toBe(true);
+  });
+});
+
+describe('guardActingProfile', () => {
+  it('refuses a request that does not say which profile is acting', async () => {
+    // Unlike guardBodyProfile, which leaves that to the handler: every social
+    // route acts *as* one of your profiles, so one that names none cannot be
+    // authorised at all.
+    const pool = fakePool([]);
+    const result = await run(guardActingProfile(pool), reqFor({ id: 7 }));
+    expect(result.status).toBe(400);
+  });
+
+  it("refuses acting as somebody else's profile", async () => {
+    const pool = fakePool([OWNS_1_AND_2]);
+    const req = reqFor({ id: 7 }, { body: { profileId: '9' } });
+    expect((await run(guardActingProfile(pool), req)).status).toBe(403);
+  });
+
+  it('reads the profile from the query string too', async () => {
+    const pool = fakePool([OWNS_1_AND_2]);
+    const req = reqFor({ id: 7 }, { query: { profileId: '1' } });
+    expect((await run(guardActingProfile(pool), req)).passed).toBe(true);
+  });
+});
+
+describe('guardBuddyLink', () => {
+  const link = over => ['FROM buddy_links WHERE id', [{
+    id: 5, profileIdA: '1', profileIdB: '9', blockedByProfileId: null, ...over,
+  }]];
+
+  it('lets through the side stored as A, and says which side that is', async () => {
+    const pool = fakePool([OWNS_1_AND_2, link()]);
+    const req = reqFor({ id: 7 }, { params: { linkId: '5' } });
+    expect((await run(guardBuddyLink(pool), req)).passed).toBe(true);
+    expect(req.link).toEqual({ id: '5', mine: '1', theirs: '9' });
+  });
+
+  it('lets through the side stored as B, with mine and theirs the other way up', async () => {
+    // The case a two-directed-rows model would hide. Getting this backwards
+    // sends a message signed as the other person.
+    const pool = fakePool([OWNS_1_AND_2, link({ profileIdA: '9', profileIdB: '1' })]);
+    const req = reqFor({ id: 7 }, { params: { linkId: '5' } });
+    expect((await run(guardBuddyLink(pool), req)).passed).toBe(true);
+    expect(req.link).toEqual({ id: '5', mine: '1', theirs: '9' });
+  });
+
+  it('refuses a friendship between two other people', async () => {
+    const pool = fakePool([OWNS_1_AND_2, link({ profileIdA: '8', profileIdB: '9' })]);
+    const req = reqFor({ id: 7 }, { params: { linkId: '5' } });
+    expect((await run(guardBuddyLink(pool), req)).status).toBe(403);
+  });
+
+  it('answers 404 for a link that does not exist, not pass-through', async () => {
+    // guardRow lets a missing row past so an idempotent DELETE stays idempotent.
+    // Here the existence of link 431 is itself a fact about two other people,
+    // and walking the id space collecting 403s would map out who knows whom.
+    const pool = fakePool([['FROM buddy_links WHERE id', []]]);
+    const req = reqFor({ id: 7 }, { params: { linkId: '431' } });
+    const result = await run(guardBuddyLink(pool), req);
+    expect(result.passed).toBe(false);
+    expect(result.status).toBe(404);
+  });
+
+  it('refuses a blocked link from the side that was blocked', async () => {
+    const pool = fakePool([OWNS_1_AND_2, link({ blockedByProfileId: '9' })]);
+    const req = reqFor({ id: 7 }, { params: { linkId: '5' } });
+    expect((await run(guardBuddyLink(pool), req)).status).toBe(403);
+  });
+
+  it('refuses a blocked link from the side that did the blocking', async () => {
+    // Blocking is not one-way silence: the blocker stops being visible too, or
+    // it would only mean "stop hearing from them" while still broadcasting.
+    const pool = fakePool([OWNS_1_AND_2, link({ blockedByProfileId: '1' })]);
+    const req = reqFor({ id: 7 }, { params: { linkId: '5' } });
+    expect((await run(guardBuddyLink(pool), req)).status).toBe(403);
+  });
+
+  it('refuses an anonymous caller rather than resolving the link', async () => {
+    const pool = fakePool([link()]);
+    const req = reqFor(undefined, { params: { linkId: '5' } });
+    expect((await run(guardBuddyLink(pool), req)).status).toBe(403);
+  });
+
+  it('never sends a non-numeric link id to Postgres', async () => {
+    const pool = fakePool([]);
+    const req = reqFor({ id: 7 }, { params: { linkId: "1 OR '1'='1" } });
+    expect((await run(guardBuddyLink(pool), req)).status).toBe(404);
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('visibleProfileIds', () => {
+  const links = rows => ['FROM buddy_links\n', rows];
+
+  it('widens the owned set by the far side of each friendship', async () => {
+    const pool = fakePool([OWNS_1_AND_2, links([{ profileIdA: '1', profileIdB: '9' }])]);
+    const visible = await visibleProfileIds(pool, reqFor({ id: 7 }));
+    expect([...visible].sort()).toEqual(['1', '2', '9']);
+  });
+
+  it('leaves out a buddy who is blocked', async () => {
+    // The SQL filters them out; this pins that the filter is not optional.
+    const pool = fakePool([OWNS_1_AND_2, links([])]);
+    expect([...(await visibleProfileIds(pool, reqFor({ id: 7 })))].sort()).toEqual(['1', '2']);
+  });
+
+  it('gives an anonymous caller nothing to see', async () => {
+    const pool = fakePool([]);
+    expect(await visibleProfileIds(pool, reqFor(undefined))).toEqual([]);
+  });
+
+  it('asks the database once however many handlers ask', async () => {
+    const pool = fakePool([OWNS_1_AND_2, links([])]);
+    const req = reqFor({ id: 7 });
+    await visibleProfileIds(pool, req);
+    await visibleProfileIds(pool, req);
+    // One for the owned profiles, one for the links — not two of each.
+    expect(pool.query).toHaveBeenCalledTimes(2);
   });
 });
 

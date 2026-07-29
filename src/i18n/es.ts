@@ -465,10 +465,72 @@ export const es: Translations = {
 
   // -- Instalar en la pantalla de inicio -------------------------
   'install.title': 'Instalar MorphIQ',
+  'install.topSubtitle': 'Añádela a tu pantalla para acceso sin conexión y pantalla completa',
   'install.body': 'Añadela a tu pantalla de inicio y se abre como una app: a pantalla completa, y sigue funcionando sin conexion.',
   'install.action': 'Instalar app',
   'install.dismissed': 'Sin problema. La oferta se queda aqui por si cambias de idea.',
   'install.iosBody': 'En iPhone y iPad, Safari la instala desde el menu de compartir:',
   'install.iosStep1': 'Pulsa Compartir abajo en Safari',
   'install.iosStep2': 'Elige «Añadir a pantalla de inicio»',
+
+  // -- Compañeros de entreno -------------------------------------
+  'buddy.title': 'Compañeros de entreno',
+  'buddy.subtitle': 'Entrena al lado de alguien, cada uno con lo suyo',
+  'buddy.open': 'Compañeros de entreno',
+  'buddy.forProfile': 'Compañeros de {name}',
+  'buddy.none': 'Todavía no tienes compañeros',
+  'buddy.noneSub': 'Pásale un código a alguien y podréis coordinar vuestras sesiones desde aquí.',
+  'buddy.since': 'Compañeros desde el {date}',
+  'buddy.count_one': '{n} compañero',
+  'buddy.count_other': '{n} compañeros',
+  'buddy.offline': 'No se ha podido contactar con el servidor',
+  'buddy.offlineSub': 'Se muestra lo último que se cargó. Se pondrá al día solo.',
+
+  // Invitar
+  'buddy.invite': 'Invitar a alguien',
+  'buddy.inviteSub': 'Mándale este código. Sirve una sola vez, y solo durante tres días.',
+  'buddy.inviteCode': 'Tu código',
+  'buddy.inviteExpires_one': 'Caduca dentro de {n} hora',
+  'buddy.inviteExpires_other': 'Caduca dentro de {n} horas',
+  'buddy.inviteExpired': 'Este código ya ha caducado',
+  'buddy.inviteCreate': 'Crear un código',
+  'buddy.inviteRenew': 'Crear un código nuevo',
+  'buddy.inviteRenewWarning': 'El código anterior deja de funcionar al instante.',
+  'buddy.inviteCopy': 'Copiar código',
+  'buddy.inviteCopied': 'Copiado',
+  'buddy.inviteShare': 'Compartir enlace',
+  'buddy.inviteShareText': 'Entrena conmigo en MorphIQ. Mi código es {code}.',
+  'buddy.inviteRevoke': 'Anular este código',
+  'buddy.inviteAndroidNote': 'En Android el enlace abre la versión web, así que mandar el código a secas siempre funciona.',
+
+  // Canjear
+  'buddy.redeem': 'Tengo un código',
+  'buddy.redeemSub': 'Escribe los ocho caracteres que te ha pasado tu compañero.',
+  'buddy.redeemPlaceholder': 'Su código',
+  'buddy.redeemAction': 'Añadir compañero',
+  'buddy.redeemWorking': 'Comprobando el código',
+  'buddy.redeemInvalid': 'Ese código no vale. Puede haber caducado, o que ya lo hayan usado.',
+  'buddy.redeemOwn': 'Ese es tu propio código: mándaselo a otra persona.',
+  'buddy.redeemTooMany': 'Demasiados intentos. Espera una hora.',
+  'buddy.redeemFull': 'Alguno de los dos tiene ya todos los compañeros que MorphIQ permite.',
+  'buddy.redeemDone': '{name} ya es tu compañero de entreno',
+
+  // Gestionar
+  'buddy.manage': 'Gestionar',
+  'buddy.block': 'Pausar a este compañero',
+  'buddy.blockSub': 'Dejáis de veros los dos hasta que lo deshagas.',
+  'buddy.blockedByMe': 'Lo has pausado',
+  'buddy.blockedByThem': 'En pausa',
+  'buddy.unblock': 'Reanudar',
+  'buddy.remove': 'Eliminar compañero',
+  'buddy.removeConfirm': '¿Eliminar a {name}?',
+  'buddy.removeConfirmSub': 'Todo lo que hayáis compartido se va con él, para los dos. Volver a añadirlo pide un código nuevo.',
+  'buddy.removeAction': 'Eliminar',
+  'buddy.cancel': 'Cancelar',
+
+  // Presencia
+  'buddy.presenceToggle': 'Mostrar cuándo entreno',
+  'buddy.presenceSub': 'Tus compañeros ven en qué ejercicio vas y cuánto llevas. Los pesos nunca.',
+  'buddy.presenceOn': 'Sí',
+  'buddy.presenceOff': 'No',
 };

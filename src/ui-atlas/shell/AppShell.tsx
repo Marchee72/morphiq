@@ -13,18 +13,11 @@ import { AtlasCoach } from '../atlas/AtlasCoach';
 import { AtlasNav } from '../atlas/AtlasNav';
 import { AtlasSkeleton } from '../atlas/AtlasStates';
 
+import { AtlasTopInstallBanner } from '../atlas/AtlasTopInstallBanner';
+
 import './app-base.css';
 import '../atlas/atlas.css';
 
-/**
- * The frame: the `.at` wrapper, a safe-area spacer, the scrolling body, the nav,
- * and the overlays — mounted inside the wrapper so they inherit its palette.
- *
- * The `at-` class prefix is historical: this used to be one of two switchable
- * skins. Only Atlas ships now, so the switcher is gone, but the prefix stayed
- * rather than churning ~180 class names across the stylesheet for no behaviour
- * change.
- */
 const SCREENS: Record<ScreenId, React.FC> = {
   today: AtlasToday,
   train: AtlasTrain,
@@ -56,6 +49,7 @@ export const AppShell: React.FC = () => {
   return (
     <div className="app at" data-mode={resolved}>
       <div className="app-statusbar" />
+      <AtlasTopInstallBanner />
       {/* Keyed on the tab so switching screens resets scroll. */}
       <div className="app-scroll" key={screen}>
         {ready ? <Screen /> : <AtlasSkeleton />}

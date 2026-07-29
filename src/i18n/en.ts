@@ -468,10 +468,72 @@ export const en = {
 
   // -- Install to the home screen --------------------------------
   'install.title': 'Install MorphIQ',
+  'install.topSubtitle': 'Add to home screen for offline access & full screen',
   'install.body': 'Add it to your home screen and it opens like an app — full screen, and it still works offline.',
   'install.action': 'Install app',
   'install.dismissed': 'No problem. The offer stays here if you change your mind.',
   'install.iosBody': 'On iPhone and iPad, Safari installs it from the share menu:',
   'install.iosStep1': 'Tap Share at the bottom of Safari',
   'install.iosStep2': 'Choose “Add to Home Screen”',
+
+  // -- Training partners -----------------------------------------
+  'buddy.title': 'Training partners',
+  'buddy.subtitle': 'Train alongside someone, each doing your own work',
+  'buddy.open': 'Training partners',
+  'buddy.forProfile': 'Partners of {name}',
+  'buddy.none': 'No partners yet',
+  'buddy.noneSub': 'Send someone a code and you can coordinate your sessions here.',
+  'buddy.since': 'Partners since {date}',
+  'buddy.count_one': '{n} partner',
+  'buddy.count_other': '{n} partners',
+  'buddy.offline': 'Could not reach the server',
+  'buddy.offlineSub': 'Showing what was loaded last. It will catch up on its own.',
+
+  // Inviting
+  'buddy.invite': 'Invite a partner',
+  'buddy.inviteSub': 'Send them this code. It works once, and only for three days.',
+  'buddy.inviteCode': 'Your code',
+  'buddy.inviteExpires_one': 'Expires in {n} hour',
+  'buddy.inviteExpires_other': 'Expires in {n} hours',
+  'buddy.inviteExpired': 'This code has expired',
+  'buddy.inviteCreate': 'Create a code',
+  'buddy.inviteRenew': 'Create a new code',
+  'buddy.inviteRenewWarning': 'The old code stops working straight away.',
+  'buddy.inviteCopy': 'Copy code',
+  'buddy.inviteCopied': 'Copied',
+  'buddy.inviteShare': 'Share link',
+  'buddy.inviteShareText': 'Train with me on MorphIQ. My code is {code}.',
+  'buddy.inviteRevoke': 'Withdraw this code',
+  'buddy.inviteAndroidNote': 'On Android the link opens the web app, so sending the code itself always works.',
+
+  // Redeeming
+  'buddy.redeem': 'I have a code',
+  'buddy.redeemSub': 'Type the eight characters your partner sent you.',
+  'buddy.redeemPlaceholder': 'Their code',
+  'buddy.redeemAction': 'Add partner',
+  'buddy.redeemWorking': 'Checking that code',
+  'buddy.redeemInvalid': 'That code is not valid. It may have expired, or already been used.',
+  'buddy.redeemOwn': 'That is your own code — send it to someone else.',
+  'buddy.redeemTooMany': 'Too many tries. Give it an hour.',
+  'buddy.redeemFull': 'One of you has as many partners as MorphIQ allows.',
+  'buddy.redeemDone': '{name} is now your training partner',
+
+  // Managing
+  'buddy.manage': 'Manage',
+  'buddy.block': 'Pause this partner',
+  'buddy.blockSub': 'Neither of you sees the other until you undo it.',
+  'buddy.blockedByMe': 'Paused by you',
+  'buddy.blockedByThem': 'Paused',
+  'buddy.unblock': 'Resume',
+  'buddy.remove': 'Remove partner',
+  'buddy.removeConfirm': 'Remove {name}?',
+  'buddy.removeConfirmSub': 'Everything you shared goes with them, for both of you. Adding them again needs a new code.',
+  'buddy.removeAction': 'Remove',
+  'buddy.cancel': 'Cancel',
+
+  // Presence
+  'buddy.presenceToggle': 'Show when I train',
+  'buddy.presenceSub': 'Partners see the exercise you are on and how far through you are. Never your weights.',
+  'buddy.presenceOn': 'On',
+  'buddy.presenceOff': 'Off',
 } as const;
