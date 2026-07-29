@@ -40,7 +40,9 @@ src/
 
 - **Storage selection**: `VITE_DB_TYPE` env var (`local` / `server`), selected at import time. Not runtime-swappable.
 - **App.css is intentionally empty** — all CSS lives in `index.css`.
-- **`dist/` is committed** to git (unusual but intentional).
+- **`dist/` is ignored** (`.gitignore:11`) and holds no tracked files. Vercel
+  builds it from source via `@vercel/static-build`, and Capacitor syncs it into
+  the APK — nothing reads a committed copy.
 - **`.agents/` is gitignored** — agent skill files are local-only.
 
 ## Design system
