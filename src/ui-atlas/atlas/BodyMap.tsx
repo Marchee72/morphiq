@@ -69,6 +69,7 @@ export const BodyMap: React.FC<{
       <g
         key={region.id}
         className="at-map-region"
+        data-group={region.id}
         data-on={active === region.id}
         onClick={() => onPick(region.id)}
         role="button"

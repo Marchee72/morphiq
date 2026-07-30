@@ -2948,3 +2948,111 @@ button.at-routine-item { cursor: pointer; }
 }
 
 .at-buddy-composer .at-round:disabled { opacity: 0.4; }
+
+/* ---------- heat map card ---------- */
+
+.at-heatmap {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.at-heatmap-figure { flex-shrink: 0; }
+
+.at-heatmap-figure .at-map-region {
+  /* Override the Library's hover/active styles — here the fill is data-driven. */
+  cursor: pointer;
+}
+
+.at-heatmap-legend {
+  width: 80px;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--at-figure-limb), var(--muted), var(--clay-strong));
+  margin: 6px auto 0;
+}
+
+.at-heatmap-legend-labels {
+  display: flex;
+  justify-content: space-between;
+  width: 80px;
+  margin: 2px auto 0;
+  font-size: 8px;
+  color: var(--muted);
+}
+
+.at-heatmap-side {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  justify-content: center;
+}
+
+.at-heatmap-side button {
+  min-height: 32px;
+  flex: 1;
+  border: 1.5px solid var(--hair);
+  background: transparent;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 650;
+  padding: 4px 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.at-heatmap-side button[data-on='true'] {
+  background: var(--cocoa);
+  border-color: var(--cocoa);
+  color: var(--sand);
+}
+
+.at-heatmap-info { flex: 1; min-width: 0; }
+
+.at-heatmap-info h4 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 2px;
+  letter-spacing: -0.02em;
+}
+
+.at-heatmap-info .at-heatmap-exercises {
+  font-size: 11px;
+  color: var(--clay);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.at-heatmap-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.at-heatmap-stats b { color: var(--sand); }
+
+.at-heatmap-today {
+  border-top: 1px solid var(--hair);
+  padding-top: 10px;
+}
+
+.at-heatmap-today-label {
+  font-size: 10px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.at-heatmap-today-goal {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.at-heatmap-today-nudge {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
