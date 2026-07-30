@@ -8,7 +8,6 @@ import { useElapsedSeconds } from '../components/useTicker';
 import { ExerciseThumb } from '../components/ExerciseThumb';
 import { metricByKey } from '../derive/bodyMetrics';
 import { daypart } from '../derive/profile';
-import { nextMuscleFocus } from '../derive/todayTraining';
 import { AtlasStates } from './AtlasStates';
 import { AtlasSessionDetail } from './AtlasSessionDetail';
 import { AtlasTodayDetail, type TodayDetail } from './AtlasTodayDetail';
@@ -60,7 +59,7 @@ export const AtlasToday: React.FC = () => {
    */
   const doneToday = training.today;
   const trainedToday = doneToday.sessions.length > 0;
-  const focus = nextMuscleFocus(training.muscleLoad.rows);
+  
 
   return (
     <>
@@ -173,18 +172,6 @@ export const AtlasToday: React.FC = () => {
                   is a decision you can make from this screen. */}
               {doneToday.previous && doneToday.previous.exercises.length > 0 && (
                 <p className="at-todaytrain-list">{doneToday.previous.exercises.join(' · ')}</p>
-              )}
-              {focus && (
-                <p className="at-todaytrain-focus">
-                  {t('today.suggestFocus', {
-                    group: t(focus.labelKey),
-                    done: focus.sets,
-                    target: focus.target,
-                  })}
-                  {focus.lastHitAt
-                    ? ` · ${t('today.lastHit')} ${fmt.relativeDay(focus.lastHitAt, now)}`
-                    : ''}
-                </p>
               )}
             </>
           )}

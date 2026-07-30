@@ -20,26 +20,35 @@ describe('screens', () => {
   beforeEach(() => useStore.setState(initialState, true));
 
   describe('Today', () => {
-    it('lists every muscle group, so the balance rows never reflow', () => {
+    it('renders the body heat map with front/back toggle and no X/16 targets', () => {
       renderScreen('today');
-      for (const group of ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core']) {
-        expect(screen.getAllByText(group).length).toBeGreaterThan(0);
-      }
+      const text = visibleText();
+      // The X/16 targets are gone — no "/16" or "/8" should appear.
+      expect(text).not.toContain('/16');
+      expect(text).not.toContain('/8');
+      // The heat map card is present with its labels.
+      expect(text).toContain('This week');
+      expect(text).toContain('Last session');
+      expect(text).toContain('Front');
+      expect(text).toContain('Back');
     });
 
-    it('counts real weekly sets against each group target', () => {
+    it('shows the last session and goal nudge with rich data', () => {
       renderScreen('today', { data: 'rich' });
       const text = visibleText();
-      // The fixture logged four bench sets and three rows yesterday.
-      expect(text).toContain('4');
-      expect(text).toContain('/16');
-      expect(text).toContain('/8'); // core target, untouched
+      // The fixture's last session is "Push A" with bench and row exercises.
+      expect(text).toContain('Push A');
+      expect(text).toContain('Barbell Bench Press');
+      // The goal nudge and streak are present.
+      expect(text).toMatch(/\d\/4/); // weeklyWorkoutGoalDays = 4
     });
 
-    it('shows zeros rather than blank rows when there is no history', () => {
+    it('renders the heat map card with no history', () => {
       renderScreen('today', { data: 'empty' });
-      expect(visibleText()).toContain('/16');
-      expect(screen.getAllByText('Chest').length).toBeGreaterThan(0);
+      const text = visibleText();
+      expect(text).toContain('Last session');
+      // No X/16 targets even with empty data.
+      expect(text).not.toContain('/16');
     });
 
     it('offers a way to start when no session is running', () => {

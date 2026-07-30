@@ -119,16 +119,15 @@ describe("Today — what you have trained", () => {
     expect(card()?.textContent).toMatch(/Push A/);
   });
 
-  it('suggests the group furthest behind when nothing has been trained', async () => {
+  it('shows the goal nudge instead of a furthest-behind suggestion', async () => {
     await seedSession(new Date(Date.now() - DAY), 'Push A', [
       { name: 'Barbell Bench Press', weight: 80 },
     ]);
     render();
 
-    // Chest got three sets yesterday; every other group got none, so the
-    // suggestion must not be chest.
-    await waitFor(() => expect(card()?.textContent).toMatch(/Furthest behind|Lo mas atrasado/i));
-    expect(card()?.textContent).not.toMatch(/Furthest behind: Chest/i);
+    // The old "Furthest behind" text is gone — replaced by the heat map card's goal nudge.
+    await waitFor(() => expect(card()).toBeTruthy());
+    expect(card()?.textContent).not.toMatch(/Furthest behind|Lo mas atrasado/i);
   });
 });
 
