@@ -442,7 +442,15 @@ export function socialRoutes(pool) {
 
       // One snapshot on open, so a reconnecting client needs no separate GET
       // and a fresh one starts correct rather than empty.
-      send('hello', { serverNow: new Date(), cursor: formatCursor(cursor), links, presence });
+      //
+      // Carries the cursor as the frame id as well as in the body: the client
+      // tracks position from `id`, so a stream that delivered only a hello and
+      // then dropped would otherwise reconnect from zero and replay everything.
+      send(
+        'hello',
+        { serverNow: new Date(), cursor: formatCursor(cursor), links, presence },
+        formatCursor(cursor),
+      );
 
       let tick = 0;
       /** Who was live on the previous tick, so a departure can be announced. */
@@ -464,10 +472,18 @@ export function socialRoutes(pool) {
 
           if (linkIds.length > 0) {
             const { rows } = await pool.query(
-              `SELECT * FROM buddy_messages
-                WHERE "linkId" = ANY($1) AND id > $2
-                ORDER BY id ASC LIMIT 200`,
-              [linkIds, cursor.messageId],
+              // The cleared cursor is joined per link, exactly as the REST read
+              // applies it. Without this the stream hands back the conversation
+              // that leaving deleted — a paging cursor is not a permission, and
+              // a fresh stream starts at zero.
+              `SELECT m.* FROM buddy_messages m
+                 LEFT JOIN buddy_read_marks rm
+                   ON rm."linkId" = m."linkId" AND rm."profileId" = $3
+                WHERE m."linkId" = ANY($1)
+                  AND m.id > $2
+                  AND m.id > COALESCE(rm."clearedBeforeMessageId", 0)
+                ORDER BY m.id ASC LIMIT 200`,
+              [linkIds, cursor.messageId, profileId],
             );
             for (const row of rows) {
               cursor.messageId = Math.max(cursor.messageId, Number(row.id));

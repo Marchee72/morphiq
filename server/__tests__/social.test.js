@@ -474,6 +474,104 @@ describe('messages', () => {
   });
 });
 
+describe('GET /stream', () => {
+  /** Captures what the stream writes, and every query it issues. */
+  function streamPool(seen) {
+    return {
+      query: async (sql, params) => {
+        seen.push({ sql, params });
+        if (sql.includes('FROM user_profiles WHERE user_id')) return { rows: [{ id: 1 }, { id: 2 }] };
+        if (sql.includes('FROM buddy_links l')) {
+          return { rows: [{
+            id: 1, profileIdA: '1', profileIdB: '9', createdAt: new Date(),
+            blockedByProfileId: null, removedByA: null, removedByB: null,
+            buddyName: 'Ana', unreadCount: 0,
+          }] };
+        }
+        return { rows: [] };
+      },
+    };
+  }
+
+  /** Opens the stream, lets it tick once, then hangs up. */
+  function openStream(pool) {
+    const router = socialRoutes(pool);
+    const written = [];
+    const closeHandlers = [];
+
+    const req = {
+      method: 'GET',
+      url: '/stream?profileId=1',
+      query: { profileId: '1' },
+      body: {},
+      user: { id: 7 },
+      headers: {},
+      on: (event, handler) => { if (event === 'close') closeHandlers.push(handler); },
+    };
+    const res = {
+      statusCode: 200,
+      set: () => res,
+      flushHeaders: () => {},
+      status(code) { res.statusCode = code; return res; },
+      json() { return res; },
+      write(chunk) { written.push(chunk); return true; },
+      end() { return res; },
+    };
+
+    router(req, res, () => {});
+    return { written, hangUp: () => closeHandlers.forEach(h => h()) };
+  }
+
+  it('joins the cleared cursor when reading messages', async () => {
+    // Found against a real database, not here: a fresh stream starts its paging
+    // cursor at zero, so without this join it replayed the entire conversation
+    // the caller had deleted by leaving. A paging cursor is not a permission.
+    vi.useFakeTimers();
+    const seen = [];
+    const { hangUp } = openStream(streamPool(seen));
+
+    // Let the opening snapshot settle, then run exactly one poll tick.
+    await vi.advanceTimersByTimeAsync(2500);
+    hangUp();
+    vi.useRealTimers();
+
+    const messageRead = seen.find(q => q.sql.includes('FROM buddy_messages m'));
+    expect(messageRead).toBeDefined();
+    expect(messageRead.sql).toContain('clearedBeforeMessageId');
+    // And it is the caller's own cursor being applied, not somebody else's.
+    expect(messageRead.params).toContain('1');
+  });
+
+  it('opens with a hello carrying the snapshot and a cursor', async () => {
+    vi.useFakeTimers();
+    const { written, hangUp } = openStream(streamPool([]));
+    await vi.advanceTimersByTimeAsync(10);
+    hangUp();
+    vi.useRealTimers();
+
+    const body = written.join('');
+    expect(body).toContain('event: hello');
+    // So a reconnecting client resumes rather than replays.
+    expect(body).toMatch(/id: m\d+\.p\d+/);
+  });
+
+  it('stops polling once the client hangs up', async () => {
+    // Without this the invocation keeps querying, and billing, after nobody is
+    // listening — on serverless that is the whole remaining function window.
+    vi.useFakeTimers();
+    const seen = [];
+    const { hangUp } = openStream(streamPool(seen));
+    await vi.advanceTimersByTimeAsync(50);
+    hangUp();
+
+    const afterHangUp = seen.length;
+    await vi.advanceTimersByTimeAsync(10_000);
+    vi.useRealTimers();
+
+    expect(seen.length).toBe(afterHangUp);
+  });
+});
+
 describe('POST /buddies/:linkId/block', () => {
   const link = over => ['SELECT * FROM buddy_links WHERE id', [{
     id: 5, profileIdA: '1', profileIdB: '9', createdAt: new Date(),
