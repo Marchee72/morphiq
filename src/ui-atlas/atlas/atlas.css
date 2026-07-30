@@ -2994,6 +2994,30 @@ button.at-routine-item { cursor: pointer; }
   align-items: flex-start;
 }
 
+/* Tighter than `.at-card`'s 20px â€” the two-column figure+info layout reads
+   crowded at the default. Matches the todaytrain card's rhythm. */
+.at-card.at-heatmap-card { padding: 16px 18px; }
+
+/* The three small captions: over the figure, over the last session, and over
+   today. Shares the label idiom of `.at-todaytrain-head small` and `.at-fact
+   small`. */
+.at-heatmap-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+/* Centred over the body figure, which is centred itself. */
+.at-heatmap-figure > .at-heatmap-label {
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.at-heatmap-today > .at-heatmap-label { margin-bottom: 4px; }
+
 .at-heatmap-figure { flex-shrink: 0; }
 
 .at-heatmap-figure .at-map-region {
@@ -3026,14 +3050,14 @@ button.at-routine-item { cursor: pointer; }
 }
 
 .at-heatmap-side button {
-  min-height: 32px;
+  min-height: 44px;
   flex: 1;
   border: 1.5px solid var(--hair);
   background: transparent;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 650;
-  padding: 4px 0;
+  padding: 7px 0;
   color: var(--muted);
   cursor: pointer;
 }
@@ -3048,17 +3072,17 @@ button.at-routine-item { cursor: pointer; }
 
 .at-heatmap-info h4 {
   font-family: 'Fraunces', Georgia, serif;
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 600;
   margin: 0 0 2px;
   letter-spacing: -0.02em;
 }
 
 .at-heatmap-info .at-heatmap-exercises {
-  font-size: 11px;
-  color: var(--clay);
+  font-size: 12px;
+  color: var(--muted);
   margin-bottom: 8px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .at-heatmap-stats {
@@ -3069,17 +3093,11 @@ button.at-routine-item { cursor: pointer; }
   margin-bottom: 12px;
 }
 
-.at-heatmap-stats b { color: var(--sand); }
+.at-heatmap-stats b { color: var(--cocoa); }
 
 .at-heatmap-today {
   border-top: 1px solid var(--hair);
   padding-top: 10px;
-}
-
-.at-heatmap-today-label {
-  font-size: 10px;
-  color: var(--muted);
-  margin-bottom: 4px;
 }
 
 .at-heatmap-today-goal {

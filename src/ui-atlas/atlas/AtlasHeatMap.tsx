@@ -73,13 +73,11 @@ export const AtlasHeatMap: React.FC<{
   };
 
   return (
-    <div className="at-card" style={{ padding: 14 }}>
+    <div className="at-card at-heatmap-card">
       <div className="at-heatmap">
         {/* Body heat map */}
         <div className="at-heatmap-figure">
-          <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center', marginBottom: 6 }}>
-            {t('today.bodyHeat')}
-          </div>
+          <div className="at-heatmap-label">{t('today.bodyHeat')}</div>
           <BodyMap side={side} active={null} onPick={onPickRegion} />
           <HeatFillOverride rows={training.muscleLoad.rows} />
           <div className="at-heatmap-legend" />
@@ -99,11 +97,9 @@ export const AtlasHeatMap: React.FC<{
 
         {/* Last session + Today */}
         <div className="at-heatmap-info">
+          <div className="at-heatmap-label">{t('today.lastSession')}</div>
           {previous ? (
             <>
-              <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>
-                {t('today.lastSession')}
-              </div>
               <h4>{previous.title}</h4>
               <div className="at-heatmap-exercises">
                 {previous.exercises.join(' · ')}
@@ -118,18 +114,13 @@ export const AtlasHeatMap: React.FC<{
               </div>
             </>
           ) : (
-            <>
-              <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>
-                {t('today.lastSession')}
-              </div>
-              <h4>{t('today.neverTrained')}</h4>
-            </>
+            <h4>{t('today.neverTrained')}</h4>
           )}
 
           <div className="at-heatmap-today">
-            <div className="at-heatmap-today-label">{t('today.todayLabel')}</div>
+            <div className="at-heatmap-label">{t('today.todayLabel')}</div>
             <div className="at-heatmap-today-goal">
-              🎯 {t('today.weeklyGoal', { done: streak.weekDone, goal: streak.weekGoal })}
+              {t('today.weeklyGoal', { done: streak.weekDone, goal: streak.weekGoal })}
               {streak.current > 0 && ` · ${t('today.streak', { n: streak.current })}`}
             </div>
             <div className="at-heatmap-today-nudge">{nudgeText()}</div>
