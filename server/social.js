@@ -352,7 +352,12 @@ export function socialRoutes(pool) {
    * Measured against a real preview before being built: Vercel does not buffer
    * `text/event-stream`, and a function survives at least 290 seconds. Both
    * were open questions the design hung on, and neither can be answered locally
-   * where Node always streams fine.
+   * where Node always streams fine. The third â€” whether the Capacitor WebView
+   * parses frames incrementally rather than waiting for the body â€” was measured
+   * on an Android 16 device (WebView 150) against a LAN server: 13 frames over
+   * 60s, each 160â€“273ms behind the server's own clock, a gap that stayed flat
+   * instead of collapsing into a clump at the end, which is what buffering looks
+   * like. `fetch`, `getReader()` and `TextDecoder` behave as on the desktop.
    *
    * The fan-out is a poll against Postgres inside the handler. Two invocations
    * are two isolated processes, so there is no in-memory pub/sub to subscribe
