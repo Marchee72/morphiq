@@ -5,12 +5,13 @@ import { useAppData } from '../data/useAppData';
 import { heatColor, heatLevel } from '../derive/heatColor';
 import { freshGroups, goalNudge } from '../derive/todayTraining';
 import { BodyMap, type Side } from './BodyMap';
+import { AtlasSegment } from './AtlasField';
 import type { MuscleGroupId } from '../types';
 
 /**
  * The combined card that replaces the old X/16 muscle-load block on Today.
  *
- * Left: a body heat map (front/back toggle) with each region colored by weekly
+ * Left: a body heat map (front/back segment) with each region colored by weekly
  * set volume. Right: the last session summary and a goal/streak nudge. Tapping
  * a region opens the detail sheet — the parent owns that state.
  */
@@ -94,12 +95,14 @@ export const AtlasHeatMap: React.FC<{
             <span>{t('today.heatTrained')}</span>
           </div>
           <div className="at-heatmap-side">
-            <button data-on={side === 'front'} onClick={() => setSide('front')}>
-              {t('today.front')}
-            </button>
-            <button data-on={side === 'back'} onClick={() => setSide('back')}>
-              {t('today.back')}
-            </button>
+            <AtlasSegment
+              value={side}
+              onChange={setSide}
+              options={[
+                { value: 'front', label: t('today.front') },
+                { value: 'back', label: t('today.back') },
+              ]}
+            />
           </div>
         </div>
 

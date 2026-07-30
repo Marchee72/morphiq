@@ -10,7 +10,7 @@ import { ALL_EQUIPMENT } from '../../features/settings/gymEquipmentData';
 import { LANGUAGES, MODES } from '../../presentation/state/preferences';
 import { MAX_HEIGHT_CM, MIN_HEIGHT_CM, parseHeightCm } from '../../core/entities/UserProfile';
 import { AtlasSheet } from './AtlasSheet';
-import { AtlasInput, AtlasChoice } from './AtlasField';
+import { AtlasInput, AtlasChoice, AtlasSegment } from './AtlasField';
 import { AppMark } from './AppMark';
 import { AtlasInstallCard } from './AtlasInstallCard';
 import { GoogleButton } from './GoogleButton';
@@ -175,7 +175,7 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               <span className="at-settings-icon"><Users size={17} /></span>
             </button>
 
-            <AtlasChoice
+            <AtlasSegment
               label={t('buddy.presenceToggle')}
               value={activeProfile?.sharePresence === false ? 'off' : 'on'}
               onChange={value => {

@@ -9,6 +9,7 @@ import type { CatalogItemVM } from '../types';
 import type { Exercise } from '../../core/entities/Exercise';
 import { BodyMap, type Side } from './BodyMap';
 import { AtlasStates, AtlasSkeleton } from './AtlasStates';
+import { AtlasSegment } from './AtlasField';
 import { AtlasExerciseDetail } from './AtlasExerciseDetail';
 
 /**
@@ -95,14 +96,19 @@ export const AtlasLibrary: React.FC = () => {
               ? t('library.regionSummary', { count: fmt.n(search.countForGroup(search.group)), sets: setsThisWeek })
               : t('library.tapMuscleSub')}
           </p>
+          {/* Switching side re-picks a region that exists on that side. */}
           <div className="at-map-side">
-            <button data-on={side === 'front'} onClick={() => { setSide('front'); search.setGroup('chest'); }}>
-              {t('library.front')}
-            </button>
-            {/* Switching side re-picks a region that exists on that side. */}
-            <button data-on={side === 'back'} onClick={() => { setSide('back'); search.setGroup('back'); }}>
-              {t('library.back')}
-            </button>
+            <AtlasSegment
+              value={side}
+              onChange={next => {
+                setSide(next);
+                search.setGroup(next === 'front' ? 'chest' : 'back');
+              }}
+              options={[
+                { value: 'front', label: t('library.front') },
+                { value: 'back', label: t('library.back') },
+              ]}
+            />
           </div>
         </div>
       </div>
