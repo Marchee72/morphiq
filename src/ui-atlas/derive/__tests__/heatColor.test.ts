@@ -29,8 +29,16 @@ describe('heatColor', () => {
   });
 
   it('returns an intermediate color at level 0.5', () => {
-    const color = heatColor(0.5);
-    // An rgba/hsl/rgb interpolation, not a raw token — the midpoint is a blend.
-    expect(color).toMatch(/rgba|hsl|rgb/);
+    // A mix of the two ends, not a raw token. Both tokens have to survive into
+    // the result: a blend computed here instead would have to pick one theme's
+    // value for the rested end and would be wrong in the other.
+    expect(heatColor(0.5)).toBe(
+      'color-mix(in srgb, var(--clay-strong) 50%, var(--at-figure-limb))',
+    );
+  });
+
+  it('mixes toward the trained end as the level rises', () => {
+    expect(heatColor(0.25)).toContain('var(--clay-strong) 25%');
+    expect(heatColor(0.75)).toContain('var(--clay-strong) 75%');
   });
 });

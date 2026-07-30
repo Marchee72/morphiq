@@ -3206,10 +3206,8 @@ button.at-routine-item { cursor: pointer; }
 
 .at-heatmap-figure { flex-shrink: 0; }
 
-.at-heatmap-figure .at-map-region {
-  /* Override the Library's hover/active styles — here the fill is data-driven. */
-  cursor: pointer;
-}
+/* The fill here comes from the data, inline, so it already beats the Library's
+   hover and active rules. Nothing left to override. */
 
 .at-heatmap-legend {
   width: 80px;

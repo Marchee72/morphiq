@@ -49,6 +49,15 @@ export const AtlasHeatMap: React.FC<{
     return Math.round((now.getTime() - last.getTime()) / 86_400_000);
   };
 
+  /**
+   * How hot a region is drawn. A group with no row this week has no sets, which
+   * is the rested end of the scale rather than an absent colour.
+   */
+  const heatFill = (group: MuscleGroupId): string => {
+    const row = training.muscleLoad.rows.find(r => r.group === group);
+    return heatColor(heatLevel(row?.sets ?? 0));
+  };
+
   const nudgeText = (): string => {
     switch (nudge.kind) {
       case 'goalHit':
@@ -78,8 +87,7 @@ export const AtlasHeatMap: React.FC<{
         {/* Body heat map */}
         <div className="at-heatmap-figure">
           <div className="at-heatmap-label">{t('today.bodyHeat')}</div>
-          <BodyMap side={side} active={null} onPick={onPickRegion} />
-          <HeatFillOverride rows={training.muscleLoad.rows} />
+          <BodyMap side={side} active={null} onPick={onPickRegion} fill={heatFill} />
           <div className="at-heatmap-legend" />
           <div className="at-heatmap-legend-labels">
             <span>{t('today.heatRested')}</span>
@@ -129,23 +137,4 @@ export const AtlasHeatMap: React.FC<{
       </div>
     </div>
   );
-};
-
-/**
- * Applies heat-map fill colors to BodyMap's SVG regions.
- *
- * BodyMap renders <g class="at-map-region"> elements whose fill is controlled
- * by CSS. For the heat map we need a per-group fill driven by data, so we inject
- * a <style> tag that overrides `.at-map-region` fill based on a `data-group`
- * attribute. This is simpler and more robust than reaching into BodyMap's DOM
- * after render.
- */
-const HeatFillOverride: React.FC<{ rows: { group: MuscleGroupId; sets: number }[] }> = ({ rows }) => {
-  const rules = rows.map(row => {
-    const level = heatLevel(row.sets);
-    const color = heatColor(level);
-    return `.at-heatmap-figure .at-map-region[data-group="${row.group}"] { fill: ${color} !important; }`;
-  }).join('\n');
-
-  return <style>{rules}</style>;
 };

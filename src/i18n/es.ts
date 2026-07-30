@@ -174,6 +174,7 @@ export const es: Translations = {
   'library.best': 'Mejor',
   'library.anyKit': 'Cualquier equipo',
   'library.all': 'Todos',
+  'library.bodyMap': 'Mapa del cuerpo',
   'library.tapMuscle': 'Toca un musculo',
   'library.tapMuscleSub': 'Elige una zona del cuerpo para filtrar el catalogo.',
   'library.regionSummary': '{count} ejercicios, {sets} series esta semana',

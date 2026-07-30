@@ -176,6 +176,7 @@ export const en = {
   'library.best': 'Best',
   'library.anyKit': 'Any kit',
   'library.all': 'All',
+  'library.bodyMap': 'Body map',
   'library.tapMuscle': 'Tap a muscle',
   'library.tapMuscleSub': 'Pick a region on the body to filter the catalogue.',
   'library.regionSummary': '{count} exercises, {sets} sets this week',

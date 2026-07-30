@@ -19,23 +19,21 @@ export function heatLevel(sets: number, reference = REFERENCE_SETS): number {
 /**
  * Returns a CSS color for the given heat level.
  *
- * Level 0 → `--at-figure-limb` (rested, dark).
- * Level 1 → `--clay-strong` (trained hard, red).
- * Midpoints → an `rgb()` blend of the two, so the SVG `fill` is always a
- * concrete color the browser can render (CSS custom properties don't
- * interpolate inside SVG `fill` across all browsers).
+ * Level 0 → `--at-figure-limb` (rested).
+ * Level 1 → `--clay-strong` (trained hard).
+ * Midpoints → `color-mix()` of the two.
+ *
+ * The mix is left to CSS rather than computed here, because `--at-figure-limb`
+ * is not one color: it is `#e0d0bc` in the light theme and `#3d3128` in the
+ * dark one. Blending hex by hand meant picking one of them, and this picked the
+ * dark tone — so in the light theme a rested group rendered pale while a group
+ * with a single set rendered near-black. The scale inverted at the bottom, and
+ * the legend bar below the figure, which is plain CSS, disagreed with the
+ * figure above it. `color-mix` resolves the token in the theme it is drawn in,
+ * so both ends and everything between them follow the theme.
  */
 export function heatColor(level: number): string {
   if (level <= 0) return 'var(--at-figure-limb)';
   if (level >= 1) return 'var(--clay-strong)';
-
-  // Blend from the limb tone (#3d3128 dark / #e0d0bc light) toward clay-strong
-  // (#c4643c). We use the dark-mode limb tone as the rested anchor because the
-  // card sits on a dark surface in both themes.
-  const rested = { r: 0x3d, g: 0x31, b: 0x28 };
-  const trained = { r: 0xc4, g: 0x64, b: 0x3c };
-  const r = Math.round(rested.r + (trained.r - rested.r) * level);
-  const g = Math.round(rested.g + (trained.g - rested.g) * level);
-  const b = Math.round(rested.b + (trained.b - rested.b) * level);
-  return `rgb(${r}, ${g}, ${b})`;
+  return `color-mix(in srgb, var(--clay-strong) ${Math.round(level * 100)}%, var(--at-figure-limb))`;
 }

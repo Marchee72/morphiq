@@ -1,4 +1,6 @@
 import React from 'react';
+import { useT } from '../../i18n';
+import { MUSCLE_GROUP_LABELS } from '../derive/muscleLoad';
 import type { MuscleGroupId } from '../types';
 
 export type Side = 'front' | 'back';
@@ -60,24 +62,37 @@ export const BodyMap: React.FC<{
   side: Side;
   active: MuscleGroupId | null;
   onPick: (id: MuscleGroupId) => void;
-}> = ({ side, active, onPick }) => (
-  <svg viewBox="0 0 120 186" width="96" height="150" role="group" aria-label="body map">
-    <circle cx="60" cy="16" r="13" fill="var(--at-figure-skin)" />
-    <rect x="54" y="27" width="12" height="9" rx="4" fill="var(--at-figure-skin)" />
-    {SILHOUETTE}
-    {REGIONS[side].map(region => (
-      <g
-        key={region.id}
-        className="at-map-region"
-        data-group={region.id}
-        data-on={active === region.id}
-        onClick={() => onPick(region.id)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onPick(region.id); }}
-      >
-        {region.shape}
-      </g>
-    ))}
-  </svg>
-);
+  /**
+   * A colour for a region, when the caller has data to paint it with. Applied
+   * inline so it beats the class's own `fill` without an `!important` — the
+   * heat map used to win that fight by injecting a stylesheet.
+   */
+  fill?: (id: MuscleGroupId) => string | undefined;
+}> = ({ side, active, onPick, fill }) => {
+  const { t } = useT();
+  return (
+    <svg viewBox="0 0 120 186" width="96" height="150" role="group" aria-label={t('library.bodyMap')}>
+      <circle cx="60" cy="16" r="13" fill="var(--at-figure-skin)" />
+      <rect x="54" y="27" width="12" height="9" rx="4" fill="var(--at-figure-skin)" />
+      {SILHOUETTE}
+      {REGIONS[side].map(region => (
+        <g
+          key={region.id}
+          className="at-map-region"
+          data-group={region.id}
+          data-on={active === region.id}
+          style={fill ? { fill: fill(region.id) } : undefined}
+          onClick={() => onPick(region.id)}
+          role="button"
+          // Every one of these is a button, and a button with no name is
+          // announced as "button" and nothing else.
+          aria-label={t(MUSCLE_GROUP_LABELS[region.id])}
+          tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onPick(region.id); }}
+        >
+          {region.shape}
+        </g>
+      ))}
+    </svg>
+  );
+};
