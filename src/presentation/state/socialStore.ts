@@ -5,6 +5,7 @@ import type {
 import { ServerSocialRepository } from '../../data/social/ServerSocialRepository';
 import { getUser } from '../../data/auth/session';
 import { isServerMode } from '../../data/database/mode';
+import type { SocialEvent } from '../../data/social/socialStream';
 
 /**
  * Training partners, held apart from the main store on purpose.
@@ -43,6 +44,35 @@ const PUBLISH_INTERVAL_MS = 5_000;
 let pendingSnapshot: { profileId: string; snapshot: LiveSessionSnapshot } | null = null;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let lastPublishAt = 0;
+
+/**
+ * Dates over the wire are strings.
+ *
+ * The repository rehydrates what it fetches; the stream bypasses it, so the
+ * same job has to happen here or a `Date` field arrives holding a string and
+ * everything downstream that calls `.getTime()` breaks at a distance.
+ */
+function parseLinkDates(raw: BuddyLink): BuddyLink {
+  return { ...raw, createdAt: new Date(raw.createdAt) };
+}
+
+function parseMessageDates(raw: BuddyMessage): BuddyMessage {
+  return { ...raw, createdAt: new Date(raw.createdAt) };
+}
+
+function parsePresenceDates(raw: BuddyPresence): BuddyPresence {
+  return {
+    ...raw,
+    startedAt: new Date(raw.startedAt),
+    updatedAt: new Date(raw.updatedAt),
+  };
+}
+
+function keyPresence(entries: BuddyPresence[]): Record<string, BuddyPresence> {
+  const byProfile: Record<string, BuddyPresence> = {};
+  for (const entry of entries) byProfile[entry.profileId] = entry;
+  return byProfile;
+}
 
 function flushPresence(): void {
   if (flushTimer !== null) { clearTimeout(flushTimer); flushTimer = null; }
@@ -84,6 +114,8 @@ interface SocialState {
   error: string | null;
 
   load: (profileId: string) => Promise<void>;
+  /** Folds one frame off the stream into state. */
+  applyEvent: (event: SocialEvent) => void;
   loadPresence: (profileId: string) => Promise<void>;
   /** Publishes a snapshot, throttled. Safe to call on every session change. */
   publishPresence: (profileId: string, snapshot: LiveSessionSnapshot) => void;
@@ -127,6 +159,74 @@ export const useSocialStore = create<SocialState>((set, get) => ({
       // Offline is the ordinary case here — the gym has no signal. Keep whatever
       // was already loaded on screen rather than blanking it.
       set({ ready: true, connection: 'offline', error: (err as Error).message });
+    }
+  },
+
+  /**
+   * Folds one frame off the stream into state.
+   *
+   * Every case is idempotent, because the transport can and does redeliver: the
+   * presence window overlaps on purpose, and a reconnect replays from a cursor
+   * that may be slightly behind. Anything here that appended blindly would
+   * duplicate on a flaky connection, which is precisely when it is hardest to
+   * notice.
+   */
+  applyEvent: event => {
+    const payload = event.data as Record<string, unknown>;
+
+    switch (event.event) {
+      case 'hello': {
+        // A snapshot, so it replaces rather than merges — the server is telling
+        // us the whole truth and anything we hold that is missing from it is
+        // stale.
+        set({
+          links: (payload.links as BuddyLink[] ?? []).map(parseLinkDates),
+          presence: keyPresence((payload.presence as BuddyPresence[] ?? []).map(parsePresenceDates)),
+          clockSkewMs: Date.now() - new Date(payload.serverNow as string).getTime(),
+          ready: true,
+          connection: 'live',
+          error: null,
+        });
+        break;
+      }
+
+      case 'buddy':
+        set({ links: (payload.links as BuddyLink[] ?? []).map(parseLinkDates) });
+        break;
+
+      case 'message': {
+        const message = parseMessageDates(payload as unknown as BuddyMessage);
+        set(state => {
+          const held = state.messages[message.linkId] ?? [];
+          // Keyed on id rather than appended: a redelivered message is a
+          // redelivery, not a second message.
+          if (held.some(m => m.id === message.id)) return state;
+          return {
+            messages: { ...state.messages, [message.linkId]: [...held, message] },
+          };
+        });
+        break;
+      }
+
+      case 'presence': {
+        const entry = parsePresenceDates(payload as unknown as BuddyPresence);
+        set(state => ({ presence: { ...state.presence, [entry.profileId]: entry } }));
+        break;
+      }
+
+      case 'presence.end': {
+        const gone = String(payload.profileId);
+        set(state => {
+          const { [gone]: _ended, ...rest } = state.presence;
+          return { presence: rest };
+        });
+        break;
+      }
+
+      default:
+        // Unknown events are ignored rather than thrown on: the server may
+        // learn to send something this client predates.
+        break;
     }
   },
 

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { sseTransport } from '../../data/social/socialStream';
 import { useStore } from '../../presentation/state/store';
 import { useSocialStore } from '../../presentation/state/socialStore';
 import { buildBuddyRows, buildMessageDays, buildPresenceRows, totalUnread } from '../derive/social';
@@ -8,22 +9,13 @@ import { useAppActions } from './useAppData';
 import type { SocialState } from './types';
 
 /**
- * How often the partner list is refetched while the app is in front.
+ * How often an open conversation is topped up, on top of the stream.
  *
- * A placeholder, and knowingly a poor one: coordination does not need ten
- * seconds of latency and a friendship does not change every twenty. The stream
- * replaces this wholesale — until then, polling is what works identically on
- * Vercel, on a phone and in a test.
+ * The stream delivers new messages, so this is a safety net rather than the
+ * mechanism: it covers the seconds between opening a thread and the first frame
+ * arriving, and closes the gap if a reconnect ever loses one. Slow on purpose.
  */
-const REFRESH_MS = 20_000;
-
-/**
- * How often the open conversation is refetched.
- *
- * Faster than the list because it is the thing being looked at. Still a
- * placeholder — the stream is what makes a reply arrive rather than turn up.
- */
-const CONVERSATION_REFRESH_MS = 5_000;
+const CONVERSATION_REFRESH_MS = 15_000;
 
 /**
  * Training partners.
@@ -48,6 +40,14 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const clockSkewMs = useSocialStore(state => state.clockSkewMs);
   const error = useSocialStore(state => state.error);
 
+  /**
+   * Where the stream got to, kept across reconnects.
+   *
+   * A ref rather than state: it changes on every frame and nothing renders from
+   * it, so putting it in state would re-render every consumer per message.
+   */
+  const cursorRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!available || !profileId) return;
 
@@ -56,27 +56,48 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // the same one: clearing first stops the previous profile's partners showing
     // under the new one's name while the request is in flight.
     store.reset();
-    void store.load(profileId);
-    void store.loadPresence(profileId).catch(() => {});
 
-    const timer = window.setInterval(() => {
-      // Refetching behind a backgrounded app is spend for nothing; the phone is
-      // in a pocket for most of a workout.
-      if (document.visibilityState !== 'visible') return;
-      void useSocialStore.getState().load(profileId);
-      void useSocialStore.getState().loadPresence(profileId).catch(() => {});
-    }, REFRESH_MS);
+    let close: (() => void) | null = null;
+
+    /**
+     * Held open only while the app is in front.
+     *
+     * A stream behind a backgrounded app is a serverless invocation billed for
+     * nothing — and during a workout the phone is in a pocket with the screen
+     * off for most of the hour. Reopening carries the cursor, so nothing that
+     * happened while away is missed.
+     */
+    const openStream = () => {
+      if (close) return;
+      close = sseTransport.open({
+        profileId,
+        since: cursorRef.current,
+        onEvent: event => {
+          if (event.id) cursorRef.current = event.id;
+          useSocialStore.getState().applyEvent(event);
+        },
+        onStatus: status => useSocialStore.setState({
+          connection: status === 'live' ? 'live' : status === 'retrying' ? 'offline' : 'loading',
+        }),
+      });
+    };
+
+    const closeStream = () => {
+      close?.();
+      close = null;
+    };
 
     const onVisible = () => {
-      if (document.visibilityState !== 'visible') return;
-      void useSocialStore.getState().load(profileId);
-      void useSocialStore.getState().loadPresence(profileId).catch(() => {});
+      if (document.visibilityState === 'visible') openStream();
+      else closeStream();
     };
+
+    if (document.visibilityState === 'visible') openStream();
     document.addEventListener('visibilitychange', onVisible);
 
     return () => {
-      window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
+      closeStream();
     };
   }, [available, profileId]);
 
