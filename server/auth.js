@@ -339,6 +339,66 @@ export function guardBuddyLink(pool, param = 'linkId') {
 }
 
 /**
+ * Guard for routes addressing one shared training session.
+ *
+ * A shared session is always born from a friendship, so authorisation is the
+ * friendship's — this resolves the link behind the session and then applies
+ * exactly the rules `guardBuddyLink` applies, including the reasons for them:
+ * a session that does not exist answers 404 rather than 403, because the
+ * existence of session 87 is already a fact about two other people.
+ *
+ * Deliberately *not* "are you a participant". Joining is the whole point, and
+ * you cannot be a participant before you join. Being a side of the link is the
+ * permission; participation is a state within it.
+ *
+ * Attaches `req.shared = { id, linkId, mine, theirs }`.
+ */
+export function guardSharedSession(pool, param = 'sessionId') {
+  return async (req, res, next) => {
+    const id = String(req.params[param] ?? '');
+    if (!/^\d+$/.test(id)) return res.status(404).json({ error: 'No such session' });
+
+    // `s.id` is aliased because `l.*` brings its own `id`, and a duplicate
+    // column name in a join silently resolves to the last one — leaving
+    // `row.id` holding the link's id while every line below reads it as the
+    // session's.
+    const { rows } = await pool.query(
+      `SELECT s.id AS "sharedId", s."endedAt" AS "sharedEndedAt", l.*
+         FROM shared_sessions s
+         JOIN buddy_links l ON l.id = s."linkId"
+        WHERE s.id = $1`,
+      [id],
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'No such session' });
+
+    const row = rows[0];
+    const owned = await ownedProfileIds(pool, req);
+    if (owned === null) return res.status(403).json(DENIED);
+
+    const onA = owned.includes(String(row.profileIdA));
+    const onB = owned.includes(String(row.profileIdB));
+    if (!onA && !onB) return res.status(403).json(DENIED);
+    if (row.blockedByProfileId != null) return res.status(403).json(DENIED);
+    if (row.removedByA != null || row.removedByB != null) {
+      return res.status(404).json({ error: 'No such session' });
+    }
+
+    req.shared = {
+      id: String(row.sharedId),
+      // `l.*`'s own id, which is the link this session was born from.
+      linkId: String(row.id),
+      // Whether the container is still open. Left to the handler rather than
+      // refused here: joining a finished session is wrong, but *leaving* one
+      // has to keep working, and a guard cannot tell those apart.
+      ended: row.sharedEndedAt != null,
+      mine: String(onA ? row.profileIdA : row.profileIdB),
+      theirs: String(onA ? row.profileIdB : row.profileIdA),
+    };
+    next();
+  };
+}
+
+/**
  * The profiles the caller may legitimately *observe*: their own, plus the ones
  * on the other end of an active friendship.
  *

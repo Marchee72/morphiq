@@ -2,7 +2,8 @@ import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import {
   adoptOrphanProfiles, guardBodyProfile, guardProfile, guardQueryProfile,
   guardRow, guardWorkoutSets, ownedProfileIds,
-  guardActingProfile, guardBuddyLink, ownsStrict, requireUser, visibleProfileIds,
+  guardActingProfile, guardBuddyLink, guardSharedSession, ownsStrict, requireUser,
+  visibleProfileIds,
 } from '../auth.js';
 
 /**
@@ -339,6 +340,85 @@ describe('guardBuddyLink', () => {
     const pool = fakePool([]);
     const req = reqFor({ id: 7 }, { params: { linkId: "1 OR '1'='1" } });
     expect((await run(guardBuddyLink(pool), req)).status).toBe(404);
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('guardSharedSession', () => {
+  /** A session on link 5, joined to its friendship exactly as the guard reads it. */
+  const session = over => ['FROM shared_sessions s', [{
+    sharedId: 12, sharedEndedAt: null,
+    id: 5, linkId: 5, profileIdA: '1', profileIdB: '9', blockedByProfileId: null,
+    removedByA: null, removedByB: null, ...over,
+  }]];
+
+  it('lets a side of the friendship through, without asking if they joined yet', async () => {
+    // Joining is the whole point, and you cannot be a participant before you
+    // join. Being a side of the link is the permission; participation is a
+    // state within it.
+    const pool = fakePool([session(), OWNS_1_AND_2]);
+    const req = reqFor({ id: 7 }, { params: { sessionId: '12' } });
+
+    expect((await run(guardSharedSession(pool), req)).passed).toBe(true);
+    expect(req.shared).toEqual({
+      id: '12', linkId: '5', ended: false, mine: '1', theirs: '9',
+    });
+  });
+
+  it('keeps the session id apart from the link id', async () => {
+    // `l.*` carries its own `id`, and a duplicate column in a join resolves to
+    // the last one — which would leave every handler addressing the link by the
+    // session's number.
+    const pool = fakePool([session({ id: 5, linkId: 5 }), OWNS_1_AND_2]);
+    const req = reqFor({ id: 7 }, { params: { sessionId: '12' } });
+    await run(guardSharedSession(pool), req);
+
+    expect(req.shared.id).toBe('12');
+    expect(req.shared.linkId).toBe('5');
+  });
+
+  it('reports a finished session rather than refusing it', async () => {
+    // Joining one is wrong and leaving one has to keep working, and a guard
+    // cannot tell those apart — so it reports and the handler decides.
+    const pool = fakePool([session({ sharedEndedAt: new Date() }), OWNS_1_AND_2]);
+    const req = reqFor({ id: 7 }, { params: { sessionId: '12' } });
+
+    expect((await run(guardSharedSession(pool), req)).passed).toBe(true);
+    expect(req.shared.ended).toBe(true);
+  });
+
+  it('refuses a session between two other people', async () => {
+    const pool = fakePool([session({ profileIdA: '8', profileIdB: '9' }), OWNS_1_AND_2]);
+    const req = reqFor({ id: 7 }, { params: { sessionId: '12' } });
+    expect((await run(guardSharedSession(pool), req)).status).toBe(403);
+  });
+
+  it('answers 404 for a session that does not exist', async () => {
+    // Same reason as the link guard: the existence of session 87 is already a
+    // fact about two other people.
+    const pool = fakePool([['FROM shared_sessions s', []]]);
+    const req = reqFor({ id: 7 }, { params: { sessionId: '87' } });
+    expect((await run(guardSharedSession(pool), req)).status).toBe(404);
+  });
+
+  it('refuses once the friendship is blocked, from either side', async () => {
+    const blocker = fakePool([session({ blockedByProfileId: '1' }), OWNS_1_AND_2]);
+    const blocked = fakePool([session({ blockedByProfileId: '9' }), OWNS_1_AND_2]);
+
+    expect((await run(guardSharedSession(blocker), reqFor({ id: 7 }, { params: { sessionId: '12' } }))).status).toBe(403);
+    expect((await run(guardSharedSession(blocked), reqFor({ id: 7 }, { params: { sessionId: '12' } }))).status).toBe(403);
+  });
+
+  it('answers 404 once either side has left the friendship', async () => {
+    const pool = fakePool([session({ removedByB: new Date() }), OWNS_1_AND_2]);
+    const req = reqFor({ id: 7 }, { params: { sessionId: '12' } });
+    expect((await run(guardSharedSession(pool), req)).status).toBe(404);
+  });
+
+  it('never sends a non-numeric session id to Postgres', async () => {
+    const pool = fakePool([]);
+    const req = reqFor({ id: 7 }, { params: { sessionId: "1 OR '1'='1" } });
+    expect((await run(guardSharedSession(pool), req)).status).toBe(404);
     expect(pool.query).not.toHaveBeenCalled();
   });
 });

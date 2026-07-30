@@ -20,7 +20,10 @@ function fakePool(answers) {
     query: vi.fn(async (sql, params) => {
       for (const [pattern, rows] of answers) {
         if (sql.includes(pattern)) {
-          return { rows: typeof rows === 'function' ? rows(params) : rows };
+          // The sql is handed along too: some routes carry the decision in the
+          // statement rather than the parameters — a literal column name, or a
+          // kind spelled into the VALUES list.
+          return { rows: typeof rows === 'function' ? rows(params, sql) : rows };
         }
       }
       throw new Error(`Unexpected query: ${sql}`);
@@ -305,12 +308,17 @@ describe('DELETE /buddies/:linkId', () => {
 
   /** Records what the route did, so the test can assert on the decision. */
   function leavingPool(afterUpdate, link = LIVE_LINK) {
-    const seen = { update: null, cleared: null, deleted: false };
+    const seen = { update: null, cleared: null, deleted: false, closedShared: false };
     const pool = {
       seen,
       query: async (sql, params) => {
         if (sql.includes('FROM user_profiles WHERE user_id')) return { rows: [{ id: 1 }, { id: 2 }] };
         if (sql.includes('SELECT * FROM buddy_links WHERE id')) return { rows: [link] };
+        if (sql.includes('UPDATE shared_sessions')) {
+          seen.closedShared = true;
+          return { rows: [] };
+        }
+        if (sql.includes('UPDATE live_sessions')) return { rows: [] };
         if (sql.includes('INSERT INTO buddy_read_marks')) {
           seen.cleared = params;
           return { rows: [] };
@@ -366,6 +374,17 @@ describe('DELETE /buddies/:linkId', () => {
     await call(pool, { method: 'DELETE', url: '/buddies/5' });
 
     expect(pool.seen.deleted).toBe(true);
+  });
+
+  it('closes any shared session open on the friendship', async () => {
+    // The friendship is what authorises reaching a shared session, so leaving it
+    // while one is open would strand whoever is still inside: they could no
+    // longer be let out of a room they cannot reach.
+    const pool = leavingPool({ id: 5, removedByA: new Date(), removedByB: null });
+
+    await call(pool, { method: 'DELETE', url: '/buddies/5' });
+
+    expect(pool.seen.closedShared).toBe(true);
   });
 });
 
@@ -611,5 +630,345 @@ describe('POST /buddies/:linkId/block', () => {
       method: 'POST', url: '/buddies/5/block', body: { profileId: '1', blocked: true },
     });
     expect(result.status).toBe(403);
+  });
+});
+
+/**
+ * Sharing a routine.
+ *
+ * The one payload one account sends another that the other account then writes
+ * into its own storage. So what is stored is rebuilt field by field, and every
+ * case below is a way the raw payload could have become something other than a
+ * routine on the far side.
+ */
+describe('POST /buddies/:linkId/messages with a routine', () => {
+  const LIVE_LINK = {
+    id: 5, profileIdA: '1', profileIdB: '9', blockedByProfileId: null,
+    removedByA: null, removedByB: null,
+  };
+
+  const ROUTINE = {
+    title: 'Push A',
+    description: 'Chest and shoulders',
+    targetMuscles: ['chest'],
+    exercises: [{
+      exerciseId: '0025', exerciseName: 'Barbell Bench Press', targetSets: 4, targetReps: 8,
+    }],
+  };
+
+  /** Sends a routine and reports the payload that reached the INSERT. */
+  async function share(payload) {
+    let stored = null;
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['SELECT * FROM buddy_links WHERE id', [LIVE_LINK]],
+      ['INSERT INTO buddy_messages', params => {
+        stored = params[4] == null ? null : JSON.parse(params[4]);
+        return [{ id: 3, linkId: 5, senderProfileId: '1', kind: 'routine', createdAt: new Date() }];
+      }],
+    ]);
+
+    const result = await call(pool, {
+      method: 'POST', url: '/buddies/5/messages', body: { kind: 'routine', payload },
+    });
+    return { result, stored };
+  }
+
+  it('stores a routine without the sender ids that came with it', async () => {
+    // `id` would aim the receiver's save at a row that is not theirs, and
+    // `profileId` would file the copy under the person who sent it.
+    const { result, stored } = await share({
+      ...ROUTINE, id: 'r99', profileId: '1', createdAt: new Date(),
+    });
+
+    expect(result.status).toBe(201);
+    expect(stored).not.toHaveProperty('id');
+    expect(stored).not.toHaveProperty('profileId');
+    expect(stored).not.toHaveProperty('createdAt');
+    expect(stored.title).toBe('Push A');
+  });
+
+  it('keeps the catalogue id, which belongs to nobody', async () => {
+    // It names a shared catalogue entry, and it is how the receiver's app finds
+    // the exercise at all.
+    const { stored } = await share(ROUTINE);
+    expect(stored.exercises[0].exerciseId).toBe('0025');
+  });
+
+  it('drops the fields an exercise did not ask for', async () => {
+    // Including a weight, which is the one field this whole feature has spent
+    // five stages keeping out of another account.
+    const { stored } = await share({
+      ...ROUTINE,
+      exercises: [{ ...ROUTINE.exercises[0], weight: 90, reps: 8, secret: 'x', notes: 'pausa' }],
+    });
+
+    expect(Object.keys(stored.exercises[0]).sort()).toEqual([
+      'exerciseId', 'exerciseName', 'notes', 'targetReps', 'targetSets',
+    ]);
+  });
+
+  it('refuses a routine with no exercises in it', async () => {
+    // An empty card in a conversation is worse than a refused send: there is
+    // nothing to save and nothing to explain.
+    expect((await share({ ...ROUTINE, exercises: [] })).result.status).toBe(400);
+    expect((await share({ title: 'Nothing' })).result.status).toBe(400);
+  });
+
+  it('refuses a payload that is not an object at all', async () => {
+    expect((await share('Push A')).result.status).toBe(400);
+    expect((await share(null)).result.status).toBe(400);
+  });
+
+  it('drops an exercise with no name, which nothing could render', async () => {
+    const { stored } = await share({
+      ...ROUTINE,
+      exercises: [{ exerciseId: '1' }, ...ROUTINE.exercises],
+    });
+
+    expect(stored.exercises).toHaveLength(1);
+    expect(stored.exercises[0].exerciseName).toBe('Barbell Bench Press');
+  });
+
+  it('caps how many exercises one routine may carry', async () => {
+    const many = Array.from({ length: 100 }, (_, i) => ({
+      exerciseId: String(i), exerciseName: `Exercise ${i}`, targetSets: 3,
+    }));
+    const { stored } = await share({ ...ROUTINE, exercises: many });
+
+    expect(stored.exercises).toHaveLength(40);
+  });
+
+  it('replaces a nonsense set count rather than storing it', async () => {
+    const { stored } = await share({
+      ...ROUTINE,
+      exercises: [{ ...ROUTINE.exercises[0], targetSets: -4, targetReps: 'lots' }],
+    });
+
+    expect(stored.exercises[0].targetSets).toBe(3);
+    expect(stored.exercises[0].targetReps).toBe(10);
+  });
+
+  it('leaves the payload of a plain text message alone', async () => {
+    // Only routines are rebuilt. The session invitation the server writes
+    // itself must keep travelling as it is.
+    let stored = null;
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['SELECT * FROM buddy_links WHERE id', [LIVE_LINK]],
+      ['INSERT INTO buddy_messages', params => {
+        stored = params[4];
+        return [{ id: 3, linkId: 5, senderProfileId: '1', kind: 'text', createdAt: new Date() }];
+      }],
+    ]);
+
+    await call(pool, {
+      method: 'POST', url: '/buddies/5/messages', body: { body: 'a las 18' },
+    });
+
+    expect(stored).toBe(null);
+  });
+});
+
+/**
+ * Shared sessions.
+ *
+ * A container, not a synchronised workout: the only thing decided here is who is
+ * in the room. So what is worth pinning is that a room cannot be opened twice
+ * for the same pair, cannot be entered by claiming to already be in it, and can
+ * always be left.
+ */
+describe('shared sessions', () => {
+  const LIVE_LINK = {
+    id: 5, profileIdA: '1', profileIdB: '9', blockedByProfileId: null,
+    removedByA: null, removedByB: null,
+  };
+
+  const SESSION = {
+    id: 12, linkId: 5, createdByProfileId: '1', createdAt: new Date(), endedAt: null,
+  };
+
+  const NO_PARTICIPANTS = ['FROM shared_session_participants', []];
+
+  it('opens a container and announces it in the conversation', async () => {
+    // The invitation is an ordinary message, so it rides the machinery that
+    // already delivers messages — the stream, the badge, the transcript.
+    let announced = null;
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['SELECT * FROM buddy_links WHERE id', [LIVE_LINK]],
+      ['SELECT * FROM shared_sessions WHERE "linkId"', []],
+      ['INSERT INTO shared_sessions', [SESSION]],
+      ['INSERT INTO shared_session_participants', []],
+      ['INSERT INTO buddy_messages', (params, sql) => { announced = { params, sql }; return []; }],
+      NO_PARTICIPANTS,
+    ]);
+
+    const result = await call(pool, { method: 'POST', url: '/buddies/5/shared' });
+
+    expect(result.status).toBe(201);
+    expect(result.body.id).toBe('12');
+    expect(announced.sql).toContain('sessionInvite');
+    // The payload points at the container, which is all a client needs to join.
+    expect(JSON.parse(announced.params[2])).toEqual({ sharedSessionId: '12' });
+  });
+
+  it('does not announce twice when the opener presses again', async () => {
+    // The container already exists, so this request opened nothing — posting a
+    // second invitation would invite somebody who is already in the room.
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['SELECT * FROM buddy_links WHERE id', [LIVE_LINK]],
+      ['SELECT * FROM shared_sessions WHERE "linkId"', [SESSION]],
+      ['INSERT INTO shared_session_participants', []],
+      NO_PARTICIPANTS,
+    ]);
+
+    await call(pool, { method: 'POST', url: '/buddies/5/shared' });
+
+    const announced = pool.query.mock.calls.some(([sql]) => sql.includes('INSERT INTO buddy_messages'));
+    expect(announced).toBe(false);
+  });
+
+  it('joins the container that exists rather than opening a second', async () => {
+    // Both partners pressing "train together" within the same second is the
+    // case this feature exists for, and two containers would leave each of them
+    // looking at an empty room.
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['SELECT * FROM buddy_links WHERE id', [LIVE_LINK]],
+      ['SELECT * FROM shared_sessions WHERE "linkId"', [SESSION]],
+      ['INSERT INTO shared_session_participants', []],
+      NO_PARTICIPANTS,
+    ]);
+
+    const result = await call(pool, { method: 'POST', url: '/buddies/5/shared' });
+
+    expect(result.status).toBe(201);
+    const opened = pool.query.mock.calls.some(([sql]) => sql.includes('INSERT INTO shared_sessions'));
+    expect(opened).toBe(false);
+  });
+
+  it('announces only from the side that opened it', async () => {
+    // Otherwise the second arrival posts an invitation into the conversation,
+    // inviting the person already standing there.
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['SELECT * FROM buddy_links WHERE id', [{ ...LIVE_LINK, profileIdA: '9', profileIdB: '1' }]],
+      ['SELECT * FROM shared_sessions WHERE "linkId"', [{ ...SESSION, createdByProfileId: '9' }]],
+      ['INSERT INTO shared_session_participants', []],
+      NO_PARTICIPANTS,
+    ]);
+
+    await call(pool, { method: 'POST', url: '/buddies/5/shared' });
+
+    const announced = pool.query.mock.calls.some(([sql]) => sql.includes('INSERT INTO buddy_messages'));
+    expect(announced).toBe(false);
+  });
+
+  it('refuses to join a session that has ended', async () => {
+    // The invitation stays in the thread forever, so without this every old one
+    // would still be a working door.
+    const pool = fakePool([
+      ['FROM shared_sessions s', [{ sharedId: 12, sharedEndedAt: new Date(), ...LIVE_LINK }]],
+      OWNS_1_AND_2,
+    ]);
+
+    expect((await call(pool, { method: 'POST', url: '/shared/12/join' })).status).toBe(409);
+  });
+
+  it('refuses a session on a friendship you are not part of', async () => {
+    const pool = fakePool([
+      ['FROM shared_sessions s', [{
+        sharedId: 12, sharedEndedAt: null, ...LIVE_LINK, profileIdA: '8', profileIdB: '9',
+      }]],
+      OWNS_1_AND_2,
+    ]);
+
+    expect((await call(pool, { method: 'POST', url: '/shared/12/join' })).status).toBe(403);
+  });
+
+  it('answers 404 for a session that does not exist, not 403', async () => {
+    // "Does session 87 exist" is already a fact about two other people, and
+    // walking the id space collecting 403s would map out who trains with whom.
+    const pool = fakePool([['FROM shared_sessions s', []]]);
+
+    expect((await call(pool, { method: 'POST', url: '/shared/87/join' })).status).toBe(404);
+  });
+
+  it('lets you leave a session that has already ended', async () => {
+    // Leaving is how a workout ends, and workouts end where a failure cannot be
+    // reported or retried — the app closing, the phone dying.
+    const pool = fakePool([
+      ['FROM shared_sessions s', [{ sharedId: 12, sharedEndedAt: new Date(), ...LIVE_LINK }]],
+      OWNS_1_AND_2,
+      ['UPDATE shared_session_participants', []],
+      ['UPDATE live_sessions', []],
+      ['UPDATE shared_sessions SET "endedAt"', []],
+    ]);
+
+    expect((await call(pool, { method: 'POST', url: '/shared/12/leave' })).status).toBe(204);
+  });
+
+  it('cuts only the container tie, leaving you training alone', async () => {
+    // Stepping out of a shared session is not finishing a workout. Clearing the
+    // presence row here would end somebody's session because their partner went
+    // home early.
+    let cleared = null;
+    const pool = fakePool([
+      ['FROM shared_sessions s', [{ sharedId: 12, sharedEndedAt: null, ...LIVE_LINK }]],
+      OWNS_1_AND_2,
+      ['UPDATE shared_session_participants', []],
+      ['UPDATE live_sessions', params => { cleared = params; return []; }],
+      ['UPDATE shared_sessions SET "endedAt"', []],
+    ]);
+
+    await call(pool, { method: 'POST', url: '/shared/12/leave' });
+
+    expect(cleared).toEqual(['1', '12']);
+    const deleted = pool.query.mock.calls.some(([sql]) => sql.includes('DELETE FROM live_sessions'));
+    expect(deleted).toBe(false);
+  });
+});
+
+describe('PUT /presence', () => {
+  it('drops a shared session the caller has not joined', async () => {
+    // Membership is an act, not an assertion. Taking the client's word for it
+    // would put somebody in a room they were never let into.
+    let written = null;
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['SELECT "sharePresence" FROM user_profiles', [{ sharePresence: true }]],
+      ['FROM shared_session_participants p', []],
+      ['INSERT INTO live_sessions', params => { written = params; return []; }],
+    ]);
+
+    const result = await call(pool, {
+      method: 'PUT',
+      url: '/presence',
+      body: { profileId: '1', snapshot: { sessionKey: 'k', sharedSessionId: '99' } },
+    });
+
+    expect(result.status).toBe(204);
+    // The container is the last parameter, and it must have been dropped.
+    expect(written[written.length - 1]).toBe(null);
+  });
+
+  it('keeps a shared session the caller is actually in', async () => {
+    let written = null;
+    const pool = fakePool([
+      OWNS_1_AND_2,
+      ['SELECT "sharePresence" FROM user_profiles', [{ sharePresence: true }]],
+      ['FROM shared_session_participants p', [{ ok: 1 }]],
+      ['INSERT INTO live_sessions', params => { written = params; return []; }],
+    ]);
+
+    await call(pool, {
+      method: 'PUT',
+      url: '/presence',
+      body: { profileId: '1', snapshot: { sessionKey: 'k', sharedSessionId: '12' } },
+    });
+
+    expect(written[written.length - 1]).toBe('12');
   });
 });

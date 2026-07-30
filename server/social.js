@@ -10,7 +10,9 @@
  * present and `owns()` — which lets anonymous requests through — is never used.
  */
 import express from 'express';
-import { guardActingProfile, guardBuddyLink, ownsStrict } from './auth.js';
+import {
+  guardActingProfile, guardBuddyLink, guardSharedSession, ownsStrict,
+} from './auth.js';
 
 /**
  * No `0/O`, no `1/I/L`. A code's whole job is to survive being read aloud in a
@@ -44,6 +46,10 @@ const MAX_BUDDIES = 20;
  */
 const MAX_BODY_CHARS = 2000;
 const MAX_PAYLOAD_BYTES = 32_768;
+
+/** More than any real routine, and far less than a payload worth storing. */
+const MAX_SHARED_EXERCISES = 40;
+const MAX_SHARED_TEXT = 200;
 
 /**
  * How long a session stays live without a heartbeat.
@@ -152,7 +158,23 @@ function toPresence(row) {
     setCount: row.setCount ?? undefined,
     setsDone: row.setsDone ?? 0,
     setsPlanned: row.setsPlanned ?? 0,
+    // Which shared session this belongs to, so the client can filter the same
+    // presence rows down to the people training with you. Not a new disclosure:
+    // it says who is in the room, not what they are lifting.
+    sharedSessionId: row.sharedSessionId != null ? String(row.sharedSessionId) : undefined,
     updatedAt: row.updatedAt,
+  };
+}
+
+/** One shared session with its live participants, from the caller's side. */
+function toShared(row, participants, myProfileId) {
+  return {
+    id: String(row.id),
+    linkId: String(row.linkId),
+    createdAt: row.createdAt,
+    startedByMe: String(row.createdByProfileId) === String(myProfileId),
+    /** Profile ids still in it, the caller included. */
+    profileIds: participants.map(String),
   };
 }
 
@@ -165,6 +187,64 @@ function toMessage(row) {
     body: row.body ?? undefined,
     payload: row.payload ?? undefined,
     createdAt: row.createdAt,
+  };
+}
+
+function clip(value, max = MAX_SHARED_TEXT) {
+  return typeof value === 'string' ? value.slice(0, max) : '';
+}
+
+function positiveInt(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
+/**
+ * Rebuilds a shared routine field by field on the way in.
+ *
+ * A routine is the one thing one account sends another that the other account
+ * then *writes into its own storage*. Passing the payload through would make
+ * "share a routine" a primitive for putting arbitrary JSON into somebody's
+ * database, so what is stored is only what this function chose to keep.
+ *
+ * Two fields are missing on purpose and must stay missing. `id` would be the
+ * sender's row, and saving it on the far side would aim their write at a row
+ * that is not theirs. `profileId` would be the sender's profile, and the whole
+ * point is that the copy belongs to whoever saved it.
+ *
+ * Returns null when there is nothing worth keeping, which the caller refuses —
+ * an empty card in a conversation is worse than a rejected send.
+ */
+function toSharedRoutine(raw) {
+  if (raw == null || typeof raw !== 'object') return null;
+
+  const exercises = (Array.isArray(raw.exercises) ? raw.exercises : [])
+    .slice(0, MAX_SHARED_EXERCISES)
+    .flatMap(item => {
+      if (item == null || typeof item !== 'object') return [];
+      const exerciseName = clip(item.exerciseName);
+      if (!exerciseName) return [];
+      return [{
+        // Kept because it is how the receiver's app finds the exercise in the
+        // catalogue — it names a shared catalogue entry, not a row of anyone's.
+        exerciseId: clip(item.exerciseId, 40),
+        exerciseName,
+        targetSets: positiveInt(item.targetSets, 3),
+        targetReps: item.targetReps != null ? positiveInt(item.targetReps, 10) : undefined,
+        notes: item.notes != null ? clip(item.notes, 500) : undefined,
+      }];
+    });
+
+  if (exercises.length === 0) return null;
+
+  return {
+    title: clip(raw.title) || 'Routine',
+    description: clip(raw.description, 1000),
+    targetMuscles: (Array.isArray(raw.targetMuscles) ? raw.targetMuscles : [])
+      .slice(0, 20)
+      .map(muscle => clip(muscle, 40))
+      .filter(Boolean),
+    exercises,
   };
 }
 
@@ -287,6 +367,21 @@ export function socialRoutes(pool) {
         [req.link.id, req.link.mine],
       );
 
+      // Any container open on this friendship closes with it. Not tidiness: the
+      // friendship is what authorises reaching a shared session, so once it is
+      // gone nobody can leave one either — the person still inside would be
+      // stranded in a room they cannot step out of.
+      await pool.query(
+        `UPDATE shared_sessions SET "endedAt" = NOW()
+          WHERE "linkId" = $1 AND "endedAt" IS NULL`,
+        [req.link.id],
+      );
+      await pool.query(
+        `UPDATE live_sessions SET "sharedSessionId" = NULL
+          WHERE "sharedSessionId" IN (SELECT id FROM shared_sessions WHERE "linkId" = $1)`,
+        [req.link.id],
+      );
+
       const column = req.link.isA ? 'removedByA' : 'removedByB';
       const { rows } = await pool.query(
         `UPDATE buddy_links SET "${column}" = NOW() WHERE id = $1 RETURNING *`,
@@ -352,10 +447,10 @@ export function socialRoutes(pool) {
    * Measured against a real preview before being built: Vercel does not buffer
    * `text/event-stream`, and a function survives at least 290 seconds. Both
    * were open questions the design hung on, and neither can be answered locally
-   * where Node always streams fine. The third â€” whether the Capacitor WebView
-   * parses frames incrementally rather than waiting for the body â€” was measured
+   * where Node always streams fine. The third — whether the Capacitor WebView
+   * parses frames incrementally rather than waiting for the body — was measured
    * on an Android 16 device (WebView 150) against a LAN server: 13 frames over
-   * 60s, each 160â€“273ms behind the server's own clock, a gap that stayed flat
+   * 60s, each 160–273ms behind the server's own clock, a gap that stayed flat
    * instead of collapsing into a clump at the end, which is what buffering looks
    * like. `fetch`, `getReader()` and `TextDecoder` behave as on the desktop.
    *
@@ -441,6 +536,11 @@ export function socialRoutes(pool) {
 
       const { links } = await refreshLinks();
       const presence = await readPresence();
+      // Membership rides on the opening frame because it is the one thing the
+      // client cannot work out from its own actions: a reload mid-workout would
+      // otherwise forget it was training with somebody. It needs no tick of its
+      // own — a partner arriving or leaving shows up in their presence row.
+      const shared = await liveSharedFor(profileId);
       for (const entry of presence) {
         cursor.presenceAt = Math.max(cursor.presenceAt, new Date(entry.updatedAt).getTime());
       }
@@ -453,7 +553,7 @@ export function socialRoutes(pool) {
       // then dropped would otherwise reconnect from zero and replay everything.
       send(
         'hello',
-        { serverNow: new Date(), cursor: formatCursor(cursor), links, presence },
+        { serverNow: new Date(), cursor: formatCursor(cursor), links, presence, shared },
         formatCursor(cursor),
       );
 
@@ -569,11 +669,28 @@ export function socialRoutes(pool) {
       }
 
       const s = req.body.snapshot ?? {};
+
+      // Membership is not taken on the client's word. A snapshot naming a
+      // session the caller has not joined would put them in a room they were
+      // never let into — so the claim is checked against the participants table
+      // and dropped if it does not hold.
+      let sharedSessionId = null;
+      if (s.sharedSessionId != null && /^\d+$/.test(String(s.sharedSessionId))) {
+        const { rows: member } = await pool.query(
+          `SELECT 1 FROM shared_session_participants p
+             JOIN shared_sessions ss ON ss.id = p."sessionId" AND ss."endedAt" IS NULL
+            WHERE p."sessionId" = $1 AND p."profileId" = $2 AND p."leftAt" IS NULL`,
+          [String(s.sharedSessionId), profileId],
+        );
+        if (member.length > 0) sharedSessionId = String(s.sharedSessionId);
+      }
+
       await pool.query(
         `INSERT INTO live_sessions ("profileId", "sessionKey", "startedAt", "exerciseName",
                                     "exerciseIndex", "exerciseCount", "setNumber", "setCount",
-                                    "setsDone", "setsPlanned", "updatedAt", "endedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, NOW(), NULL)
+                                    "setsDone", "setsPlanned", "sharedSessionId",
+                                    "updatedAt", "endedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, NOW(), NULL)
          ON CONFLICT ("profileId") DO UPDATE
            SET "sessionKey" = EXCLUDED."sessionKey",
                "startedAt" = EXCLUDED."startedAt",
@@ -584,13 +701,14 @@ export function socialRoutes(pool) {
                "setCount" = EXCLUDED."setCount",
                "setsDone" = EXCLUDED."setsDone",
                "setsPlanned" = EXCLUDED."setsPlanned",
+               "sharedSessionId" = EXCLUDED."sharedSessionId",
                "updatedAt" = NOW(),
                "endedAt" = NULL`,
         [
           profileId, String(s.sessionKey ?? ''), s.startedAt ?? new Date(),
           s.exerciseName ?? null, s.exerciseIndex ?? null, s.exerciseCount ?? null,
           s.setNumber ?? null, s.setCount ?? null,
-          s.setsDone ?? 0, s.setsPlanned ?? 0,
+          s.setsDone ?? 0, s.setsPlanned ?? 0, sharedSessionId,
         ],
       );
       res.status(204).end();
@@ -637,6 +755,189 @@ export function socialRoutes(pool) {
       // `serverNow` lets the client correct for the other phone's clock being
       // wrong, which would otherwise show an elapsed time minutes out.
       res.json({ serverNow: new Date(), presence: rows.map(toPresence) });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ─── Shared sessions ──────────────────────────────────────────────────────
+  //
+  // A container, not a synchronised workout. Two partners agree to be in the gym
+  // together; each does their own exercises at their own weights. Everything a
+  // participant sees is a filter over the presence rows they could already see,
+  // which is why this stage adds routes but no new disclosure.
+
+  /** Who is still in a container, oldest first. */
+  async function participantsOf(sessionId) {
+    const { rows } = await pool.query(
+      `SELECT "profileId" FROM shared_session_participants
+        WHERE "sessionId" = $1 AND "leftAt" IS NULL
+        ORDER BY "joinedAt" ASC`,
+      [sessionId],
+    );
+    return rows.map(row => row.profileId);
+  }
+
+  /**
+   * Closes a container once the last person has stepped out.
+   *
+   * Ending it rather than leaving it empty is what makes the partial unique
+   * index work: the pair can train together again tomorrow, and the invite left
+   * in the chat cannot be tapped to rejoin a session that is over.
+   */
+  async function endIfEmpty(sessionId) {
+    await pool.query(
+      `UPDATE shared_sessions SET "endedAt" = NOW()
+        WHERE id = $1 AND "endedAt" IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM shared_session_participants
+             WHERE "sessionId" = $1 AND "leftAt" IS NULL
+          )`,
+      [sessionId],
+    );
+  }
+
+  /**
+   * The caller's live container, if they are in one.
+   *
+   * Asked on load and again on every stream open, because membership is the one
+   * piece of social state the client cannot reconstruct from its own actions —
+   * a reload mid-session would otherwise forget you were training with someone.
+   */
+  async function liveSharedFor(profileId) {
+    const { rows } = await pool.query(
+      `SELECT s.* FROM shared_sessions s
+         JOIN shared_session_participants p
+           ON p."sessionId" = s.id AND p."profileId" = $1 AND p."leftAt" IS NULL
+         JOIN buddy_links l ON l.id = s."linkId"
+        WHERE s."endedAt" IS NULL
+          AND l."blockedByProfileId" IS NULL
+          AND l."removedByA" IS NULL AND l."removedByB" IS NULL
+        ORDER BY s."createdAt" DESC LIMIT 1`,
+      [String(profileId)],
+    );
+    if (rows.length === 0) return null;
+    return toShared(rows[0], await participantsOf(rows[0].id), profileId);
+  }
+
+  router.get('/shared', actingProfile, async (req, res) => {
+    try {
+      res.json(await liveSharedFor(String(req.query.profileId)));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  /**
+   * Opens a container on a friendship and invites the other side into it.
+   *
+   * Idempotent per friendship, and that is the point of the partial unique
+   * index rather than a check here: both people pressing "train together" within
+   * the same second must land in *one* session, or each sees an empty room and
+   * the feature has failed at exactly the moment it was wanted.
+   *
+   * The invitation is an ordinary message, so it arrives through the machinery
+   * that already delivers messages — the stream, the unread badge, the
+   * transcript. A separate notification channel would need all of that again.
+   */
+  router.post('/buddies/:linkId/shared', buddyLink, async (req, res) => {
+    try {
+      const mine = req.link.mine;
+
+      const { rows: existing } = await pool.query(
+        'SELECT * FROM shared_sessions WHERE "linkId" = $1 AND "endedAt" IS NULL',
+        [req.link.id],
+      );
+
+      let session = existing[0];
+      /** Whether *this* request opened it, which is what decides who announces. */
+      let opened = false;
+      if (!session) {
+        const { rows: created } = await pool.query(
+          `INSERT INTO shared_sessions ("linkId", "createdByProfileId") VALUES ($1, $2)
+           ON CONFLICT ("linkId") WHERE "endedAt" IS NULL DO NOTHING
+           RETURNING *`,
+          [req.link.id, mine],
+        );
+        if (created[0]) {
+          session = created[0];
+          opened = true;
+        } else {
+          // Empty means the other phone won the race; theirs is the session.
+          session = (await pool.query(
+            'SELECT * FROM shared_sessions WHERE "linkId" = $1 AND "endedAt" IS NULL',
+            [req.link.id],
+          )).rows[0];
+        }
+      }
+
+      await pool.query(
+        `INSERT INTO shared_session_participants ("sessionId", "profileId") VALUES ($1, $2)
+         ON CONFLICT ("sessionId", "profileId") DO UPDATE
+           SET "leftAt" = NULL, "joinedAt" = NOW()`,
+        [session.id, mine],
+      );
+
+      // Announced only by the request that actually opened the container.
+      // Keyed on that rather than on who created it, because both alternatives
+      // put a second invitation into the conversation: the other side arriving
+      // would invite the person already standing there, and the opener pressing
+      // twice would invite them again.
+      if (opened) {
+        await pool.query(
+          `INSERT INTO buddy_messages ("linkId", "senderProfileId", kind, payload)
+           VALUES ($1, $2, 'sessionInvite', $3)`,
+          [req.link.id, mine, JSON.stringify({ sharedSessionId: String(session.id) })],
+        );
+      }
+
+      res.status(201).json(toShared(session, await participantsOf(session.id), mine));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  /** Steps into a container somebody opened. Idempotent. */
+  router.post('/shared/:sessionId/join', guardSharedSession(pool), async (req, res) => {
+    try {
+      // A finished session is a record of something that happened, not a door.
+      // The invitation stays in the conversation forever, so without this every
+      // old invite would still be tappable.
+      if (req.shared.ended) return res.status(409).json({ error: 'That session has ended' });
+
+      await pool.query(
+        `INSERT INTO shared_session_participants ("sessionId", "profileId") VALUES ($1, $2)
+         ON CONFLICT ("sessionId", "profileId") DO UPDATE
+           SET "leftAt" = NULL, "joinedAt" = NOW()`,
+        [req.shared.id, req.shared.mine],
+      );
+
+      const { rows } = await pool.query('SELECT * FROM shared_sessions WHERE id = $1', [
+        req.shared.id,
+      ]);
+      res.status(201).json(
+        toShared(rows[0], await participantsOf(req.shared.id), req.shared.mine),
+      );
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  /**
+   * Steps out. Never refused, including from a session already ended.
+   *
+   * Leaving is how a workout ends, and a workout ends in places where a failure
+   * cannot be reported or retried — the app being closed, the phone dying. So
+   * this is written to always succeed if it arrives at all.
+   */
+  router.post('/shared/:sessionId/leave', guardSharedSession(pool), async (req, res) => {
+    try {
+      await pool.query(
+        `UPDATE shared_session_participants SET "leftAt" = NOW()
+          WHERE "sessionId" = $1 AND "profileId" = $2 AND "leftAt" IS NULL`,
+        [req.shared.id, req.shared.mine],
+      );
+      // Your presence row keeps existing — you may still be training, just no
+      // longer together. Only the container tie is cut.
+      await pool.query(
+        `UPDATE live_sessions SET "sharedSessionId" = NULL
+          WHERE "profileId" = $1 AND "sharedSessionId" = $2`,
+        [req.shared.mine, req.shared.id],
+      );
+      await endIfEmpty(req.shared.id);
+      res.status(204).end();
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -689,12 +990,21 @@ export function socialRoutes(pool) {
         return res.status(413).json({ error: 'Attachment too large' });
       }
 
+      // A routine is rebuilt rather than stored: it is the one payload the far
+      // side writes into its own database, so what is kept is only what the
+      // serialiser chose — never an id, never a profile.
+      let stored = payload ?? null;
+      if (kind === 'routine') {
+        stored = toSharedRoutine(payload);
+        if (!stored) return res.status(400).json({ error: 'That routine has no exercises' });
+      }
+
       const { rows } = await pool.query(
         `INSERT INTO buddy_messages ("linkId", "senderProfileId", kind, body, payload)
          VALUES ($1, $2, $3, $4, $5) RETURNING *`,
         // The sender comes from the guard, never from the body — otherwise
         // anyone in a conversation could sign a message as the other person.
-        [req.link.id, req.link.mine, kind, text, payload != null ? JSON.stringify(payload) : null],
+        [req.link.id, req.link.mine, kind, text, stored != null ? JSON.stringify(stored) : null],
       );
       res.status(201).json(toMessage(rows[0]));
     } catch (err) { res.status(500).json({ error: err.message }); }
