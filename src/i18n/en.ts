@@ -568,4 +568,31 @@ export const en = {
   'buddy.presenceSub': 'Partners see the exercise you are on and how far through you are. Never your weights.',
   'buddy.presenceOn': 'On',
   'buddy.presenceOff': 'Off',
+
+  // Training together
+  'buddy.together': 'Train together',
+  'buddy.togetherSub': 'You each do your own workout, at your own weights.',
+  'buddy.togetherInviteMine': 'You asked {name} to train together',
+  'buddy.togetherInviteTheirs': '{name} asked you to train together',
+  'buddy.togetherJoin': 'Join',
+  'buddy.togetherJoined': 'You are in this session',
+  'buddy.togetherEnded': 'This session is over',
+  'buddy.togetherHeading': 'Training together',
+  'buddy.togetherWaiting': 'Waiting for someone to join',
+  'buddy.togetherLeave': 'Leave',
+  'buddy.togetherFailed': 'That did not work. Try again.',
+
+  // Sharing a routine
+  'buddy.shareRoutine': 'Share a routine',
+  'buddy.shareRoutineSub': 'They get a copy of their own to change however they like.',
+  'buddy.shareRoutinePick': 'Which routine?',
+  'buddy.shareRoutineNone': 'You have not saved a routine yet.',
+  'buddy.routineFromMe': 'You shared a routine',
+  'buddy.routineFromThem': '{name} shared a routine',
+  'buddy.routineExercises_one': '{n} exercise',
+  'buddy.routineExercises_other': '{n} exercises',
+  'buddy.routineSave': 'Save a copy',
+  'buddy.routineSaved': 'Saved to your routines',
+  'buddy.routineBroken': 'This routine did not come through',
+  'buddy.routineFailed': 'That did not save. Try again.',
 } as const;

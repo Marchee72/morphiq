@@ -73,11 +73,61 @@ export interface BuddyPresence {
   setCount?: number;
   setsDone: number;
   setsPlanned: number;
+  /** The container they are training in, if any. See `SharedSession`. */
+  sharedSessionId?: string;
   updatedAt: Date;
 }
 
 /** What this device publishes about its own session. Never read back. */
 export type LiveSessionSnapshot = Omit<BuddyPresence, 'profileId' | 'linkId' | 'updatedAt'>;
+
+/**
+ * Two partners training at the same time.
+ *
+ * A container, not a synchronised workout: each person does their own
+ * exercises, at their own weights, at their own pace. Nothing in here describes
+ * a plan, because there is no shared plan — only a shared hour.
+ *
+ * It therefore discloses nothing new. What a participant sees of the others is
+ * the presence they could already see, narrowed to the people in the same
+ * container.
+ */
+export interface SharedSession {
+  id: string;
+  /** The friendship it was opened on, which is also what authorises reaching it. */
+  linkId: string;
+  createdAt: Date;
+  startedByMe: boolean;
+  /** Everyone still in it, you included. */
+  profileIds: string[];
+}
+
+/**
+ * A routine as it travels between two people.
+ *
+ * A snapshot, not a link. It carries no `id` and no `profileId`, and the two
+ * absences are the design: the receiver saves a copy that belongs to them, so
+ * there is nothing pointing back at the sender's row for a later edit to follow.
+ *
+ * Which means the two copies drift apart the moment either is changed, and that
+ * is the honest behaviour — the button says "save a copy" because that is what
+ * it does, not because the wording is softer.
+ *
+ * `exerciseId` survives because it names an entry in the shared exercise
+ * catalogue, which belongs to nobody.
+ */
+export interface SharedRoutine {
+  title: string;
+  description: string;
+  targetMuscles: string[];
+  exercises: {
+    exerciseId: string;
+    exerciseName: string;
+    targetSets: number;
+    targetReps?: number;
+    notes?: string;
+  }[];
+}
 
 /**
  * A code you send someone, single-use and short-lived.

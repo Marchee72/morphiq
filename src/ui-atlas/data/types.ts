@@ -1,4 +1,6 @@
-import type { BuddyInvite, BuddyLink } from '../../core/entities/Buddy';
+import type {
+  BuddyInvite, BuddyLink, SharedRoutine, SharedSession,
+} from '../../core/entities/Buddy';
 import type { Exercise } from '../../core/entities/Exercise';
 import type { Message } from '../../core/entities/Message';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
@@ -90,6 +92,15 @@ export interface SocialState {
   unread: number;
   /** Partners training right now, newest first. Empty when nobody is. */
   training: PresenceRowVM[];
+  /** The container this device is training in, or null when training alone. */
+  shared: SharedSession | null;
+  /**
+   * The partners inside that container, in the order they arrived.
+   *
+   * A filter over `training`, deliberately: a shared session shows nothing a
+   * partner could not already see, it only says who is in the room.
+   */
+  sharedPartners: PresenceRowVM[];
 
   refresh(): Promise<void>;
   createInvite(): Promise<void>;
@@ -109,6 +120,25 @@ export interface SocialState {
    */
   watchConversation(linkId: string): () => void;
   sendMessage(linkId: string, body: string): Promise<void>;
+  /**
+   * Sends a routine into a conversation as a snapshot.
+   *
+   * A copy, not a link: what the receiver saves belongs to them, and the two
+   * drift apart the moment either is edited. Which is why the button on the
+   * far side says "save a copy" rather than anything friendlier.
+   */
+  shareRoutine(linkId: string, routine: SharedRoutine): Promise<void>;
+
+  /**
+   * Opens a shared session on a friendship and invites the other side.
+   *
+   * Idempotent per friendship: both partners pressing it at once end up in one
+   * container rather than two, each looking at an empty room.
+   */
+  startShared(linkId: string): Promise<void>;
+  joinShared(sessionId: string): Promise<void>;
+  /** Steps out without ending the workout — you carry on training alone. */
+  leaveShared(): Promise<void>;
 }
 
 /** Overlays the shell can open. Any screen can request one. */

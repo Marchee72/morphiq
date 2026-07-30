@@ -1,5 +1,5 @@
 import type {
-  BuddyInvite, BuddyLink, BuddyMessage, BuddyPresence,
+  BuddyInvite, BuddyLink, BuddyMessage, BuddyMessageKind, BuddyPresence, SharedRoutine,
 } from '../../core/entities/Buddy';
 
 /**
@@ -25,7 +25,20 @@ export interface BuddyRowVM {
 export interface BuddyMessageVM {
   id: string;
   mine: boolean;
-  body: string;
+  /**
+   * Which shape the thread draws.
+   *
+   * Carried rather than inferred from the fields present: a text message and an
+   * invitation are different things to look at, and deciding that from "does it
+   * have a body" would quietly turn an empty message into a card.
+   */
+  kind: BuddyMessageKind;
+  /** Present on text. An invitation has nothing to say beyond being one. */
+  body?: string;
+  /** The container an invitation points at. */
+  sharedSessionId?: string;
+  /** The routine a share carries, once it has survived being read back. */
+  routine?: SharedRoutine;
   at: Date;
 }
 
@@ -81,6 +94,8 @@ export interface PresenceRowVM {
   exerciseCount?: number;
   setNumber?: number;
   setCount?: number;
+  /** The container they are training in, if any. Undefined means alone. */
+  sharedSessionId?: string;
   /**
    * When they started, corrected for the difference between their clock and
    * the server's. A `Date`, so the ticker at the render edge owns the counting.
@@ -122,14 +137,63 @@ export function buildPresenceRows(
         exerciseCount: entry.exerciseCount,
         setNumber: entry.setNumber,
         setCount: entry.setCount,
+        sharedSessionId: entry.sharedSessionId,
         startedAt: new Date(entry.startedAt.getTime() + clockSkewMs),
       }];
     })
     .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
 }
 
+/**
+ * The partners training in the same container as you.
+ *
+ * A filter over the rows above and nothing more — which is the whole design of
+ * shared sessions. Being in one shows you no more about somebody than being
+ * their partner already did; it only says who is in the room right now.
+ *
+ * Ordered by when each arrived, oldest first, so the strip does not reshuffle
+ * itself under a thumb every time somebody closes a set.
+ */
+export function buildSharedRows(
+  training: PresenceRowVM[],
+  sharedSessionId: string | null,
+): PresenceRowVM[] {
+  if (!sharedSessionId) return [];
+  return training
+    .filter(row => row.sharedSessionId === sharedSessionId)
+    .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+}
+
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/**
+ * Reads a shared routine back out of a message payload.
+ *
+ * The server already rebuilds it field by field on the way in, so this is not
+ * where the trust boundary is. It is where an *old* payload is handled: a
+ * message is stored forever, and a routine written by a version of the app that
+ * shaped them differently must not put a card with no exercises on screen.
+ *
+ * Returns undefined for anything it cannot make a whole routine out of, which
+ * the thread renders as a share that arrived broken rather than as a button
+ * that would save nothing.
+ */
+export function parseSharedRoutine(payload: unknown): SharedRoutine | undefined {
+  if (payload == null || typeof payload !== 'object') return undefined;
+  const raw = payload as Partial<SharedRoutine>;
+  if (!Array.isArray(raw.exercises) || raw.exercises.length === 0) return undefined;
+
+  const exercises = raw.exercises.filter(item => item?.exerciseName);
+  if (exercises.length === 0) return undefined;
+
+  return {
+    title: raw.title ?? '',
+    description: raw.description ?? '',
+    targetMuscles: Array.isArray(raw.targetMuscles) ? raw.targetMuscles : [],
+    exercises,
+  };
 }
 
 /**
@@ -150,16 +214,20 @@ export function buildMessageDays(
   const days: BuddyDayVM[] = [];
 
   for (const message of messages) {
-    // Only text has a body worth rendering; the other kinds arrive with the
-    // stages that know how to draw them.
-    if (message.kind !== 'text' || !message.body) continue;
+    // A text message with nothing in it has nothing to draw. Every other kind
+    // carries its own shape and the thread knows how to render it.
+    if (message.kind === 'text' && !message.body) continue;
 
     const day = startOfDay(message.createdAt);
     const last = days[days.length - 1];
+    const payload = message.payload as { sharedSessionId?: string } | undefined;
     const vm: BuddyMessageVM = {
       id: message.id,
       mine: String(message.senderProfileId) === String(myProfileId),
+      kind: message.kind,
       body: message.body,
+      sharedSessionId: payload?.sharedSessionId,
+      routine: message.kind === 'routine' ? parseSharedRoutine(message.payload) : undefined,
       at: message.createdAt,
     };
 

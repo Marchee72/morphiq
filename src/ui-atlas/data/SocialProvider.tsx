@@ -2,10 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { sseTransport } from '../../data/social/socialStream';
 import { useStore } from '../../presentation/state/store';
 import { useSocialStore } from '../../presentation/state/socialStore';
-import { buildBuddyRows, buildMessageDays, buildPresenceRows, totalUnread } from '../derive/social';
+import {
+  buildBuddyRows, buildMessageDays, buildPresenceRows, buildSharedRows, totalUnread,
+} from '../derive/social';
 import { usePresencePublisher } from './usePresencePublisher';
 import { SocialContext } from './contexts';
 import { useAppActions } from './useAppData';
+import type { SharedRoutine } from '../../core/entities/Buddy';
 import type { SocialState } from './types';
 
 /**
@@ -37,6 +40,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const invite = useSocialStore(state => state.invite);
   const messages = useSocialStore(state => state.messages);
   const presence = useSocialStore(state => state.presence);
+  const shared = useSocialStore(state => state.shared);
   const clockSkewMs = useSocialStore(state => state.clockSkewMs);
   const error = useSocialStore(state => state.error);
 
@@ -128,6 +132,10 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     () => buildPresenceRows(Object.values(presence), rows, clockSkewMs),
     [presence, rows, clockSkewMs],
   );
+  const sharedPartners = useMemo(
+    () => buildSharedRows(training, shared?.id ?? null),
+    [training, shared],
+  );
 
   // Publishing this device's own session. Mounted here so it runs wherever the
   // app is, not only while the Train screen happens to be on screen.
@@ -167,6 +175,10 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     await useSocialStore.getState().sendMessage(linkId, body);
   }, []);
 
+  const shareRoutine = useCallback(async (linkId: string, routine: SharedRoutine) => {
+    await useSocialStore.getState().shareRoutine(linkId, routine);
+  }, []);
+
   const refresh = useCallback(async () => {
     if (profileId) await useSocialStore.getState().load(profileId);
   }, [profileId]);
@@ -195,14 +207,28 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (profileId) await useSocialStore.getState().setBlocked(linkId, profileId, blocked);
   }, [profileId]);
 
+  const startShared = useCallback(async (linkId: string) => {
+    await useSocialStore.getState().startShared(linkId);
+  }, []);
+
+  const joinShared = useCallback(async (sessionId: string) => {
+    await useSocialStore.getState().joinShared(sessionId);
+  }, []);
+
+  const leaveShared = useCallback(async () => {
+    await useSocialStore.getState().leaveShared();
+  }, []);
+
   const value = useMemo<SocialState>(() => ({
-    available, ready, links, invite, error, rows, unread, training,
+    available, ready, links, invite, error, rows, unread, training, shared, sharedPartners,
     refresh, createInvite, revokeInvite, redeemInvite, removeBuddy, setBlocked,
-    conversation, watchConversation, sendMessage,
+    conversation, watchConversation, sendMessage, shareRoutine,
+    startShared, joinShared, leaveShared,
   }), [
-    available, ready, links, invite, error, rows, unread, training,
+    available, ready, links, invite, error, rows, unread, training, shared, sharedPartners,
     refresh, createInvite, revokeInvite, redeemInvite, removeBuddy, setBlocked,
-    conversation, watchConversation, sendMessage,
+    conversation, watchConversation, sendMessage, shareRoutine,
+    startShared, joinShared, leaveShared,
   ]);
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>;

@@ -2986,6 +2986,187 @@ button.at-routine-item { cursor: pointer; }
   white-space: nowrap;
 }
 
+/* ---------- training together ---------- */
+
+/* The proposal, at the top of a conversation. Reads as an action rather than a
+   message, so it is not styled like a bubble. */
+.at-buddy-together {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border: 1.5px solid var(--hair);
+  border-radius: 14px;
+  background: transparent;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.at-buddy-together b { display: block; font-size: 13.5px; }
+.at-buddy-together small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--muted); }
+
+/* The invitation as it sits in the thread. Full width rather than a bubble on
+   one side: it is a thing to act on, and both people act on the same one. */
+.at-buddy-invitecard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 11px 13px;
+  border-radius: 14px;
+  background: var(--at-tonal);
+}
+
+.at-buddy-invitetext { flex: 1; min-width: 0; }
+.at-buddy-invitetext b { display: block; font-size: 13px; line-height: 1.35; }
+.at-buddy-invitetext small { display: block; margin-top: 2px; font-size: 11px; color: var(--muted); }
+
+.at-buddy-invitejoin {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--clay);
+  color: var(--at-on-clay);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.at-buddy-invitestate {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* ---------- sharing a routine ---------- */
+
+.at-buddy-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border-radius: 14px;
+  background: var(--at-tonal);
+}
+
+.at-buddy-picklabel {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.at-buddy-pickitem {
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  background: transparent;
+  padding: 8px 0;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.at-buddy-pickitem:last-child { border-bottom: 0; }
+.at-buddy-pickitem b { display: block; font-size: 13.5px; }
+.at-buddy-pickitem small { display: block; margin-top: 1px; font-size: 11.5px; color: var(--muted); }
+
+/* Shares the invitation card's frame — both are a thing to act on rather than
+   a line to read, and they sit in the same thread. */
+.at-buddy-routinecard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 11px 13px;
+  border-radius: 14px;
+  background: var(--at-tonal);
+}
+
+.at-buddy-routinetitle {
+  display: block;
+  margin-top: 3px;
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+/* The participant strip under the Train header. Present only inside a shared
+   session, which is why it may sit flush against the header above it. */
+.at-shared {
+  padding: 8px 18px 10px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.at-shared-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.at-shared-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.at-shared-leave {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  padding: 4px 2px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.at-shared-waiting { font-size: 12.5px; color: var(--muted); }
+
+.at-shared-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12.5px;
+}
+
+.at-shared-row b { flex-shrink: 0; letter-spacing: -0.01em; }
+
+/* The exercise gives way first: the name and the clock are what stay readable
+   when a long exercise title arrives. */
+.at-shared-row small {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.at-shared-time {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- heat map card ---------- */
 
 .at-heatmap {
@@ -2994,7 +3175,7 @@ button.at-routine-item { cursor: pointer; }
   align-items: flex-start;
 }
 
-/* Tighter than `.at-card`'s 20px â€” the two-column figure+info layout reads
+/* Tighter than `.at-card`'s 20px — the two-column figure+info layout reads
    crowded at the default. Matches the todaytrain card's rhythm. */
 .at-card.at-heatmap-card { padding: 16px 18px; }
 

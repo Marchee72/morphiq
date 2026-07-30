@@ -565,4 +565,31 @@ export const es: Translations = {
   'buddy.presenceSub': 'Tus compañeros ven en qué ejercicio vas y cuánto llevas. Los pesos nunca.',
   'buddy.presenceOn': 'Sí',
   'buddy.presenceOff': 'No',
+
+  // Entrenar juntos
+  'buddy.together': 'Entrenar juntos',
+  'buddy.togetherSub': 'Cada uno hace su propio entreno, con sus propios pesos.',
+  'buddy.togetherInviteMine': 'Le propusiste a {name} entrenar juntos',
+  'buddy.togetherInviteTheirs': '{name} te propuso entrenar juntos',
+  'buddy.togetherJoin': 'Sumarme',
+  'buddy.togetherJoined': 'Estás en esta sesión',
+  'buddy.togetherEnded': 'Esta sesión ya terminó',
+  'buddy.togetherHeading': 'Entrenando juntos',
+  'buddy.togetherWaiting': 'Esperando a que se sume alguien',
+  'buddy.togetherLeave': 'Salir',
+  'buddy.togetherFailed': 'No se pudo. Probá de nuevo.',
+
+  // Compartir una rutina
+  'buddy.shareRoutine': 'Compartir una rutina',
+  'buddy.shareRoutineSub': 'Le queda una copia suya, para cambiarla como quiera.',
+  'buddy.shareRoutinePick': '¿Cuál rutina?',
+  'buddy.shareRoutineNone': 'Todavía no guardaste ninguna rutina.',
+  'buddy.routineFromMe': 'Compartiste una rutina',
+  'buddy.routineFromThem': '{name} compartió una rutina',
+  'buddy.routineExercises_one': '{n} ejercicio',
+  'buddy.routineExercises_other': '{n} ejercicios',
+  'buddy.routineSave': 'Guardar una copia',
+  'buddy.routineSaved': 'Guardada en tus rutinas',
+  'buddy.routineBroken': 'Esta rutina no llegó bien',
+  'buddy.routineFailed': 'No se pudo guardar. Probá de nuevo.',
 };

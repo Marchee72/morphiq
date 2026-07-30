@@ -15,6 +15,7 @@ import { AtlasSessionEditor } from './AtlasSessionEditor';
 import { AtlasStates } from './AtlasStates';
 import { AtlasDial } from './AtlasDial';
 import { AtlasSetList } from './AtlasSetList';
+import { AtlasSharedStrip } from './AtlasSharedStrip';
 import { AtlasTrainHeader } from './AtlasTrainHeader';
 import { AtlasTrainStage } from './AtlasTrainStage';
 import { AtlasFinishSheet } from './AtlasFinishSheet';
@@ -124,14 +125,20 @@ export const AtlasTrain: React.FC = () => {
   };
 
   const header = (
-    <AtlasTrainHeader
-      session={session}
-      exercises={sessionExercises}
-      currentIdx={live.cursor.exerciseIdx}
-      onGoTo={live.goToExercise}
-      onMinimize={() => actions.navigate('today')}
-      onOpenList={() => setListOpen(true)}
-    />
+    <>
+      <AtlasTrainHeader
+        session={session}
+        exercises={sessionExercises}
+        currentIdx={live.cursor.exerciseIdx}
+        onGoTo={live.goToExercise}
+        onMinimize={() => actions.navigate('today')}
+        onOpenList={() => setListOpen(true)}
+      />
+      {/* Sits beside the header rather than inside it because the header ticks
+          once a second and this does not — folding them together would re-render
+          the partner rows sixty times a minute for a clock they do not show. */}
+      <AtlasSharedStrip />
+    </>
   );
 
   const sheets = (

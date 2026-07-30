@@ -35,6 +35,7 @@ export function usePresencePublisher(): void {
   const { session, sessionExercises, cursor, sessionTotals } = useAppData();
   const profileId = useStore(state => state.activeProfile?.id);
   const available = useSocialStore(state => state.available);
+  const sharedSessionId = useSocialStore(state => state.shared?.id);
 
   const current = sessionExercises[cursor.exerciseIdx];
 
@@ -60,9 +61,17 @@ export function usePresencePublisher(): void {
       setCount: current?.sets.length || undefined,
       setsDone: sessionTotals.setsDone,
       setsPlanned: sessionTotals.setsPlanned,
+      /**
+       * Which container this session belongs to, so a partner's screen can
+       * narrow to the people training with them.
+       *
+       * Sent, not trusted: the server checks the claim against the participants
+       * table and drops it otherwise. Joining is an act, not an assertion.
+       */
+      sharedSessionId,
     };
   }, [session, current, cursor.exerciseIdx, cursor.setIdx, sessionExercises.length,
-      sessionTotals.setsDone, sessionTotals.setsPlanned]);
+      sessionTotals.setsDone, sessionTotals.setsPlanned, sharedSessionId]);
 
   useEffect(() => {
     if (!available || !profileId || !snapshot) return;

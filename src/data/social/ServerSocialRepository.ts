@@ -1,5 +1,6 @@
 import type {
   BuddyInvite, BuddyLink, BuddyMessage, BuddyMessageKind, BuddyPresence, LiveSessionSnapshot,
+  SharedRoutine, SharedSession,
 } from '../../core/entities/Buddy';
 import type { ISocialRepository } from '../../core/interfaces/ISocial';
 import { api } from '../database/apiClient';
@@ -27,6 +28,10 @@ function parsePresence(raw: Record<string, unknown>): BuddyPresence {
 
 function parseMessage(raw: Record<string, unknown>): BuddyMessage {
   return { ...raw, createdAt: new Date(raw.createdAt as string) } as BuddyMessage;
+}
+
+function parseShared(raw: Record<string, unknown>): SharedSession {
+  return { ...raw, createdAt: new Date(raw.createdAt as string) } as SharedSession;
 }
 
 function parseInvite(raw: Record<string, unknown>): BuddyInvite {
@@ -103,6 +108,10 @@ export class ServerSocialRepository implements ISocialRepository {
     return parseMessage(raw);
   }
 
+  async shareRoutine(linkId: string, routine: SharedRoutine): Promise<BuddyMessage> {
+    return this.sendMessage(linkId, { kind: 'routine', payload: routine });
+  }
+
   async markRead(linkId: string, upToId: string): Promise<void> {
     await api(`/api/social/buddies/${linkId}/read`, {
       method: 'POST',
@@ -128,5 +137,30 @@ export class ServerSocialRepository implements ISocialRepository {
     await api(`/api/social/presence?profileId=${encodeURIComponent(profileId)}`, {
       method: 'DELETE',
     });
+  }
+
+  async getShared(profileId: string): Promise<SharedSession | null> {
+    const raw = await api<Record<string, unknown> | null>(
+      `/api/social/shared?profileId=${encodeURIComponent(profileId)}`,
+    );
+    return raw ? parseShared(raw) : null;
+  }
+
+  async startShared(linkId: string): Promise<SharedSession> {
+    const raw = await api<Record<string, unknown>>(`/api/social/buddies/${linkId}/shared`, {
+      method: 'POST',
+    });
+    return parseShared(raw);
+  }
+
+  async joinShared(sessionId: string): Promise<SharedSession> {
+    const raw = await api<Record<string, unknown>>(`/api/social/shared/${sessionId}/join`, {
+      method: 'POST',
+    });
+    return parseShared(raw);
+  }
+
+  async leaveShared(sessionId: string): Promise<void> {
+    await api(`/api/social/shared/${sessionId}/leave`, { method: 'POST' });
   }
 }

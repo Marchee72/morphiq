@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type {
-  BuddyInvite, BuddyLink, BuddyMessage, BuddyPresence, LiveSessionSnapshot,
+  BuddyInvite, BuddyLink, BuddyMessage, BuddyPresence, LiveSessionSnapshot, SharedRoutine,
+  SharedSession,
 } from '../../core/entities/Buddy';
 import { ServerSocialRepository } from '../../data/social/ServerSocialRepository';
 import { getUser } from '../../data/auth/session';
@@ -60,6 +61,10 @@ function parseMessageDates(raw: BuddyMessage): BuddyMessage {
   return { ...raw, createdAt: new Date(raw.createdAt) };
 }
 
+function parseSharedDates(raw: SharedSession | null): SharedSession | null {
+  return raw ? { ...raw, createdAt: new Date(raw.createdAt) } : null;
+}
+
 function parsePresenceDates(raw: BuddyPresence): BuddyPresence {
   return {
     ...raw,
@@ -102,6 +107,14 @@ interface SocialState {
   /** Partners currently training, by their profile id. Replace-by-key. */
   presence: Record<string, BuddyPresence>;
   /**
+   * The container this device is training in, or null.
+   *
+   * Held rather than derived because the presence map describes *other* people
+   * — your own row is never in it, so there is nothing local to read your own
+   * membership off. It arrives on the stream's opening frame.
+   */
+  shared: SharedSession | null;
+  /**
    * How far this device's clock is from the server's, in milliseconds.
    *
    * Applied to a partner's `startedAt` before showing elapsed time. Without it
@@ -120,8 +133,12 @@ interface SocialState {
   /** Publishes a snapshot, throttled. Safe to call on every session change. */
   publishPresence: (profileId: string, snapshot: LiveSessionSnapshot) => void;
   endPresence: (profileId: string) => Promise<void>;
+  startShared: (linkId: string) => Promise<void>;
+  joinShared: (sessionId: string) => Promise<void>;
+  leaveShared: () => Promise<void>;
   loadMessages: (linkId: string) => Promise<void>;
   sendMessage: (linkId: string, body: string) => Promise<void>;
+  shareRoutine: (linkId: string, routine: SharedRoutine) => Promise<void>;
   markRead: (linkId: string) => Promise<void>;
   createInvite: (profileId: string) => Promise<void>;
   revokeInvite: () => Promise<void>;
@@ -139,22 +156,27 @@ export const useSocialStore = create<SocialState>((set, get) => ({
   invite: null,
   messages: {},
   presence: {},
+  shared: null,
   clockSkewMs: 0,
   connection: 'idle',
   error: null,
 
   load: async profileId => {
     if (!socialAvailable()) {
-      set({ available: false, ready: true, links: [], invite: null, connection: 'idle' });
+      set({
+        available: false, ready: true, links: [], invite: null, shared: null,
+        connection: 'idle',
+      });
       return;
     }
     set({ available: true, connection: 'loading' });
     try {
-      const [links, invite] = await Promise.all([
+      const [links, invite, shared] = await Promise.all([
         repo.listBuddies(profileId),
         repo.getInvite(profileId),
+        repo.getShared(profileId),
       ]);
-      set({ links, invite, ready: true, connection: 'live', error: null });
+      set({ links, invite, shared, ready: true, connection: 'live', error: null });
     } catch (err) {
       // Offline is the ordinary case here — the gym has no signal. Keep whatever
       // was already loaded on screen rather than blanking it.
@@ -182,6 +204,10 @@ export const useSocialStore = create<SocialState>((set, get) => ({
         set({
           links: (payload.links as BuddyLink[] ?? []).map(parseLinkDates),
           presence: keyPresence((payload.presence as BuddyPresence[] ?? []).map(parsePresenceDates)),
+          // Null is an answer, not a gap: the server is saying you are training
+          // alone, and keeping a stale container would leave the strip showing
+          // a session you have already left.
+          shared: parseSharedDates((payload.shared as SharedSession | null) ?? null),
           clockSkewMs: Date.now() - new Date(payload.serverNow as string).getTime(),
           ready: true,
           connection: 'live',
@@ -270,7 +296,35 @@ export const useSocialStore = create<SocialState>((set, get) => ({
     // resurrect the session on the other side until the TTL caught up.
     pendingSnapshot = null;
     if (flushTimer !== null) { clearTimeout(flushTimer); flushTimer = null; }
+    // Finishing a workout leaves the container too. The two are one act from
+    // the user's side, and a partner who stayed on the list after going home
+    // is worse than not having shown them at all.
+    const container = get().shared;
+    if (container) {
+      set({ shared: null });
+      await repo.leaveShared(container.id).catch(() => {});
+    }
     await repo.endPresence(profileId);
+  },
+
+  startShared: async linkId => {
+    set({ shared: await repo.startShared(linkId) });
+  },
+
+  joinShared: async sessionId => {
+    set({ shared: await repo.joinShared(sessionId) });
+  },
+
+  leaveShared: async () => {
+    const container = get().shared;
+    if (!container) return;
+    // Cleared first: leaving is the one action whose result the user is looking
+    // straight at, and waiting for the round trip makes the button feel stuck.
+    // A failed call leaves the membership standing on the server, which costs
+    // nothing worse than rejoining the same room next time — opening a
+    // container is idempotent per friendship.
+    set({ shared: null });
+    await repo.leaveShared(container.id);
   },
 
   /**
@@ -294,6 +348,19 @@ export const useSocialStore = create<SocialState>((set, get) => ({
     const sent = await repo.sendMessage(linkId, { kind: 'text', body });
     // Appended from the server's reply rather than optimistically: the id and
     // the timestamp are the server's, and the next poll keys on that id.
+    set(state => ({
+      messages: {
+        ...state.messages,
+        [linkId]: [...(state.messages[linkId] ?? []), sent],
+      },
+    }));
+  },
+
+  shareRoutine: async (linkId, routine) => {
+    const sent = await repo.shareRoutine(linkId, routine);
+    // Appended from the server's reply for the same reason a text message is:
+    // the id is the server's, and here so is the payload — it rebuilt the
+    // routine on the way in, so what came back is what the other side will see.
     set(state => ({
       messages: {
         ...state.messages,
@@ -353,7 +420,7 @@ export const useSocialStore = create<SocialState>((set, get) => ({
   },
 
   reset: () => set({
-    ready: false, links: [], invite: null, messages: {}, presence: {}, clockSkewMs: 0,
-    connection: 'idle', error: null, available: socialAvailable(),
+    ready: false, links: [], invite: null, messages: {}, presence: {}, shared: null,
+    clockSkewMs: 0, connection: 'idle', error: null, available: socialAvailable(),
   }),
 }));
