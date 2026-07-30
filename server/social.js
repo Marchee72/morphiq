@@ -35,6 +35,16 @@ const REDEEM_ATTEMPTS_PER_HOUR = 10;
  */
 const MAX_BUDDIES = 20;
 
+/**
+ * Message caps.
+ *
+ * Not validation theatre. Without them a "message" is an unbounded write
+ * primitive pointed at another account's storage, and `payload` — which exists
+ * to carry a shared routine — is the wider of the two doors.
+ */
+const MAX_BODY_CHARS = 2000;
+const MAX_PAYLOAD_BYTES = 32_768;
+
 function generateCode() {
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i++) {
@@ -69,6 +79,19 @@ function toBuddyLink(row, myProfileId) {
       && String(row.blockedByProfileId) === String(myProfileId),
     blockedByThem: row.blockedByProfileId != null
       && String(row.blockedByProfileId) !== String(myProfileId),
+    unreadCount: row.unreadCount ?? 0,
+  };
+}
+
+function toMessage(row) {
+  return {
+    id: String(row.id),
+    linkId: String(row.linkId),
+    senderProfileId: String(row.senderProfileId),
+    kind: row.kind,
+    body: row.body ?? undefined,
+    payload: row.payload ?? undefined,
+    createdAt: row.createdAt,
   };
 }
 
@@ -90,13 +113,27 @@ function toInvite(row) {
 const LINK_SELECT = `
   SELECT l.*,
          COALESCE(p.name, u.name) AS "buddyName",
-         u.picture                AS "buddyPicture"
+         u.picture                AS "buddyPicture",
+         (
+           SELECT COUNT(*)::int FROM buddy_messages m
+            WHERE m."linkId" = l.id
+              -- Your own messages are never unread to you.
+              AND m."senderProfileId" <> $1
+              -- Past both cursors: what you have read, and what you cleared by
+              -- leaving. Without the second, rejoining someone would surface a
+              -- pile of unread from a conversation you deleted.
+              AND m.id > GREATEST(
+                    COALESCE(rm."lastReadMessageId", 0),
+                    COALESCE(rm."clearedBeforeMessageId", 0)
+                  )
+         ) AS "unreadCount"
     FROM buddy_links l
     JOIN LATERAL (
       SELECT CASE WHEN l."profileIdA" = $1 THEN l."profileIdB" ELSE l."profileIdA" END AS other
     ) side ON TRUE
     LEFT JOIN user_profiles p ON p.id::text = side.other
     LEFT JOIN users u ON u.id = CASE WHEN l."profileIdA" = $1 THEN l."userIdB" ELSE l."userIdA" END
+    LEFT JOIN buddy_read_marks rm ON rm."linkId" = l.id AND rm."profileId" = $1
 `;
 
 export function socialRoutes(pool) {
@@ -164,6 +201,19 @@ export function socialRoutes(pool) {
    */
   router.delete('/buddies/:linkId', buddyLink, async (req, res) => {
     try {
+      // Your copy goes first, by cursor: everything currently in the
+      // conversation drops below your read line. The rows stay for the other
+      // side, and this mark survives a later revival so what you deleted does
+      // not reappear underneath a new friendship.
+      await pool.query(
+        `INSERT INTO buddy_read_marks ("linkId", "profileId", "clearedBeforeMessageId")
+         VALUES ($1, $2, COALESCE((SELECT MAX(id) FROM buddy_messages WHERE "linkId" = $1), 0))
+         ON CONFLICT ("linkId", "profileId") DO UPDATE
+           SET "clearedBeforeMessageId" = EXCLUDED."clearedBeforeMessageId",
+               "updatedAt" = NOW()`,
+        [req.link.id, req.link.mine],
+      );
+
       const column = req.link.isA ? 'removedByA' : 'removedByB';
       const { rows } = await pool.query(
         `UPDATE buddy_links SET "${column}" = NOW() WHERE id = $1 RETURNING *`,
@@ -218,6 +268,82 @@ export function socialRoutes(pool) {
         [link.id, blocked ? mine : null, blocked ? new Date() : null],
       );
       res.json(toBuddyLink(updated[0], mine));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ─── Messages ─────────────────────────────────────────────────────────────
+
+  /**
+   * The conversation, oldest first, from your side of it.
+   *
+   * "Your side" is the whole subtlety: anything at or below your cleared cursor
+   * is gone for you and still there for them, so the filter is not an
+   * optimisation and must not be dropped.
+   */
+  router.get('/buddies/:linkId/messages', buddyLink, async (req, res) => {
+    try {
+      const { rows: marks } = await pool.query(
+        'SELECT "clearedBeforeMessageId" FROM buddy_read_marks WHERE "linkId" = $1 AND "profileId" = $2',
+        [req.link.id, req.link.mine],
+      );
+      const cleared = marks[0]?.clearedBeforeMessageId ?? 0;
+      // `sinceId` is the poll's cursor; the cleared mark is the floor under it.
+      const since = Math.max(Number(req.query.sinceId ?? 0) || 0, cleared);
+
+      const { rows } = await pool.query(
+        `SELECT * FROM buddy_messages
+          WHERE "linkId" = $1 AND id > $2
+          ORDER BY id ASC
+          LIMIT 500`,
+        [req.link.id, since],
+      );
+      res.json(rows.map(toMessage));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  router.post('/buddies/:linkId/messages', buddyLink, async (req, res) => {
+    try {
+      const { kind = 'text', body, payload } = req.body ?? {};
+      if (!['text', 'routine', 'sessionInvite'].includes(kind)) {
+        return res.status(400).json({ error: 'Unknown message kind' });
+      }
+
+      const text = typeof body === 'string' ? body.trim() : null;
+      if (kind === 'text' && !text) return res.status(400).json({ error: 'Empty message' });
+
+      // Caps, not validation theatre: without them `payload` is a primitive for
+      // writing arbitrary JSON into someone else's account.
+      if (text && text.length > MAX_BODY_CHARS) {
+        return res.status(413).json({ error: 'Message too long' });
+      }
+      if (payload != null && JSON.stringify(payload).length > MAX_PAYLOAD_BYTES) {
+        return res.status(413).json({ error: 'Attachment too large' });
+      }
+
+      const { rows } = await pool.query(
+        `INSERT INTO buddy_messages ("linkId", "senderProfileId", kind, body, payload)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        // The sender comes from the guard, never from the body — otherwise
+        // anyone in a conversation could sign a message as the other person.
+        [req.link.id, req.link.mine, kind, text, payload != null ? JSON.stringify(payload) : null],
+      );
+      res.status(201).json(toMessage(rows[0]));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  /** Moves your read line forward. Never backward — see the GREATEST. */
+  router.post('/buddies/:linkId/read', buddyLink, async (req, res) => {
+    try {
+      const upTo = Number(req.body?.upToId ?? 0) || 0;
+      await pool.query(
+        `INSERT INTO buddy_read_marks ("linkId", "profileId", "lastReadMessageId")
+         VALUES ($1, $2, $3)
+         ON CONFLICT ("linkId", "profileId") DO UPDATE
+           SET "lastReadMessageId" = GREATEST(buddy_read_marks."lastReadMessageId", EXCLUDED."lastReadMessageId"),
+               "updatedAt" = NOW()`,
+        [req.link.id, req.link.mine, upTo],
+      );
+      res.status(204).end();
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 

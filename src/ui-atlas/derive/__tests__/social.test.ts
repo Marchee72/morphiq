@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { BuddyInvite, BuddyLink } from '../../../core/entities/Buddy';
+import type { BuddyInvite, BuddyLink, BuddyMessage } from '../../../core/entities/Buddy';
 import {
-  buildBuddyRows, inviteHoursLeft, isCompleteCode, isInviteLive, normalizeInviteCode,
+  buildBuddyRows, buildMessageDays, inviteHoursLeft, isCompleteCode, isInviteLive,
+  normalizeInviteCode, totalUnread,
 } from '../social';
 
 const NOW = new Date(2026, 6, 27, 18); // Monday 27 July 2026, evening
@@ -15,6 +16,7 @@ const link = (over: Partial<BuddyLink> = {}): BuddyLink => ({
   createdAt: NOW,
   blockedByMe: false,
   blockedByThem: false,
+  unreadCount: 0,
   ...over,
 });
 
@@ -65,6 +67,96 @@ describe('buildBuddyRows', () => {
   it('holds dates, not formatted text', () => {
     const [row] = buildBuddyRows([link()]);
     expect(row.since).toBeInstanceOf(Date);
+  });
+});
+
+describe('totalUnread', () => {
+  it('adds up what is waiting across conversations', () => {
+    const rows = buildBuddyRows([
+      link({ id: '1', buddyName: 'Ana', unreadCount: 2 }),
+      link({ id: '2', buddyName: 'Sofía', unreadCount: 3 }),
+    ]);
+    expect(totalUnread(rows)).toBe(5);
+  });
+
+  it('ignores a paused conversation, whose badge could never be cleared', () => {
+    // Nothing arrives through a paused link, so counting it would leave a badge
+    // with no way to open what it points at.
+    const rows = buildBuddyRows([link({ unreadCount: 4, blockedByMe: true })]);
+    expect(totalUnread(rows)).toBe(0);
+  });
+});
+
+describe('buildMessageDays', () => {
+  const at = (day: number, hour: number) => new Date(2026, 6, day, hour);
+
+  const message = (over: Partial<BuddyMessage> = {}): BuddyMessage => ({
+    id: '1',
+    linkId: '1',
+    senderProfileId: '9',
+    kind: 'text',
+    body: 'a las 18?',
+    createdAt: at(27, 10),
+    ...over,
+  });
+
+  it('puts one day header over the messages of that day', () => {
+    const days = buildMessageDays([
+      message({ id: '1', createdAt: at(26, 20) }),
+      message({ id: '2', createdAt: at(27, 9) }),
+      message({ id: '3', createdAt: at(27, 19) }),
+    ], '1');
+
+    expect(days).toHaveLength(2);
+    expect(days[1].messages.map(m => m.id)).toEqual(['2', '3']);
+  });
+
+  it('groups by calendar day, not by elapsed hours', () => {
+    // Two messages four hours apart across midnight are two days, which is the
+    // case that is wrong at exactly one moment and right the rest of the time.
+    const days = buildMessageDays([
+      message({ id: '1', createdAt: at(26, 23) }),
+      message({ id: '2', createdAt: at(27, 3) }),
+    ], '1');
+
+    expect(days).toHaveLength(2);
+  });
+
+  it('decides which side a bubble sits on from the sender', () => {
+    // The same conversation renders mirrored on the other person's phone, so
+    // this cannot be baked into the message.
+    const [day] = buildMessageDays([
+      message({ id: '1', senderProfileId: '1' }),
+      message({ id: '2', senderProfileId: '9' }),
+    ], '1');
+
+    expect(day.messages.map(m => m.mine)).toEqual([true, false]);
+  });
+
+  it('compares sender ids as strings, so a numeric id is not a different person', () => {
+    const [day] = buildMessageDays([message({ senderProfileId: 1 as unknown as string })], '1');
+    expect(day.messages[0].mine).toBe(true);
+  });
+
+  it('leaves out kinds that have no text to draw yet', () => {
+    // Routine and session-invite messages arrive with the stages that know how
+    // to render them; until then drawing a blank bubble would be worse.
+    const days = buildMessageDays([
+      message({ id: '1', kind: 'routine', body: undefined }),
+      message({ id: '2' }),
+    ], '1');
+
+    expect(days[0].messages.map(m => m.id)).toEqual(['2']);
+  });
+
+  it('holds dates, not formatted times', () => {
+    const [day] = buildMessageDays([message()], '1');
+    expect(day.day).toBeInstanceOf(Date);
+    expect(day.messages[0].at).toBeInstanceOf(Date);
+  });
+
+  it('survives an empty conversation', () => {
+    expect(buildMessageDays([], '1')).toEqual([]);
   });
 });
 

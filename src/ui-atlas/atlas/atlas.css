@@ -2872,3 +2872,79 @@ button.at-routine-item { cursor: pointer; }
   font-weight: 600;
   color: var(--clay);
 }
+
+/* The identity block is the tap target for the conversation. */
+.at-buddy-open {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.at-buddy-open:disabled { cursor: default; }
+
+.at-buddy-badge {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--clay);
+  color: var(--at-on-clay);
+  font-size: 11.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.at-buddy-day { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+
+.at-buddy-daymark {
+  align-self: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--at-tonal);
+}
+
+.at-buddy-bubble {
+  max-width: 78%;
+  align-self: flex-start;
+  padding: 9px 13px;
+  border-radius: 16px 16px 16px 5px;
+  background: var(--at-tonal);
+}
+
+.at-buddy-bubble[data-mine='true'] {
+  align-self: flex-end;
+  border-radius: 16px 16px 5px;
+  background: var(--cocoa);
+  color: var(--sand);
+}
+
+/* Long words and pasted links must wrap rather than widen the sheet. */
+.at-buddy-bubble p { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+
+.at-buddy-bubble small { display: block; margin-top: 3px; font-size: 10.5px; opacity: 0.6; }
+
+.at-buddy-composer { display: flex; align-items: center; gap: 8px; }
+.at-buddy-composer .at-input { flex: 1; }
+
+.at-buddy-composer .at-round {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  background: var(--clay);
+  color: var(--at-on-clay);
+  border: none;
+}
+
+.at-buddy-composer .at-round:disabled { opacity: 0.4; }

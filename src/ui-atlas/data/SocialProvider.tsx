@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { useStore } from '../../presentation/state/store';
 import { useSocialStore } from '../../presentation/state/socialStore';
-import { buildBuddyRows } from '../derive/social';
+import { buildBuddyRows, buildMessageDays, totalUnread } from '../derive/social';
 import { SocialContext } from './contexts';
 import { useAppActions } from './useAppData';
 import type { SocialState } from './types';
@@ -15,6 +15,14 @@ import type { SocialState } from './types';
  * Vercel, on a phone and in a test.
  */
 const REFRESH_MS = 20_000;
+
+/**
+ * How often the open conversation is refetched.
+ *
+ * Faster than the list because it is the thing being looked at. Still a
+ * placeholder — the stream is what makes a reply arrive rather than turn up.
+ */
+const CONVERSATION_REFRESH_MS = 5_000;
 
 /**
  * Training partners.
@@ -34,6 +42,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const ready = useSocialStore(state => state.ready);
   const links = useSocialStore(state => state.links);
   const invite = useSocialStore(state => state.invite);
+  const messages = useSocialStore(state => state.messages);
   const error = useSocialStore(state => state.error);
 
   useEffect(() => {
@@ -85,6 +94,41 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [available, actions]);
 
   const rows = useMemo(() => buildBuddyRows(links), [links]);
+  const unread = useMemo(() => totalUnread(rows), [rows]);
+
+  const conversation = useCallback((linkId: string) => {
+    const held = messages[linkId];
+    if (!held || !profileId) return [];
+    return buildMessageDays(held, profileId);
+  }, [messages, profileId]);
+
+  /**
+   * Follows one conversation while its sheet is open.
+   *
+   * Faster than the partner list because the gap is being watched: twenty
+   * seconds to see a reply, with the thread on screen, reads as broken. Stops
+   * on unsubscribe and while the app is backgrounded, so a chat left open in a
+   * pocket costs nothing.
+   */
+  const watchConversation = useCallback((linkId: string) => {
+    if (!available) return () => {};
+
+    const store = useSocialStore.getState();
+    void store.loadMessages(linkId).then(() => useSocialStore.getState().markRead(linkId));
+
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      void useSocialStore.getState().loadMessages(linkId)
+        .then(() => useSocialStore.getState().markRead(linkId))
+        .catch(() => { /* offline; the next tick tries again */ });
+    }, CONVERSATION_REFRESH_MS);
+
+    return () => window.clearInterval(timer);
+  }, [available]);
+
+  const sendMessage = useCallback(async (linkId: string, body: string) => {
+    await useSocialStore.getState().sendMessage(linkId, body);
+  }, []);
 
   const refresh = useCallback(async () => {
     if (profileId) await useSocialStore.getState().load(profileId);
@@ -115,11 +159,13 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [profileId]);
 
   const value = useMemo<SocialState>(() => ({
-    available, ready, links, invite, error, rows,
+    available, ready, links, invite, error, rows, unread,
     refresh, createInvite, revokeInvite, redeemInvite, removeBuddy, setBlocked,
+    conversation, watchConversation, sendMessage,
   }), [
-    available, ready, links, invite, error, rows,
+    available, ready, links, invite, error, rows, unread,
     refresh, createInvite, revokeInvite, redeemInvite, removeBuddy, setBlocked,
+    conversation, watchConversation, sendMessage,
   ]);
 
   return <SocialContext.Provider value={value}>{children}</SocialContext.Provider>;

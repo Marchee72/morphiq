@@ -8,6 +8,7 @@ import { AtlasSheet } from './AtlasSheet';
 import { AtlasStates } from './AtlasStates';
 import { AtlasBuddyInvite } from './AtlasBuddyInvite';
 import { AtlasBuddyRedeem } from './AtlasBuddyRedeem';
+import { AtlasBuddyChat } from './AtlasBuddyChat';
 import { useDismissOnBack } from '../components/useDismissOnBack';
 
 type Panel = 'invite' | 'redeem' | null;
@@ -35,6 +36,7 @@ export const AtlasBuddies: React.FC<{
   // following it has one thing to do, and it is not reading a list.
   const [panel, setPanel] = useState<Panel>(initialCode ? 'redeem' : null);
   const [confirming, setConfirming] = useState<BuddyRowVM | null>(null);
+  const [chatting, setChatting] = useState<BuddyRowVM | null>(null);
 
   useDismissOnBack(true, onClose, 'buddies');
 
@@ -85,7 +87,14 @@ export const AtlasBuddies: React.FC<{
         ) : (
           rows.map(row => (
             <div key={row.linkId} className="at-card at-buddy-row" data-muted={row.muted}>
-              <div className="at-account">
+              {/* The whole identity block opens the conversation. Muted
+                  partners are not tappable: nothing can be sent through a
+                  paused link, so offering the thread would be a dead end. */}
+              <button
+                className="at-account at-buddy-open"
+                disabled={row.muted}
+                onClick={() => setChatting(row)}
+              >
                 {row.picture && <img src={row.picture} alt="" referrerPolicy="no-referrer" />}
                 <div>
                   <b>{row.name || '—'}</b>
@@ -97,7 +106,12 @@ export const AtlasBuddies: React.FC<{
                         : t('buddy.since', { date: fmt.dmy(row.since) })}
                   </small>
                 </div>
-              </div>
+                {row.unread > 0 && !row.muted && (
+                  <span className="at-buddy-badge" aria-label={tp('buddy.unread', row.unread)}>
+                    {row.unread}
+                  </span>
+                )}
+              </button>
 
               <div className="at-buddy-actions">
                 {/* Offered only to the side that blocked. The other side seeing
@@ -127,6 +141,10 @@ export const AtlasBuddies: React.FC<{
       {panel === 'redeem' && (
         <AtlasBuddyRedeem onClose={() => setPanel(null)} initialCode={initialCode} />
       )}
+
+      {/* Mounted only while open so the conversation stops being followed the
+          moment it is closed, rather than polling behind the list. */}
+      {chatting && <AtlasBuddyChat row={chatting} onClose={() => setChatting(null)} />}
 
       {/* Removal takes the conversation with it, for both people. That is worth
           one deliberate confirmation rather than an undo that cannot exist. */}

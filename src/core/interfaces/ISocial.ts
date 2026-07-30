@@ -1,4 +1,4 @@
-import type { BuddyInvite, BuddyLink } from '../entities/Buddy';
+import type { BuddyInvite, BuddyLink, BuddyMessage, BuddyMessageKind } from '../entities/Buddy';
 
 /**
  * What the app can ask about training partners.
@@ -24,4 +24,18 @@ export interface ISocialRepository {
   revokeInvite(code: string): Promise<void>;
   /** Turns a code into a friendship. Idempotent if the two already are. */
   redeemInvite(profileId: string, code: string): Promise<BuddyLink>;
+
+  /**
+   * The conversation from your side, oldest first.
+   *
+   * `sinceId` is the poll's cursor. Anything you cleared by leaving is filtered
+   * out by the server regardless of what is passed here.
+   */
+  listMessages(linkId: string, sinceId?: string): Promise<BuddyMessage[]>;
+  sendMessage(
+    linkId: string,
+    draft: { kind?: BuddyMessageKind; body?: string; payload?: unknown },
+  ): Promise<BuddyMessage>;
+  /** Moves your read line forward. The server refuses to move it back. */
+  markRead(linkId: string, upToId: string): Promise<void>;
 }

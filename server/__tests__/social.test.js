@@ -304,13 +304,17 @@ describe('DELETE /buddies/:linkId', () => {
   };
 
   /** Records what the route did, so the test can assert on the decision. */
-  function leavingPool(afterUpdate) {
-    const seen = { update: null, deleted: false };
+  function leavingPool(afterUpdate, link = LIVE_LINK) {
+    const seen = { update: null, cleared: null, deleted: false };
     const pool = {
       seen,
-      query: async sql => {
+      query: async (sql, params) => {
         if (sql.includes('FROM user_profiles WHERE user_id')) return { rows: [{ id: 1 }, { id: 2 }] };
-        if (sql.includes('SELECT * FROM buddy_links WHERE id')) return { rows: [LIVE_LINK] };
+        if (sql.includes('SELECT * FROM buddy_links WHERE id')) return { rows: [link] };
+        if (sql.includes('INSERT INTO buddy_read_marks')) {
+          seen.cleared = params;
+          return { rows: [] };
+        }
         if (sql.includes('UPDATE buddy_links SET')) {
           seen.update = sql;
           return { rows: [afterUpdate] };
@@ -321,6 +325,16 @@ describe('DELETE /buddies/:linkId', () => {
     };
     return pool;
   }
+
+  it('clears your own transcript by cursor before it marks you gone', async () => {
+    // The cursor is how "only your copy" is actually enforced. Setting it after
+    // the link closed would race the guard that then refuses the link.
+    const pool = leavingPool({ id: 5, removedByA: new Date(), removedByB: null });
+
+    await call(pool, { method: 'DELETE', url: '/buddies/5' });
+
+    expect(pool.seen.cleared).toEqual(['5', '1']);
+  });
 
   it('marks your side rather than deleting the row', async () => {
     // A DELETE cascades, and would take the other person's transcript with
@@ -335,18 +349,10 @@ describe('DELETE /buddies/:linkId', () => {
   });
 
   it('marks the B column when you are the B side', async () => {
-    const pool = leavingPool({ id: 5, removedByA: null, removedByB: new Date() });
-    pool.query = async sql => {
-      if (sql.includes('FROM user_profiles WHERE user_id')) return { rows: [{ id: 1 }, { id: 2 }] };
-      if (sql.includes('SELECT * FROM buddy_links WHERE id')) {
-        return { rows: [{ ...LIVE_LINK, profileIdA: '9', profileIdB: '1' }] };
-      }
-      if (sql.includes('UPDATE buddy_links SET')) {
-        pool.seen.update = sql;
-        return { rows: [{ id: 5, removedByA: null, removedByB: new Date() }] };
-      }
-      throw new Error(`Unexpected query: ${sql}`);
-    };
+    const pool = leavingPool(
+      { id: 5, removedByA: null, removedByB: new Date() },
+      { ...LIVE_LINK, profileIdA: '9', profileIdB: '1' },
+    );
 
     await call(pool, { method: 'DELETE', url: '/buddies/5' });
 
@@ -360,6 +366,111 @@ describe('DELETE /buddies/:linkId', () => {
     await call(pool, { method: 'DELETE', url: '/buddies/5' });
 
     expect(pool.seen.deleted).toBe(true);
+  });
+});
+
+describe('messages', () => {
+  const LIVE_LINK = {
+    id: 5, profileIdA: '1', profileIdB: '9', blockedByProfileId: null,
+    removedByA: null, removedByB: null,
+  };
+
+  function chatPool(handlers = {}) {
+    const seen = { insert: null, selectParams: null };
+    return {
+      seen,
+      query: async (sql, params) => {
+        if (sql.includes('FROM user_profiles WHERE user_id')) return { rows: [{ id: 1 }, { id: 2 }] };
+        if (sql.includes('SELECT * FROM buddy_links WHERE id')) return { rows: [LIVE_LINK] };
+        if (sql.includes('"clearedBeforeMessageId" FROM buddy_read_marks')) {
+          return { rows: handlers.marks ?? [] };
+        }
+        if (sql.includes('FROM buddy_messages')) {
+          seen.selectParams = params;
+          return { rows: handlers.messages ?? [] };
+        }
+        if (sql.includes('INSERT INTO buddy_messages')) {
+          seen.insert = params;
+          return { rows: [{
+            id: 7, linkId: 5, senderProfileId: params[1], kind: params[2],
+            body: params[3], payload: null, createdAt: new Date(),
+          }] };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      },
+    };
+  }
+
+  it('will not read below what you cleared, whatever cursor is asked for', async () => {
+    // The client's `sinceId` is a paging cursor; the cleared mark is a floor
+    // under it. Letting a smaller sinceId win would hand back the conversation
+    // that leaving deleted.
+    const pool = chatPool({ marks: [{ clearedBeforeMessageId: 40 }] });
+
+    await call(pool, {
+      method: 'GET', url: '/buddies/5/messages?sinceId=3', query: { sinceId: '3' },
+    });
+
+    expect(pool.seen.selectParams).toEqual(['5', 40]);
+  });
+
+  it('pages forward normally when nothing was cleared', async () => {
+    const pool = chatPool();
+
+    await call(pool, {
+      method: 'GET', url: '/buddies/5/messages?sinceId=12', query: { sinceId: '12' },
+    });
+
+    expect(pool.seen.selectParams).toEqual(['5', 12]);
+  });
+
+  it('signs the message with the guard, never with the body', async () => {
+    // Otherwise either person in a conversation could post as the other.
+    const pool = chatPool();
+
+    await call(pool, {
+      method: 'POST',
+      url: '/buddies/5/messages',
+      body: { body: 'a las 18?', senderProfileId: '9' },
+    });
+
+    expect(pool.seen.insert[1]).toBe('1');
+  });
+
+  it('refuses an empty message rather than storing a blank row', async () => {
+    const pool = chatPool();
+    const result = await call(pool, {
+      method: 'POST', url: '/buddies/5/messages', body: { body: '   ' },
+    });
+    expect(result.status).toBe(400);
+  });
+
+  it('refuses a message past the length cap', async () => {
+    const pool = chatPool();
+    const result = await call(pool, {
+      method: 'POST', url: '/buddies/5/messages', body: { body: 'x'.repeat(2001) },
+    });
+    expect(result.status).toBe(413);
+  });
+
+  it('refuses an oversized payload, which is the wider door', async () => {
+    // `payload` exists to carry a shared routine. Uncapped it is a primitive
+    // for writing arbitrary JSON into someone else's account.
+    const pool = chatPool();
+    const result = await call(pool, {
+      method: 'POST',
+      url: '/buddies/5/messages',
+      body: { kind: 'routine', payload: { blob: 'x'.repeat(40_000) } },
+    });
+    expect(result.status).toBe(413);
+  });
+
+  it('refuses a kind it does not know', async () => {
+    const pool = chatPool();
+    const result = await call(pool, {
+      method: 'POST', url: '/buddies/5/messages', body: { kind: 'invoice', body: 'hi' },
+    });
+    expect(result.status).toBe(400);
   });
 });
 

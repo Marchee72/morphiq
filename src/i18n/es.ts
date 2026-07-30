@@ -548,6 +548,15 @@ export const es: Translations = {
   'buddy.removeAction': 'Eliminar',
   'buddy.cancel': 'Cancelar',
 
+  // Chat
+  'buddy.chatPlaceholder': 'Escribe un mensaje',
+  'buddy.chatSend': 'Enviar',
+  'buddy.chatEmpty': 'Todavía nada. Pregúntale a {name} cuándo entrena.',
+  'buddy.chatMuted': 'Este compañero está en pausa, así que no se puede enviar nada.',
+  'buddy.chatFailed': 'No se ha enviado. Tu mensaje sigue aquí: inténtalo otra vez.',
+  'buddy.unread_one': '{n} mensaje sin leer',
+  'buddy.unread_other': '{n} mensajes sin leer',
+
   // Presencia
   'buddy.presenceToggle': 'Mostrar cuándo entreno',
   'buddy.presenceSub': 'Tus compañeros ven en qué ejercicio vas y cuánto llevas. Los pesos nunca.',

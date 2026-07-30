@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { BuddyInvite, BuddyLink } from '../../core/entities/Buddy';
+import type { BuddyInvite, BuddyLink, BuddyMessage } from '../../core/entities/Buddy';
 import { ServerSocialRepository } from '../../data/social/ServerSocialRepository';
 import { getUser } from '../../data/auth/session';
 import { isServerMode } from '../../data/database/mode';
@@ -32,11 +32,21 @@ interface SocialState {
   ready: boolean;
   links: BuddyLink[];
   invite: BuddyInvite | null;
+  /**
+   * Conversations by link id, oldest message first.
+   *
+   * Kept per link rather than only for the open one so the badge and the last
+   * line survive closing the sheet, and so reopening is instant.
+   */
+  messages: Record<string, BuddyMessage[]>;
   connection: SocialConnection;
   /** The last failure, for the screen to show. Cleared by the next success. */
   error: string | null;
 
   load: (profileId: string) => Promise<void>;
+  loadMessages: (linkId: string) => Promise<void>;
+  sendMessage: (linkId: string, body: string) => Promise<void>;
+  markRead: (linkId: string) => Promise<void>;
   createInvite: (profileId: string) => Promise<void>;
   revokeInvite: () => Promise<void>;
   redeemInvite: (profileId: string, code: string) => Promise<BuddyLink>;
@@ -51,6 +61,7 @@ export const useSocialStore = create<SocialState>((set, get) => ({
   ready: false,
   links: [],
   invite: null,
+  messages: {},
   connection: 'idle',
   error: null,
 
@@ -71,6 +82,46 @@ export const useSocialStore = create<SocialState>((set, get) => ({
       // was already loaded on screen rather than blanking it.
       set({ ready: true, connection: 'offline', error: (err as Error).message });
     }
+  },
+
+  /**
+   * Fetches whatever is new in one conversation.
+   *
+   * Incremental by the highest id already held, so a poll every few seconds
+   * costs an empty array rather than the whole history. Anything cleared by
+   * leaving never arrives — the server floors the cursor.
+   */
+  loadMessages: async linkId => {
+    const held = get().messages[linkId] ?? [];
+    const sinceId = held.length > 0 ? held[held.length - 1].id : undefined;
+    const fresh = await repo.listMessages(linkId, sinceId);
+    if (fresh.length === 0) return;
+    set(state => ({
+      messages: { ...state.messages, [linkId]: [...(state.messages[linkId] ?? []), ...fresh] },
+    }));
+  },
+
+  sendMessage: async (linkId, body) => {
+    const sent = await repo.sendMessage(linkId, { kind: 'text', body });
+    // Appended from the server's reply rather than optimistically: the id and
+    // the timestamp are the server's, and the next poll keys on that id.
+    set(state => ({
+      messages: {
+        ...state.messages,
+        [linkId]: [...(state.messages[linkId] ?? []), sent],
+      },
+    }));
+  },
+
+  markRead: async linkId => {
+    const held = get().messages[linkId] ?? [];
+    if (held.length === 0) return;
+    const upToId = held[held.length - 1].id;
+    await repo.markRead(linkId, upToId);
+    // Reflected locally so the badge clears now rather than on the next poll.
+    set(state => ({
+      links: state.links.map(l => (l.id === linkId ? { ...l, unreadCount: 0 } : l)),
+    }));
   },
 
   createInvite: async profileId => {
@@ -98,7 +149,13 @@ export const useSocialStore = create<SocialState>((set, get) => ({
 
   removeBuddy: async linkId => {
     await repo.removeBuddy(linkId);
-    set(state => ({ links: state.links.filter(l => l.id !== linkId) }));
+    set(state => {
+      // Your copy is gone on the server, so it must not linger in memory —
+      // otherwise the conversation stays on screen until the next reload and
+      // the deletion looks like it failed.
+      const { [linkId]: _cleared, ...rest } = state.messages;
+      return { links: state.links.filter(l => l.id !== linkId), messages: rest };
+    });
   },
 
   setBlocked: async (linkId, profileId, blocked) => {
@@ -107,7 +164,7 @@ export const useSocialStore = create<SocialState>((set, get) => ({
   },
 
   reset: () => set({
-    ready: false, links: [], invite: null, connection: 'idle', error: null,
+    ready: false, links: [], invite: null, messages: {}, connection: 'idle', error: null,
     available: socialAvailable(),
   }),
 }));

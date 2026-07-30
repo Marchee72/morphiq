@@ -1,4 +1,6 @@
-import type { BuddyInvite, BuddyLink } from '../../core/entities/Buddy';
+import type {
+  BuddyInvite, BuddyLink, BuddyMessage, BuddyMessageKind,
+} from '../../core/entities/Buddy';
 import type { ISocialRepository } from '../../core/interfaces/ISocial';
 import { api } from '../database/apiClient';
 
@@ -13,6 +15,10 @@ import { api } from '../database/apiClient';
 
 function parseLink(raw: Record<string, unknown>): BuddyLink {
   return { ...raw, createdAt: new Date(raw.createdAt as string) } as BuddyLink;
+}
+
+function parseMessage(raw: Record<string, unknown>): BuddyMessage {
+  return { ...raw, createdAt: new Date(raw.createdAt as string) } as BuddyMessage;
 }
 
 function parseInvite(raw: Record<string, unknown>): BuddyInvite {
@@ -68,5 +74,31 @@ export class ServerSocialRepository implements ISocialRepository {
       { method: 'POST', body: JSON.stringify({ profileId }) },
     );
     return parseLink(raw);
+  }
+
+  async listMessages(linkId: string, sinceId?: string): Promise<BuddyMessage[]> {
+    const query = sinceId ? `?sinceId=${encodeURIComponent(sinceId)}` : '';
+    const rows = await api<Record<string, unknown>[]>(
+      `/api/social/buddies/${linkId}/messages${query}`,
+    );
+    return rows.map(parseMessage);
+  }
+
+  async sendMessage(
+    linkId: string,
+    draft: { kind?: BuddyMessageKind; body?: string; payload?: unknown },
+  ): Promise<BuddyMessage> {
+    const raw = await api<Record<string, unknown>>(`/api/social/buddies/${linkId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(draft),
+    });
+    return parseMessage(raw);
+  }
+
+  async markRead(linkId: string, upToId: string): Promise<void> {
+    await api(`/api/social/buddies/${linkId}/read`, {
+      method: 'POST',
+      body: JSON.stringify({ upToId: Number(upToId) }),
+    });
   }
 }

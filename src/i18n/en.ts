@@ -551,6 +551,15 @@ export const en = {
   'buddy.removeAction': 'Remove',
   'buddy.cancel': 'Cancel',
 
+  // Chat
+  'buddy.chatPlaceholder': 'Write a message',
+  'buddy.chatSend': 'Send',
+  'buddy.chatEmpty': 'Nothing yet. Ask {name} when they are training.',
+  'buddy.chatMuted': 'This partner is paused, so nothing can be sent.',
+  'buddy.chatFailed': 'That did not send. Your message is still here — try again.',
+  'buddy.unread_one': '{n} unread message',
+  'buddy.unread_other': '{n} unread messages',
+
   // Presence
   'buddy.presenceToggle': 'Show when I train',
   'buddy.presenceSub': 'Partners see the exercise you are on and how far through you are. Never your weights.',

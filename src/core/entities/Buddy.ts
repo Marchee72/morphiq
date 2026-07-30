@@ -29,6 +29,27 @@ export interface BuddyLink {
    */
   blockedByMe: boolean;
   blockedByThem: boolean;
+  /** Messages from them you have not read, past anything you cleared. */
+  unreadCount: number;
+}
+
+/**
+ * Kinds a message can be.
+ *
+ * Only `text` is sent today; the other two arrive with their own stages. They
+ * are named here so a reader handling messages knows the set is not open.
+ */
+export type BuddyMessageKind = 'text' | 'routine' | 'sessionInvite';
+
+export interface BuddyMessage {
+  id: string;
+  linkId: string;
+  senderProfileId: string;
+  kind: BuddyMessageKind;
+  body?: string;
+  /** A shared routine, or which session is being joined. Empty for text. */
+  payload?: unknown;
+  createdAt: Date;
 }
 
 /**

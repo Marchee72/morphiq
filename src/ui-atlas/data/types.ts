@@ -2,7 +2,7 @@ import type { BuddyInvite, BuddyLink } from '../../core/entities/Buddy';
 import type { Exercise } from '../../core/entities/Exercise';
 import type { Message } from '../../core/entities/Message';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
-import type { BuddyRowVM } from '../derive/social';
+import type { BuddyDayVM, BuddyRowVM } from '../derive/social';
 import type { ExerciseFilters, FacetCounts } from '../../data/exercises/ExerciseCatalog';
 import type { WeeklyStatsVM } from '../derive/history';
 import type { ExerciseSessionVM } from '../derive/exerciseHistory';
@@ -86,6 +86,8 @@ export interface SocialState {
   error: string | null;
   /** The partner list as rows, buddies first and blocked ones last. */
   rows: BuddyRowVM[];
+  /** Unread across every live conversation, for the badge on the way in. */
+  unread: number;
 
   refresh(): Promise<void>;
   createInvite(): Promise<void>;
@@ -93,6 +95,18 @@ export interface SocialState {
   redeemInvite(code: string): Promise<void>;
   removeBuddy(linkId: string): Promise<void>;
   setBlocked(linkId: string, blocked: boolean): Promise<void>;
+
+  /** One conversation, grouped into days. Empty until it has been opened. */
+  conversation(linkId: string): BuddyDayVM[];
+  /**
+   * Starts following a conversation, and stops on unsubscribe.
+   *
+   * The open thread is polled faster than the partner list: waiting twenty
+   * seconds to see a reply, while looking straight at the thread, reads as
+   * broken. Only one conversation is followed at a time.
+   */
+  watchConversation(linkId: string): () => void;
+  sendMessage(linkId: string, body: string): Promise<void>;
 }
 
 /** Overlays the shell can open. Any screen can request one. */

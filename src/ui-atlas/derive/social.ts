@@ -1,4 +1,4 @@
-import type { BuddyInvite, BuddyLink } from '../../core/entities/Buddy';
+import type { BuddyInvite, BuddyLink, BuddyMessage } from '../../core/entities/Buddy';
 
 /**
  * One partner as the list shows them.
@@ -16,6 +16,22 @@ export interface BuddyRowVM {
   blockedByThem: boolean;
   /** True when nothing flows either way — either side having blocked stops it. */
   muted: boolean;
+  unread: number;
+}
+
+/** One message as the thread renders it. */
+export interface BuddyMessageVM {
+  id: string;
+  mine: boolean;
+  body: string;
+  at: Date;
+}
+
+/** A day's worth of messages, so the thread can show one date header per day. */
+export interface BuddyDayVM {
+  /** Midnight of the day, for the render edge to format. */
+  day: Date;
+  messages: BuddyMessageVM[];
 }
 
 /**
@@ -37,11 +53,61 @@ export function buildBuddyRows(links: BuddyLink[]): BuddyRowVM[] {
       blockedByMe: link.blockedByMe,
       blockedByThem: link.blockedByThem,
       muted: link.blockedByMe || link.blockedByThem,
+      unread: link.unreadCount ?? 0,
     }))
     .sort((a, b) => {
       if (a.muted !== b.muted) return a.muted ? 1 : -1;
       return a.name.localeCompare(b.name);
     });
+}
+
+/** Every unread message across every conversation, for the badge on the hub. */
+export function totalUnread(rows: BuddyRowVM[]): number {
+  // Muted conversations are excluded: nothing arrives through them, so a count
+  // there would be a badge you cannot clear.
+  return rows.reduce((sum, row) => sum + (row.muted ? 0 : row.unread), 0);
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/**
+ * The thread, grouped into days.
+ *
+ * Grouping happens here rather than in the component because it is the kind of
+ * thing that is wrong at midnight and nowhere else, and a pure function is the
+ * only place that is cheap to test.
+ *
+ * `myProfileId` decides which side each bubble sits on — the messages carry a
+ * sender id and nothing else, since the same conversation renders mirrored on
+ * the other person's phone.
+ */
+export function buildMessageDays(
+  messages: BuddyMessage[],
+  myProfileId: string,
+): BuddyDayVM[] {
+  const days: BuddyDayVM[] = [];
+
+  for (const message of messages) {
+    // Only text has a body worth rendering; the other kinds arrive with the
+    // stages that know how to draw them.
+    if (message.kind !== 'text' || !message.body) continue;
+
+    const day = startOfDay(message.createdAt);
+    const last = days[days.length - 1];
+    const vm: BuddyMessageVM = {
+      id: message.id,
+      mine: String(message.senderProfileId) === String(myProfileId),
+      body: message.body,
+      at: message.createdAt,
+    };
+
+    if (last && last.day.getTime() === day.getTime()) last.messages.push(vm);
+    else days.push({ day, messages: [vm] });
+  }
+
+  return days;
 }
 
 /**

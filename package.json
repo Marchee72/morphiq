@@ -12,6 +12,7 @@
     "icons": "node scripts/generate-icons.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
+    "typecheck": "tsc -b",
     "test": "vitest run",
     "test:e2e": "npx playwright test",
     "test:e2e:report": "npx playwright show-report",
