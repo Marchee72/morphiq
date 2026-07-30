@@ -12,6 +12,7 @@ import { nextMuscleFocus } from '../derive/todayTraining';
 import { AtlasStates } from './AtlasStates';
 import { AtlasSessionDetail } from './AtlasSessionDetail';
 import { AtlasTodayDetail, type TodayDetail } from './AtlasTodayDetail';
+import { AtlasHeatMap } from './AtlasHeatMap';
 
 /**
  * Today — the screen that answers "what do I need to know right now".
@@ -273,36 +274,8 @@ export const AtlasToday: React.FC = () => {
         </div>
       </div>
 
-      <div className="at-rail-head">
-        <h3>{t('today.muscleLoad')}</h3>
-        <button onClick={() => actions.navigate('library')}>{t('today.balance')}</button>
-      </div>
       <div className="at-pad" style={{ paddingBottom: 22 }}>
-        <div className="at-card" style={{ padding: '8px 20px' }}>
-          {training.muscleLoad.rows.map((row, i) => (
-            <button
-              key={row.group}
-              className="at-routine-item"
-              style={{ borderTop: i === 0 ? 'none' : undefined, width: '100%' }}
-              onClick={() => setDetail({ kind: 'muscle', group: row.group })}
-            >
-              <span>
-                {t(row.labelKey)}
-                <small>
-                  {row.lastHitAt
-                    ? `${row.recoveredPct}% · ${fmt.relativeDay(row.lastHitAt, now)}`
-                    : t('common.noData')}
-                </small>
-              </span>
-              <b data-met={row.sets >= row.target}>{row.sets}/{row.target}</b>
-            </button>
-          ))}
-          {training.muscleLoad.unmappedSets > 0 && (
-            <div className="at-routine-note">
-              {tp('muscle.unattributed', training.muscleLoad.unmappedSets)}
-            </div>
-          )}
-        </div>
+        <AtlasHeatMap onPickRegion={(group) => setDetail({ kind: 'muscle', group })} />
       </div>
 
       {training.history.length > 0 && (

@@ -262,32 +262,59 @@ export const AtlasTodayDetail: React.FC<{
   const muscleRow = training.muscleLoad.rows.find(r => r.group === detail.group);
   if (!muscleRow) return null;
 
+  /** Recency dot color matching the heat gradient. */
+  const recencyColor = (lastHitAt: Date | null): string => {
+    if (!lastHitAt) return 'var(--at-figure-limb)';
+    const hours = (now.getTime() - lastHitAt.getTime()) / 3_600_000;
+    if (hours <= 48) return 'var(--clay-strong)';
+    if (hours <= 120) return 'var(--muted)';
+    return 'var(--at-figure-limb)';
+  };
+
+  /** Resolve the session title for an exercise by looking it up in history. */
+  const sessionTitleFor = (exerciseName: string): string => {
+    const entry = training.history.find(h => h.exercises.includes(exerciseName));
+    return entry?.title ?? '';
+  };
+
   return sheet(
     t(muscleRow.labelKey),
-    muscleRow.lastHitAt
-      ? `${t('today.lastHit')} · ${fmt.relativeDay(muscleRow.lastHitAt, now)}`
-      : t('today.muscleDetail'),
-    <>
-      <div className="at-summary-stats">
-        <div><b>{muscleRow.sets}</b><small>{t('today.setsThisWeek')}</small></div>
-        <div><b>{muscleRow.target}</b><small>{t('today.targetSets')}</small></div>
-        <div><b>{muscleRow.recoveredPct}<i>{t('unit.pct')}</i></b><small>{t('today.recovered')}</small></div>
+    `${muscleRow.sets} ${t('today.setsThisWeekShort')}`,
+    muscleRow.exercises.length > 0 ? (
+      <div className="at-card" style={{ padding: '8px 20px' }}>
+        {muscleRow.exercises.map((exercise, i) => (
+          <div
+            key={exercise.name}
+            className="at-routine-item"
+            style={{ borderTop: i === 0 ? 'none' : undefined }}
+          >
+            <span>
+              <span style={{ color: recencyColor(exercise.lastHitAt) }}>●</span>{' '}
+              {exercise.name}
+              <small>
+                {exercise.lastHitAt
+                  ? `${fmt.relativeDay(exercise.lastHitAt, now)}${
+                      sessionTitleFor(exercise.name) ? ` · ${sessionTitleFor(exercise.name)}` : ''
+                    }`
+                  : t('common.noData')}
+              </small>
+            </span>
+            <b>
+              {tp('unit.sets', exercise.sets)}
+              {exercise.bestSet && (
+                <small style={{ display: 'block', fontWeight: 400 }}>
+                  {t('today.bestSet', { weight: fmt.n(exercise.bestSet.weightKg, 1), reps: exercise.bestSet.reps })}
+                </small>
+              )}
+            </b>
+          </div>
+        ))}
       </div>
-      {muscleRow.exercises.length > 0 ? (
-        <div className="at-card" style={{ padding: '8px 20px' }}>
-          {muscleRow.exercises.map((exercise, i) =>
-            row(
-              exercise.name,
-              exercise.name,
-              tp('unit.sets', exercise.sets),
-              `${fmt.n(exercise.volumeKg)} ${t('unit.kg')}`,
-              i,
-            ))}
-        </div>
-      ) : (
-        <p className="at-summary-empty">{t('common.noData')}</p>
-      )}
-    </>,
+    ) : (
+      <p className="at-summary-empty">
+        {t('today.noGroupWork', { group: t(muscleRow.labelKey) })}
+      </p>
+    ),
     <button className="at-btn" onClick={go('library')}>
       {t('nav.library')} <i><ArrowRight size={16} /></i>
     </button>,
