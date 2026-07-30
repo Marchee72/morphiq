@@ -2949,6 +2949,43 @@ button.at-routine-item { cursor: pointer; }
 
 .at-buddy-composer .at-round:disabled { opacity: 0.4; }
 
+/* The live strip on Today. Absent entirely when nobody is training. */
+.at-buddy-strip { display: flex; flex-direction: column; gap: 8px; }
+
+.at-buddy-live {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  border: 0;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.at-buddy-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--clay);
+}
+
+.at-buddy-livetext { min-width: 0; }
+.at-buddy-livetext b { display: block; font-size: 13.5px; letter-spacing: -0.01em; }
+
+/* One line: a long exercise name must not push the elapsed time out of view. */
+.at-buddy-livetext small {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- heat map card ---------- */
 
 .at-heatmap {

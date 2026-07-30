@@ -53,6 +53,33 @@ export interface BuddyMessage {
 }
 
 /**
+ * What one partner is doing right now.
+ *
+ * Note what is absent and has to stay absent: no weight, no reps, no volume. A
+ * partner sees the exercise, the progress through it, and how long it has been
+ * going. The server's table has no column for anything else, which is the real
+ * guarantee — this type only has to avoid inventing one.
+ */
+export interface BuddyPresence {
+  profileId: string;
+  linkId: string;
+  /** New each time a session starts, so a restart is not the old one resumed. */
+  sessionKey: string;
+  startedAt: Date;
+  exerciseName?: string;
+  exerciseIndex?: number;
+  exerciseCount?: number;
+  setNumber?: number;
+  setCount?: number;
+  setsDone: number;
+  setsPlanned: number;
+  updatedAt: Date;
+}
+
+/** What this device publishes about its own session. Never read back. */
+export type LiveSessionSnapshot = Omit<BuddyPresence, 'profileId' | 'linkId' | 'updatedAt'>;
+
+/**
  * A code you send someone, single-use and short-lived.
  *
  * `expiresAt` is a `Date`, not a formatted countdown — the render edge turns it

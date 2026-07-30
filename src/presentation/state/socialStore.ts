@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import type { BuddyInvite, BuddyLink, BuddyMessage } from '../../core/entities/Buddy';
+import type {
+  BuddyInvite, BuddyLink, BuddyMessage, BuddyPresence, LiveSessionSnapshot,
+} from '../../core/entities/Buddy';
 import { ServerSocialRepository } from '../../data/social/ServerSocialRepository';
 import { getUser } from '../../data/auth/session';
 import { isServerMode } from '../../data/database/mode';
@@ -26,6 +28,34 @@ export function socialAvailable(): boolean {
 
 export type SocialConnection = 'idle' | 'loading' | 'live' | 'offline';
 
+/**
+ * Minimum gap between two presence writes.
+ *
+ * Worst case with the heartbeat is a few hundred tiny upserts an hour, which is
+ * nothing — the throttle exists so that scrubbing the weight wheel does not
+ * turn into one request per frame.
+ */
+const PUBLISH_INTERVAL_MS = 5_000;
+
+// Module scope rather than store state: these are the mechanics of a timer, and
+// nothing renders from them. Putting them in the store would re-render every
+// consumer on each tick of a throttle.
+let pendingSnapshot: { profileId: string; snapshot: LiveSessionSnapshot } | null = null;
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let lastPublishAt = 0;
+
+function flushPresence(): void {
+  if (flushTimer !== null) { clearTimeout(flushTimer); flushTimer = null; }
+  const queued = pendingSnapshot;
+  pendingSnapshot = null;
+  if (!queued) return;
+
+  lastPublishAt = Date.now();
+  // Best-effort by design: a failed heartbeat costs the partner a stale reading
+  // for a few seconds, and must never surface as an error during a workout.
+  void repo.publishPresence(queued.profileId, queued.snapshot).catch(() => {});
+}
+
 interface SocialState {
   available: boolean;
   /** False until the first load settles, so "no partners yet" is not shown early. */
@@ -39,11 +69,25 @@ interface SocialState {
    * line survive closing the sheet, and so reopening is instant.
    */
   messages: Record<string, BuddyMessage[]>;
+  /** Partners currently training, by their profile id. Replace-by-key. */
+  presence: Record<string, BuddyPresence>;
+  /**
+   * How far this device's clock is from the server's, in milliseconds.
+   *
+   * Applied to a partner's `startedAt` before showing elapsed time. Without it
+   * a phone whose clock is three minutes fast makes its owner look like they
+   * started three minutes before they did.
+   */
+  clockSkewMs: number;
   connection: SocialConnection;
   /** The last failure, for the screen to show. Cleared by the next success. */
   error: string | null;
 
   load: (profileId: string) => Promise<void>;
+  loadPresence: (profileId: string) => Promise<void>;
+  /** Publishes a snapshot, throttled. Safe to call on every session change. */
+  publishPresence: (profileId: string, snapshot: LiveSessionSnapshot) => void;
+  endPresence: (profileId: string) => Promise<void>;
   loadMessages: (linkId: string) => Promise<void>;
   sendMessage: (linkId: string, body: string) => Promise<void>;
   markRead: (linkId: string) => Promise<void>;
@@ -62,6 +106,8 @@ export const useSocialStore = create<SocialState>((set, get) => ({
   links: [],
   invite: null,
   messages: {},
+  presence: {},
+  clockSkewMs: 0,
   connection: 'idle',
   error: null,
 
@@ -82,6 +128,49 @@ export const useSocialStore = create<SocialState>((set, get) => ({
       // was already loaded on screen rather than blanking it.
       set({ ready: true, connection: 'offline', error: (err as Error).message });
     }
+  },
+
+  loadPresence: async profileId => {
+    const { serverNow, presence } = await repo.listPresence(profileId);
+    const byProfile: Record<string, BuddyPresence> = {};
+    for (const entry of presence) byProfile[entry.profileId] = entry;
+    // Replaced wholesale rather than merged: the server's answer is the set of
+    // people who are live, so anyone missing from it has stopped, and merging
+    // would leave them training forever.
+    set({ presence: byProfile, clockSkewMs: Date.now() - serverNow.getTime() });
+  },
+
+  /**
+   * Publishes this device's session, throttled.
+   *
+   * Leading edge fires at once, because closing a set updating your partner
+   * immediately is the entire point. After that at most one write every few
+   * seconds, with the last snapshot coalesced and flushed on the trailing edge
+   * so the final state is never the one that got dropped.
+   *
+   * Best-effort throughout: presence failing must never disturb a workout.
+   */
+  publishPresence: (profileId, snapshot) => {
+    pendingSnapshot = { profileId, snapshot };
+
+    const now = Date.now();
+    const elapsed = now - lastPublishAt;
+
+    if (elapsed >= PUBLISH_INTERVAL_MS) {
+      flushPresence();
+      return;
+    }
+    if (flushTimer === null) {
+      flushTimer = setTimeout(flushPresence, PUBLISH_INTERVAL_MS - elapsed);
+    }
+  },
+
+  endPresence: async profileId => {
+    // Whatever was queued is now stale — flushing it after the end would
+    // resurrect the session on the other side until the TTL caught up.
+    pendingSnapshot = null;
+    if (flushTimer !== null) { clearTimeout(flushTimer); flushTimer = null; }
+    await repo.endPresence(profileId);
   },
 
   /**
@@ -164,7 +253,7 @@ export const useSocialStore = create<SocialState>((set, get) => ({
   },
 
   reset: () => set({
-    ready: false, links: [], invite: null, messages: {}, connection: 'idle', error: null,
-    available: socialAvailable(),
+    ready: false, links: [], invite: null, messages: {}, presence: {}, clockSkewMs: 0,
+    connection: 'idle', error: null, available: socialAvailable(),
   }),
 }));

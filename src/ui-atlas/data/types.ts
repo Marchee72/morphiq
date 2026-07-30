@@ -2,7 +2,7 @@ import type { BuddyInvite, BuddyLink } from '../../core/entities/Buddy';
 import type { Exercise } from '../../core/entities/Exercise';
 import type { Message } from '../../core/entities/Message';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
-import type { BuddyDayVM, BuddyRowVM } from '../derive/social';
+import type { BuddyDayVM, BuddyRowVM, PresenceRowVM } from '../derive/social';
 import type { ExerciseFilters, FacetCounts } from '../../data/exercises/ExerciseCatalog';
 import type { WeeklyStatsVM } from '../derive/history';
 import type { ExerciseSessionVM } from '../derive/exerciseHistory';
@@ -88,6 +88,8 @@ export interface SocialState {
   rows: BuddyRowVM[];
   /** Unread across every live conversation, for the badge on the way in. */
   unread: number;
+  /** Partners training right now, newest first. Empty when nobody is. */
+  training: PresenceRowVM[];
 
   refresh(): Promise<void>;
   createInvite(): Promise<void>;

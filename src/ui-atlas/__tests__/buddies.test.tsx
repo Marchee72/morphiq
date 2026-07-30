@@ -4,10 +4,10 @@ import { useStore } from '../../presentation/state/store';
 import { AppDataProvider } from '../data/AppDataProvider';
 import { AppActionsProvider } from '../data/AppActionsProvider';
 import { SocialContext } from '../data/contexts';
-import { buildBuddyRows, buildMessageDays, totalUnread } from '../derive/social';
+import { buildBuddyRows, buildMessageDays, buildPresenceRows, totalUnread } from '../derive/social';
 import { AtlasBuddies } from '../atlas/AtlasBuddies';
 import { testProfile, TEST_NOW } from '../../test/renderScreen';
-import type { BuddyLink, BuddyMessage } from '../../core/entities/Buddy';
+import type { BuddyLink, BuddyMessage, BuddyPresence } from '../../core/entities/Buddy';
 import type { SocialState } from '../data/types';
 
 /**
@@ -41,12 +41,16 @@ const noop2 = async (_linkId: string, _body: string) => {};
 
 function renderBuddies(
   links: BuddyLink[],
-  { initialCode, error = null, removeBuddy = noop, messages = {}, sendMessage = noop2 }: {
+  {
+    initialCode, error = null, removeBuddy = noop, messages = {},
+    sendMessage = noop2, presence = [],
+  }: {
     initialCode?: string;
     error?: string | null;
     removeBuddy?: (linkId: string) => Promise<void>;
     messages?: Record<string, BuddyMessage[]>;
     sendMessage?: (linkId: string, body: string) => Promise<void>;
+    presence?: BuddyPresence[];
   } = {},
 ) {
   useStore.setState({ activeProfile: testProfile, profiles: [testProfile] });
@@ -60,6 +64,7 @@ function renderBuddies(
     error,
     rows,
     unread: totalUnread(rows),
+    training: buildPresenceRows(presence, rows, 0),
     refresh: noop,
     createInvite: noop,
     revokeInvite: noop,

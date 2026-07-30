@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { BuddyInvite, BuddyLink, BuddyMessage } from '../../../core/entities/Buddy';
+import type {
+  BuddyInvite, BuddyLink, BuddyMessage, BuddyPresence,
+} from '../../../core/entities/Buddy';
 import {
-  buildBuddyRows, buildMessageDays, inviteHoursLeft, isCompleteCode, isInviteLive,
-  normalizeInviteCode, totalUnread,
+  buildBuddyRows, buildMessageDays, buildPresenceRows, inviteHoursLeft, isCompleteCode,
+  isInviteLive, normalizeInviteCode, totalUnread,
 } from '../social';
 
 const NOW = new Date(2026, 6, 27, 18); // Monday 27 July 2026, evening
@@ -84,6 +86,78 @@ describe('totalUnread', () => {
     // with no way to open what it points at.
     const rows = buildBuddyRows([link({ unreadCount: 4, blockedByMe: true })]);
     expect(totalUnread(rows)).toBe(0);
+  });
+});
+
+describe('buildPresenceRows', () => {
+  const presence = (over: Partial<BuddyPresence> = {}): BuddyPresence => ({
+    profileId: '9',
+    linkId: '1',
+    sessionKey: 'k1',
+    startedAt: new Date(NOW.getTime() - 20 * 60_000),
+    exerciseName: 'Press banca',
+    exerciseIndex: 2,
+    exerciseCount: 5,
+    setNumber: 2,
+    setCount: 4,
+    setsDone: 5,
+    setsPlanned: 18,
+    updatedAt: NOW,
+    ...over,
+  });
+
+  it('names the partner from the friendship, not from the presence row', () => {
+    // Presence carries a profile id and nothing else, deliberately: identity
+    // comes only from a friendship you already have.
+    const [row] = buildPresenceRows([presence()], buildBuddyRows([link()]), 0);
+    expect(row.name).toBe('Ana');
+    expect(row.exerciseName).toBe('Press banca');
+  });
+
+  it('drops presence from somebody who is not a live partner', () => {
+    // Should be unreachable — the server joins on the link. If it happens
+    // anyway, an unnamed stranger training is worse than showing nobody.
+    expect(buildPresenceRows([presence({ profileId: '404' })], buildBuddyRows([link()]), 0))
+      .toEqual([]);
+  });
+
+  it('drops presence from a paused partner', () => {
+    const rows = buildBuddyRows([link({ blockedByMe: true })]);
+    expect(buildPresenceRows([presence()], rows, 0)).toEqual([]);
+  });
+
+  it('shifts the start time by the clock difference', () => {
+    // Their `startedAt` is off their phone's clock. Expressed in ours, or the
+    // elapsed counter subtracts two different clocks from each other.
+    const [row] = buildPresenceRows([presence()], buildBuddyRows([link()]), 60_000);
+    expect(row.startedAt.getTime()).toBe(presence().startedAt.getTime() + 60_000);
+  });
+
+  it('puts the most recently started session first', () => {
+    const rows = buildBuddyRows([
+      link({ id: '1', buddyProfileId: '9', buddyName: 'Ana' }),
+      link({ id: '2', buddyProfileId: '8', buddyName: 'Sofía' }),
+    ]);
+    const ordered = buildPresenceRows([
+      presence({ profileId: '9', linkId: '1', startedAt: new Date(NOW.getTime() - 40 * 60_000) }),
+      presence({ profileId: '8', linkId: '2', startedAt: new Date(NOW.getTime() - 5 * 60_000) }),
+    ], rows, 0);
+
+    expect(ordered.map(r => r.name)).toEqual(['Sofía', 'Ana']);
+  });
+
+  it('carries no weight or reps, whatever the server sent', () => {
+    // The guarantee lives in the table and the serialiser; this pins that the
+    // view model never grows a field to hold one either.
+    const [row] = buildPresenceRows([presence()], buildBuddyRows([link()]), 0);
+    expect(Object.keys(row).sort()).toEqual([
+      'exerciseCount', 'exerciseIndex', 'exerciseName', 'linkId', 'name',
+      'picture', 'profileId', 'setCount', 'setNumber', 'startedAt',
+    ]);
+  });
+
+  it('survives nobody training', () => {
+    expect(buildPresenceRows([], buildBuddyRows([link()]), 0)).toEqual([]);
   });
 });
 

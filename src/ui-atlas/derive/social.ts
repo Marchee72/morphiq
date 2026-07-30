@@ -1,4 +1,6 @@
-import type { BuddyInvite, BuddyLink, BuddyMessage } from '../../core/entities/Buddy';
+import type {
+  BuddyInvite, BuddyLink, BuddyMessage, BuddyPresence,
+} from '../../core/entities/Buddy';
 
 /**
  * One partner as the list shows them.
@@ -66,6 +68,64 @@ export function totalUnread(rows: BuddyRowVM[]): number {
   // Muted conversations are excluded: nothing arrives through them, so a count
   // there would be a badge you cannot clear.
   return rows.reduce((sum, row) => sum + (row.muted ? 0 : row.unread), 0);
+}
+
+/** One partner training, as the strip on Today shows them. */
+export interface PresenceRowVM {
+  profileId: string;
+  linkId: string;
+  name: string;
+  picture?: string;
+  exerciseName?: string;
+  exerciseIndex?: number;
+  exerciseCount?: number;
+  setNumber?: number;
+  setCount?: number;
+  /**
+   * When they started, corrected for the difference between their clock and
+   * the server's. A `Date`, so the ticker at the render edge owns the counting.
+   */
+  startedAt: Date;
+}
+
+/**
+ * Partners who are training, newest session first.
+ *
+ * Joined to the partner list for the name and picture: presence carries a
+ * profile id and nothing else, deliberately, so that the only place a partner's
+ * identity comes from is the friendship you already have with them.
+ *
+ * `clockSkewMs` is this device's clock minus the server's. Adding it to a
+ * partner's `startedAt` expresses their start in *our* clock, which is the one
+ * the elapsed counter will subtract from.
+ */
+export function buildPresenceRows(
+  presence: BuddyPresence[],
+  rows: BuddyRowVM[],
+  clockSkewMs: number,
+): PresenceRowVM[] {
+  const byProfile = new Map(rows.map(row => [row.profileId, row]));
+
+  return presence
+    .flatMap(entry => {
+      const row = byProfile.get(entry.profileId);
+      // Someone with no live friendship should never have reached us; if they
+      // did, showing an unnamed stranger training is worse than showing nobody.
+      if (!row || row.muted) return [];
+      return [{
+        profileId: entry.profileId,
+        linkId: entry.linkId,
+        name: row.name,
+        picture: row.picture,
+        exerciseName: entry.exerciseName,
+        exerciseIndex: entry.exerciseIndex,
+        exerciseCount: entry.exerciseCount,
+        setNumber: entry.setNumber,
+        setCount: entry.setCount,
+        startedAt: new Date(entry.startedAt.getTime() + clockSkewMs),
+      }];
+    })
+    .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
 }
 
 function startOfDay(date: Date): Date {

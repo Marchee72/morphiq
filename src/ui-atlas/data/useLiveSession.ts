@@ -1,11 +1,26 @@
 import { useCallback } from 'react';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import { useStore } from '../../presentation/state/store';
+import { useSocialStore } from '../../presentation/state/socialStore';
 import { cancelActiveWorkoutNotification } from '../../data/health/ActiveWorkoutNotification';
 import { useAppData } from './useAppData';
 import type { SessionCursor, SessionExerciseVM } from '../types';
 
 type DraftSet = Omit<WorkoutSet, 'profileId' | 'timestamp' | 'workoutLogId'>;
+
+/**
+ * Stops telling partners you are training.
+ *
+ * Read imperatively rather than through `useSocial`, because the two callers
+ * run while their component is being torn down and a hook value captured at
+ * render could be a session behind. A no-op when there is nobody to tell.
+ */
+async function endPresence(): Promise<void> {
+  const social = useSocialStore.getState();
+  const profileId = useStore.getState().activeProfile?.id;
+  if (!social.available || !profileId) return;
+  await social.endPresence(profileId);
+}
 
 /**
  * Live-session behaviour, without any markup.
@@ -214,6 +229,12 @@ export function useLiveSession(
 
   const finish = useCallback(async () => {
     await cancelActiveWorkoutNotification().catch(() => { /* notification is best-effort */ });
+    // Called here rather than from the publisher because it has to run as the
+    // session ceases to exist, which is exactly when a declarative effect is
+    // being torn down. Best-effort for the same reason the notification above
+    // is: a partner seeing you train for another two minutes is not worth
+    // failing a finished workout over.
+    await endPresence().catch(() => { /* presence is best-effort */ });
     await useStore.getState().finishActiveSession();
     // Reload so the session that just ended counts toward records and balance.
     await useStore.getState().loadAllSets().catch(() => { /* degrades to the loaded window */ });
@@ -222,6 +243,7 @@ export function useLiveSession(
 
   const discard = useCallback(async () => {
     await cancelActiveWorkoutNotification().catch(() => { /* notification is best-effort */ });
+    await endPresence().catch(() => { /* presence is best-effort */ });
     useStore.getState().dismissActiveSession();
     useStore.getState().setActiveTab('today');
   }, []);

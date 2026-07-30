@@ -1,4 +1,6 @@
-import type { BuddyInvite, BuddyLink, BuddyMessage, BuddyMessageKind } from '../entities/Buddy';
+import type {
+  BuddyInvite, BuddyLink, BuddyMessage, BuddyMessageKind, BuddyPresence, LiveSessionSnapshot,
+} from '../entities/Buddy';
 
 /**
  * What the app can ask about training partners.
@@ -38,4 +40,15 @@ export interface ISocialRepository {
   ): Promise<BuddyMessage>;
   /** Moves your read line forward. The server refuses to move it back. */
   markRead(linkId: string, upToId: string): Promise<void>;
+
+  /**
+   * Which partners are training, with the server's clock alongside.
+   *
+   * `serverNow` is not decoration: `startedAt` comes off the other person's
+   * phone, and without a reference their elapsed time can read minutes wrong.
+   */
+  listPresence(profileId: string): Promise<{ serverNow: Date; presence: BuddyPresence[] }>;
+  /** Publishes this device's session. One way — nothing is ever read back. */
+  publishPresence(profileId: string, snapshot: LiveSessionSnapshot): Promise<void>;
+  endPresence(profileId: string): Promise<void>;
 }

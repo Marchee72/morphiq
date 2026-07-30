@@ -558,6 +558,9 @@ export const es: Translations = {
   'buddy.unread_other': '{n} mensajes sin leer',
 
   // Presencia
+  'buddy.training': '{name} está entrenando',
+  'buddy.progress': '{exercise}, serie {n} de {total}',
+  'buddy.warmingUp': 'Acaba de empezar',
   'buddy.presenceToggle': 'Mostrar cuándo entreno',
   'buddy.presenceSub': 'Tus compañeros ven en qué ejercicio vas y cuánto llevas. Los pesos nunca.',
   'buddy.presenceOn': 'Sí',

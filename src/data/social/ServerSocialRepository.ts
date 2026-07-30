@@ -1,5 +1,5 @@
 import type {
-  BuddyInvite, BuddyLink, BuddyMessage, BuddyMessageKind,
+  BuddyInvite, BuddyLink, BuddyMessage, BuddyMessageKind, BuddyPresence, LiveSessionSnapshot,
 } from '../../core/entities/Buddy';
 import type { ISocialRepository } from '../../core/interfaces/ISocial';
 import { api } from '../database/apiClient';
@@ -15,6 +15,14 @@ import { api } from '../database/apiClient';
 
 function parseLink(raw: Record<string, unknown>): BuddyLink {
   return { ...raw, createdAt: new Date(raw.createdAt as string) } as BuddyLink;
+}
+
+function parsePresence(raw: Record<string, unknown>): BuddyPresence {
+  return {
+    ...raw,
+    startedAt: new Date(raw.startedAt as string),
+    updatedAt: new Date(raw.updatedAt as string),
+  } as BuddyPresence;
 }
 
 function parseMessage(raw: Record<string, unknown>): BuddyMessage {
@@ -99,6 +107,26 @@ export class ServerSocialRepository implements ISocialRepository {
     await api(`/api/social/buddies/${linkId}/read`, {
       method: 'POST',
       body: JSON.stringify({ upToId: Number(upToId) }),
+    });
+  }
+
+  async listPresence(profileId: string): Promise<{ serverNow: Date; presence: BuddyPresence[] }> {
+    const raw = await api<{ serverNow: string; presence: Record<string, unknown>[] }>(
+      `/api/social/presence?profileId=${encodeURIComponent(profileId)}`,
+    );
+    return { serverNow: new Date(raw.serverNow), presence: raw.presence.map(parsePresence) };
+  }
+
+  async publishPresence(profileId: string, snapshot: LiveSessionSnapshot): Promise<void> {
+    await api('/api/social/presence', {
+      method: 'PUT',
+      body: JSON.stringify({ profileId, snapshot }),
+    });
+  }
+
+  async endPresence(profileId: string): Promise<void> {
+    await api(`/api/social/presence?profileId=${encodeURIComponent(profileId)}`, {
+      method: 'DELETE',
     });
   }
 }

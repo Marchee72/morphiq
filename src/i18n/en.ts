@@ -561,6 +561,9 @@ export const en = {
   'buddy.unread_other': '{n} unread messages',
 
   // Presence
+  'buddy.training': '{name} is training',
+  'buddy.progress': '{exercise}, set {n} of {total}',
+  'buddy.warmingUp': 'Just started',
   'buddy.presenceToggle': 'Show when I train',
   'buddy.presenceSub': 'Partners see the exercise you are on and how far through you are. Never your weights.',
   'buddy.presenceOn': 'On',

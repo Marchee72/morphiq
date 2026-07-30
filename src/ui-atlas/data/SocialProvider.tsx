@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo } from 'react';
 import { useStore } from '../../presentation/state/store';
 import { useSocialStore } from '../../presentation/state/socialStore';
-import { buildBuddyRows, buildMessageDays, totalUnread } from '../derive/social';
+import { buildBuddyRows, buildMessageDays, buildPresenceRows, totalUnread } from '../derive/social';
+import { usePresencePublisher } from './usePresencePublisher';
 import { SocialContext } from './contexts';
 import { useAppActions } from './useAppData';
 import type { SocialState } from './types';
@@ -43,6 +44,8 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const links = useSocialStore(state => state.links);
   const invite = useSocialStore(state => state.invite);
   const messages = useSocialStore(state => state.messages);
+  const presence = useSocialStore(state => state.presence);
+  const clockSkewMs = useSocialStore(state => state.clockSkewMs);
   const error = useSocialStore(state => state.error);
 
   useEffect(() => {
@@ -54,15 +57,20 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     // under the new one's name while the request is in flight.
     store.reset();
     void store.load(profileId);
+    void store.loadPresence(profileId).catch(() => {});
 
     const timer = window.setInterval(() => {
       // Refetching behind a backgrounded app is spend for nothing; the phone is
       // in a pocket for most of a workout.
-      if (document.visibilityState === 'visible') void useSocialStore.getState().load(profileId);
+      if (document.visibilityState !== 'visible') return;
+      void useSocialStore.getState().load(profileId);
+      void useSocialStore.getState().loadPresence(profileId).catch(() => {});
     }, REFRESH_MS);
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void useSocialStore.getState().load(profileId);
+      if (document.visibilityState !== 'visible') return;
+      void useSocialStore.getState().load(profileId);
+      void useSocialStore.getState().loadPresence(profileId).catch(() => {});
     };
     document.addEventListener('visibilitychange', onVisible);
 
@@ -95,6 +103,14 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const rows = useMemo(() => buildBuddyRows(links), [links]);
   const unread = useMemo(() => totalUnread(rows), [rows]);
+  const training = useMemo(
+    () => buildPresenceRows(Object.values(presence), rows, clockSkewMs),
+    [presence, rows, clockSkewMs],
+  );
+
+  // Publishing this device's own session. Mounted here so it runs wherever the
+  // app is, not only while the Train screen happens to be on screen.
+  usePresencePublisher();
 
   const conversation = useCallback((linkId: string) => {
     const held = messages[linkId];
@@ -159,11 +175,11 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [profileId]);
 
   const value = useMemo<SocialState>(() => ({
-    available, ready, links, invite, error, rows, unread,
+    available, ready, links, invite, error, rows, unread, training,
     refresh, createInvite, revokeInvite, redeemInvite, removeBuddy, setBlocked,
     conversation, watchConversation, sendMessage,
   }), [
-    available, ready, links, invite, error, rows, unread,
+    available, ready, links, invite, error, rows, unread, training,
     refresh, createInvite, revokeInvite, redeemInvite, removeBuddy, setBlocked,
     conversation, watchConversation, sendMessage,
   ]);
