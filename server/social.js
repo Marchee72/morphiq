@@ -54,6 +54,46 @@ const MAX_PAYLOAD_BYTES = 32_768;
  */
 const PRESENCE_TTL_MINUTES = 3;
 
+/**
+ * Stream pacing.
+ *
+ * `LIFETIME` ends the response before the platform can cut it mid-frame — the
+ * measured ceiling is at least 290s, and a clean end the client expects is
+ * better than a truncated one it has to treat as an error. `POLL` is how often
+ * the database is asked; two seconds is well under what anyone notices while
+ * still being one indexed query per connected client.
+ */
+const STREAM_LIFETIME_MS = 280_000;
+const STREAM_POLL_MS = 2_000;
+
+/** Friendships change far less often than messages, so they are checked rarely. */
+const LINK_POLL_EVERY = 10;
+
+/**
+ * How far back the presence window reaches on each tick.
+ *
+ * Presence is a snapshot keyed by profile and the client replaces by key, so
+ * re-sending one costs nothing. Overlapping deliberately means a row written
+ * between two ticks cannot fall through the gap — the trade that lets this work
+ * on a timestamp rather than needing an exact monotonic cursor.
+ */
+const PRESENCE_OVERLAP_MS = 2_000;
+
+/** `m<messageId>.p<presenceMs>` — two cursors, because two tables. */
+function parseCursor(raw) {
+  const text = typeof raw === 'string' ? raw : '';
+  const message = /m(\d+)/.exec(text);
+  const presence = /p(\d+)/.exec(text);
+  return {
+    messageId: message ? Number(message[1]) : 0,
+    presenceAt: presence ? Number(presence[1]) : 0,
+  };
+}
+
+function formatCursor(cursor) {
+  return `m${cursor.messageId}.p${cursor.presenceAt}`;
+}
+
 function generateCode() {
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i++) {
@@ -302,6 +342,180 @@ export function socialRoutes(pool) {
       );
       res.json(toBuddyLink(updated[0], mine));
     } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ─── Stream ───────────────────────────────────────────────────────────────
+
+  /**
+   * Everything that changes, pushed as it happens.
+   *
+   * Measured against a real preview before being built: Vercel does not buffer
+   * `text/event-stream`, and a function survives at least 290 seconds. Both
+   * were open questions the design hung on, and neither can be answered locally
+   * where Node always streams fine.
+   *
+   * The fan-out is a poll against Postgres inside the handler. Two invocations
+   * are two isolated processes, so there is no in-memory pub/sub to subscribe
+   * to, and Neon's pooler does not carry `LISTEN/NOTIFY`. Polling one indexed
+   * query every couple of seconds for one connected client is cheaper than
+   * either alternative and works identically in development.
+   *
+   * Note `pool.query` per tick rather than a client held for the life of the
+   * stream: holding one would pin a Neon connection for the whole five minutes.
+   */
+  router.get('/stream', actingProfile, async (req, res) => {
+    const profileId = String(req.query.profileId);
+    let cursor = parseCursor(req.query.since);
+    let linkIds = [];
+    let linkFingerprint = '';
+    let timer = null;
+    let closed = false;
+
+    const send = (event, data, id) => {
+      if (closed) return;
+      if (id) res.write(`id: ${id}\n`);
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const stop = () => {
+      closed = true;
+      if (timer !== null) { clearInterval(timer); timer = null; }
+    };
+
+    // Without this the invocation keeps polling after the client hangs up, and
+    // bills for every second of it.
+    req.on('close', stop);
+
+    try {
+      res.set({
+        'Content-Type': 'text/event-stream',
+        'Connection': 'keep-alive',
+        // Proxies buffer event streams unless told not to.
+        'X-Accel-Buffering': 'no',
+      });
+      res.flushHeaders();
+
+      const startedAt = Date.now();
+
+      /** Refreshes the caller's links and reports whether they changed. */
+      async function refreshLinks() {
+        const { rows } = await pool.query(
+          `${LINK_SELECT}
+            WHERE (l."profileIdA" = $1 OR l."profileIdB" = $1)
+              AND l."removedByA" IS NULL AND l."removedByB" IS NULL
+            ORDER BY l."createdAt" ASC`,
+          [profileId],
+        );
+        linkIds = rows.map(row => Number(row.id));
+        const links = rows.map(row => toBuddyLink(row, profileId));
+        const fingerprint = JSON.stringify(links);
+        const changed = fingerprint !== linkFingerprint;
+        linkFingerprint = fingerprint;
+        return { links, changed };
+      }
+
+      async function readPresence() {
+        const { rows } = await pool.query(
+          `SELECT ls.*, l.id AS "linkId"
+             FROM live_sessions ls
+             JOIN buddy_links l
+               ON (l."profileIdA" = ls."profileId" AND l."profileIdB" = $1)
+               OR (l."profileIdB" = ls."profileId" AND l."profileIdA" = $1)
+             JOIN user_profiles p ON p.id::text = ls."profileId"
+            WHERE ls."profileId" <> $1
+              AND ls."endedAt" IS NULL
+              AND ls."updatedAt" > NOW() - INTERVAL '${PRESENCE_TTL_MINUTES} minutes'
+              AND l."blockedByProfileId" IS NULL
+              AND l."removedByA" IS NULL AND l."removedByB" IS NULL
+              AND COALESCE(p."sharePresence", TRUE) = TRUE`,
+          [profileId],
+        );
+        return rows.map(toPresence);
+      }
+
+      const { links } = await refreshLinks();
+      const presence = await readPresence();
+      for (const entry of presence) {
+        cursor.presenceAt = Math.max(cursor.presenceAt, new Date(entry.updatedAt).getTime());
+      }
+
+      // One snapshot on open, so a reconnecting client needs no separate GET
+      // and a fresh one starts correct rather than empty.
+      send('hello', { serverNow: new Date(), cursor: formatCursor(cursor), links, presence });
+
+      let tick = 0;
+      /** Who was live on the previous tick, so a departure can be announced. */
+      let lastLive = new Set(presence.map(entry => entry.profileId));
+
+      timer = setInterval(async () => {
+        if (closed) return;
+        try {
+          // Ends cleanly before the platform can cut mid-frame. The client
+          // treats a clean end as ordinary and reconnects with its cursor.
+          if (Date.now() - startedAt > STREAM_LIFETIME_MS) {
+            send('bye', {});
+            stop();
+            res.end();
+            return;
+          }
+
+          tick += 1;
+
+          if (linkIds.length > 0) {
+            const { rows } = await pool.query(
+              `SELECT * FROM buddy_messages
+                WHERE "linkId" = ANY($1) AND id > $2
+                ORDER BY id ASC LIMIT 200`,
+              [linkIds, cursor.messageId],
+            );
+            for (const row of rows) {
+              cursor.messageId = Math.max(cursor.messageId, Number(row.id));
+              send('message', toMessage(row), formatCursor(cursor));
+            }
+          }
+
+          // Presence is a snapshot keyed by profile, so re-sending one is
+          // harmless — the client replaces by key. That is what lets the window
+          // overlap rather than needing an exact cursor.
+          const live = await readPresence();
+          const seen = new Set();
+          for (const entry of live) {
+            seen.add(entry.profileId);
+            const at = new Date(entry.updatedAt).getTime();
+            if (at > cursor.presenceAt - PRESENCE_OVERLAP_MS) {
+              send('presence', entry, formatCursor(cursor));
+            }
+            cursor.presenceAt = Math.max(cursor.presenceAt, at);
+          }
+          // Anyone who was live and is not now has finished or gone stale.
+          for (const gone of [...lastLive].filter(id => !seen.has(id))) {
+            send('presence.end', { profileId: gone });
+          }
+          lastLive = seen;
+
+          // Friendships change far less often than messages do, so they are
+          // checked every tenth tick rather than every one.
+          if (tick % LINK_POLL_EVERY === 0) {
+            const refreshed = await refreshLinks();
+            if (refreshed.changed) send('buddy', { links: refreshed.links });
+          }
+
+          // Keeps proxies from closing an idle connection, and lets the client
+          // tell a live stream from a dead socket.
+          res.write(':hb\n\n');
+        } catch {
+          // A stream whose headers are already sent cannot answer 500 — the
+          // catch-all in index.js would throw trying. End and let the client
+          // reconnect with its cursor.
+          stop();
+          res.end();
+        }
+      }, STREAM_POLL_MS);
+    } catch {
+      stop();
+      res.end();
+    }
   });
 
   // ─── Presence ─────────────────────────────────────────────────────────────
