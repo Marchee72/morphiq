@@ -45,6 +45,15 @@ const MAX_BUDDIES = 20;
 const MAX_BODY_CHARS = 2000;
 const MAX_PAYLOAD_BYTES = 32_768;
 
+/**
+ * How long a session stays live without a heartbeat.
+ *
+ * Long enough to survive a heavy set, a rest and a lost signal; short enough
+ * that an app killed mid-workout stops looking like somebody still in the gym.
+ * A phone has no reliable goodbye, so a few minutes of ghost is the price.
+ */
+const PRESENCE_TTL_MINUTES = 3;
+
 function generateCode() {
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i++) {
@@ -80,6 +89,30 @@ function toBuddyLink(row, myProfileId) {
     blockedByThem: row.blockedByProfileId != null
       && String(row.blockedByProfileId) !== String(myProfileId),
     unreadCount: row.unreadCount ?? 0,
+  };
+}
+
+/**
+ * Named field by field, deliberately.
+ *
+ * Spreading the row would mean any column added to `live_sessions` later is
+ * served to a partner the moment it exists. The table has no load columns
+ * today; this makes sure that adding one is not enough to leak it.
+ */
+function toPresence(row) {
+  return {
+    profileId: String(row.profileId),
+    linkId: String(row.linkId),
+    sessionKey: row.sessionKey,
+    startedAt: row.startedAt,
+    exerciseName: row.exerciseName ?? undefined,
+    exerciseIndex: row.exerciseIndex ?? undefined,
+    exerciseCount: row.exerciseCount ?? undefined,
+    setNumber: row.setNumber ?? undefined,
+    setCount: row.setCount ?? undefined,
+    setsDone: row.setsDone ?? 0,
+    setsPlanned: row.setsPlanned ?? 0,
+    updatedAt: row.updatedAt,
   };
 }
 
@@ -268,6 +301,107 @@ export function socialRoutes(pool) {
         [link.id, blocked ? mine : null, blocked ? new Date() : null],
       );
       res.json(toBuddyLink(updated[0], mine));
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  // ─── Presence ─────────────────────────────────────────────────────────────
+
+  /**
+   * Publishes where you are in the session you are doing right now.
+   *
+   * Every field is named individually, so anything else the client sends is
+   * dropped on the floor. Together with the table having no load columns, that
+   * is two independent reasons a weight cannot reach another account.
+   *
+   * The preference is enforced here as well as on the read side. Honouring it
+   * only when reading would leave your presence sitting in the database anyway,
+   * one forgotten `WHERE` away from being served.
+   */
+  router.put('/presence', actingProfile, async (req, res) => {
+    try {
+      const profileId = String(req.body.profileId);
+
+      const { rows: prefs } = await pool.query(
+        'SELECT "sharePresence" FROM user_profiles WHERE id = $1',
+        [profileId],
+      );
+      if (prefs[0]?.sharePresence === false) {
+        // Not an error. The client may keep publishing without knowing, and
+        // switching the preference off has to take effect without waiting for
+        // the app to notice.
+        await pool.query('DELETE FROM live_sessions WHERE "profileId" = $1', [profileId]);
+        return res.status(204).end();
+      }
+
+      const s = req.body.snapshot ?? {};
+      await pool.query(
+        `INSERT INTO live_sessions ("profileId", "sessionKey", "startedAt", "exerciseName",
+                                    "exerciseIndex", "exerciseCount", "setNumber", "setCount",
+                                    "setsDone", "setsPlanned", "updatedAt", "endedAt")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, NOW(), NULL)
+         ON CONFLICT ("profileId") DO UPDATE
+           SET "sessionKey" = EXCLUDED."sessionKey",
+               "startedAt" = EXCLUDED."startedAt",
+               "exerciseName" = EXCLUDED."exerciseName",
+               "exerciseIndex" = EXCLUDED."exerciseIndex",
+               "exerciseCount" = EXCLUDED."exerciseCount",
+               "setNumber" = EXCLUDED."setNumber",
+               "setCount" = EXCLUDED."setCount",
+               "setsDone" = EXCLUDED."setsDone",
+               "setsPlanned" = EXCLUDED."setsPlanned",
+               "updatedAt" = NOW(),
+               "endedAt" = NULL`,
+        [
+          profileId, String(s.sessionKey ?? ''), s.startedAt ?? new Date(),
+          s.exerciseName ?? null, s.exerciseIndex ?? null, s.exerciseCount ?? null,
+          s.setNumber ?? null, s.setCount ?? null,
+          s.setsDone ?? 0, s.setsPlanned ?? 0,
+        ],
+      );
+      res.status(204).end();
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  /** Finishing or discarding. Deleted rather than flagged — nothing reads history. */
+  router.delete('/presence', actingProfile, async (req, res) => {
+    try {
+      await pool.query('DELETE FROM live_sessions WHERE "profileId" = $1', [
+        String(req.query.profileId),
+      ]);
+      res.status(204).end();
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  /**
+   * Which of your partners are training, and where they are in it.
+   *
+   * Staleness is a read predicate rather than a swept column, because
+   * serverless has no daemon to sweep with.
+   */
+  router.get('/presence', actingProfile, async (req, res) => {
+    try {
+      const profileId = String(req.query.profileId);
+      const { rows } = await pool.query(
+        `SELECT ls.*, l.id AS "linkId"
+           FROM live_sessions ls
+           JOIN buddy_links l
+             ON (l."profileIdA" = ls."profileId" AND l."profileIdB" = $1)
+             OR (l."profileIdB" = ls."profileId" AND l."profileIdA" = $1)
+           JOIN user_profiles p ON p.id::text = ls."profileId"
+          WHERE ls."profileId" <> $1
+            AND ls."endedAt" IS NULL
+            AND ls."updatedAt" > NOW() - INTERVAL '${PRESENCE_TTL_MINUTES} minutes'
+            AND l."blockedByProfileId" IS NULL
+            AND l."removedByA" IS NULL AND l."removedByB" IS NULL
+            -- Checked again on the way out: a preference switched off after the
+            -- row was written must take effect now, not at the next heartbeat.
+            AND COALESCE(p."sharePresence", TRUE) = TRUE`,
+        [profileId],
+      );
+
+      // `serverNow` lets the client correct for the other phone's clock being
+      // wrong, which would otherwise show an elapsed time minutes out.
+      res.json({ serverNow: new Date(), presence: rows.map(toPresence) });
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
