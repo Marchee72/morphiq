@@ -27,19 +27,17 @@ export const AtlasSharedStrip: React.FC = () => {
     <div className="at-shared">
       <div className="at-shared-head">
         <span className="at-shared-label">{t('buddy.togetherHeading')}</span>
-        <button
-          className="at-shared-leave"
-          onClick={() => void leaveShared()}
-          aria-label={t('buddy.togetherLeave')}
-        >
+        <button className="at-shared-leave" onClick={() => void leaveShared()}>
           <LogOut size={13} />
           {t('buddy.togetherLeave')}
         </button>
       </div>
 
       {sharedPartners.length === 0 ? (
-        // The container opens before anybody accepts, and the seconds between
-        // are exactly when you would wonder whether it worked.
+        // The container opens before anybody accepts, and the minutes between
+        // are exactly when you would wonder whether it worked. It also covers a
+        // partner who has joined but not started: presence is what puts a row
+        // here, and joining a room is not training in it.
         <p className="at-shared-waiting">{t('buddy.togetherWaiting')}</p>
       ) : (
         sharedPartners.map(row => <SharedRow key={row.profileId} row={row} />)

@@ -324,7 +324,9 @@ export const useSocialStore = create<SocialState>((set, get) => ({
     // nothing worse than rejoining the same room next time — opening a
     // container is idempotent per friendship.
     set({ shared: null });
-    await repo.leaveShared(container.id);
+    // Swallowed for the same reason, and because the strip's button fires this
+    // and forgets: a rejection nobody is waiting on is an unhandled one.
+    await repo.leaveShared(container.id).catch(() => {});
   },
 
   /**

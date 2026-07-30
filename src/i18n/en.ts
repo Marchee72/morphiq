@@ -578,7 +578,9 @@ export const en = {
   'buddy.togetherJoined': 'You are in this session',
   'buddy.togetherEnded': 'This session is over',
   'buddy.togetherHeading': 'Training together',
-  'buddy.togetherWaiting': 'Waiting for someone to join',
+  // "Start", not "join": someone who has joined but not begun their workout has
+  // no presence row yet, so this line is what they would still be looking at.
+  'buddy.togetherWaiting': 'Waiting for someone to start',
   'buddy.togetherLeave': 'Leave',
   'buddy.togetherFailed': 'That did not work. Try again.',
 

@@ -595,14 +595,16 @@ describe('the shared session strip', () => {
     // The container opens before anybody accepts, and those seconds are exactly
     // when you would wonder whether it worked.
     renderStrip(session, []);
-    expect(text()).toContain('Waiting for someone to join');
+    expect(text()).toContain('Waiting for someone to start');
   });
 
   it('lets you step out without ending your workout', () => {
     const leaveShared = vi.fn(async () => {});
     renderStrip(session, [presence()], leaveShared);
 
-    fireEvent.click(screen.getByLabelText('Leave'));
+    // By role and visible text: the button's own label is its accessible name,
+    // so an `aria-label` repeating it would only be one more thing to keep in step.
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(leaveShared).toHaveBeenCalled();
   });

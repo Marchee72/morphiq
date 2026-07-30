@@ -134,9 +134,10 @@ export const AtlasTrain: React.FC = () => {
         onMinimize={() => actions.navigate('today')}
         onOpenList={() => setListOpen(true)}
       />
-      {/* Sits beside the header rather than inside it because the header ticks
-          once a second and this does not — folding them together would re-render
-          the partner rows sixty times a minute for a clock they do not show. */}
+      {/* Sits beside the header rather than inside it. Both tick once a second,
+          but each owns its own clock at the leaf that shows it — folded together,
+          the header's timer would drag the partner rows along with it and the
+          rows' timers would drag the whole header back. */}
       <AtlasSharedStrip />
     </>
   );

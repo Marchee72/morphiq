@@ -3124,13 +3124,18 @@ button.at-routine-item { cursor: pointer; }
   color: var(--muted);
 }
 
+/* 44px and pulled back out with negative margin: the strip stays two lines tall,
+   but the target is one you can hit standing over a bar. The text is small
+   because leaving is not what you came here to do — the target is not. */
 .at-shared-leave {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-height: 44px;
   border: 0;
   background: transparent;
-  padding: 4px 2px;
+  padding: 0 8px;
+  margin: -12px -8px;
   font-family: inherit;
   font-size: 11.5px;
   font-weight: 600;

@@ -575,7 +575,7 @@ export const es: Translations = {
   'buddy.togetherJoined': 'Estás en esta sesión',
   'buddy.togetherEnded': 'Esta sesión ya terminó',
   'buddy.togetherHeading': 'Entrenando juntos',
-  'buddy.togetherWaiting': 'Esperando a que se sume alguien',
+  'buddy.togetherWaiting': 'Esperando a que alguien empiece',
   'buddy.togetherLeave': 'Salir',
   'buddy.togetherFailed': 'No se pudo. Probá de nuevo.',
 
