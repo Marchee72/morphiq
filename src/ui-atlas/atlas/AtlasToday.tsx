@@ -244,7 +244,7 @@ export const AtlasToday: React.FC = () => {
           {training.streak.current > 0 && ` · ${t('today.streak', { n: training.streak.current })}`}
         </button>
       </div>
-      <div className="at-pad">
+      <div className="at-pad" style={{ paddingBottom: 22 }}>
         <div className="at-card">
           <div className="at-week">
             {training.streak.week.map(day => (

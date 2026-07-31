@@ -1111,12 +1111,41 @@
 
 .at-map-legend p { margin: 0 0 12px; font-size: 12px; color: var(--muted); line-height: 1.45; }
 
-.at-map-side { display: flex; gap: 6px; }
+/* A segmented control, not two floating chips: one pill carries a solid
+   thumb that slides to whichever side is picked, the way a tab switcher
+   does. Two side-by-side buttons with a gap between them read as separate
+   choices; this reads as one control with two positions, which is what
+   Front/Back actually is. */
+.at-map-side {
+  position: relative;
+  display: flex;
+  padding: 3px;
+  background: var(--at-tonal);
+  border-radius: 999px;
+}
+
+.at-map-side::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  background: var(--clay);
+  border-radius: 999px;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Only two buttons ever exist here, so "the last one is on" is enough to
+   know the thumb belongs on the right rather than tracking an index. */
+.at-map-side:has(button:last-child[data-on='true'])::before { transform: translateX(100%); }
 
 .at-map-side button {
+  position: relative;
+  z-index: 1;
   min-height: 44px;
   flex: 1;
-  border: 1.5px solid var(--hair);
+  border: 0;
   background: transparent;
   border-radius: 999px;
   font-size: 11px;
@@ -1124,16 +1153,10 @@
   padding: 7px 0;
   color: var(--muted);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
 }
 
-.at-map-side button:active { transform: scale(0.96); }
-
-.at-map-side button[data-on='true'] {
-  background: color-mix(in srgb, var(--clay) 16%, var(--card));
-  border-color: var(--clay);
-  color: var(--clay);
-}
+.at-map-side button[data-on='true'] { color: var(--at-on-clay); }
 
 .at-chiprail {
   display: flex;
@@ -3287,17 +3310,38 @@ button.at-routine-item { cursor: pointer; }
   color: var(--muted);
 }
 
+/* Same segmented control as `.at-map-side` — one pill, a thumb that slides
+   between two positions, rather than two chips with a gap between them. */
 .at-heatmap-side {
+  position: relative;
   display: flex;
-  gap: 4px;
   margin-top: 8px;
+  padding: 3px;
+  background: var(--at-tonal);
+  border-radius: 999px;
   justify-content: center;
 }
 
+.at-heatmap-side::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  background: var(--clay);
+  border-radius: 999px;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.at-heatmap-side:has(button:last-child[data-on='true'])::before { transform: translateX(100%); }
+
 .at-heatmap-side button {
+  position: relative;
+  z-index: 1;
   min-height: 44px;
   flex: 1;
-  border: 1.5px solid var(--hair);
+  border: 0;
   background: transparent;
   border-radius: 999px;
   font-size: 11px;
@@ -3305,16 +3349,10 @@ button.at-routine-item { cursor: pointer; }
   padding: 7px 0;
   color: var(--muted);
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
 }
 
-.at-heatmap-side button:active { transform: scale(0.96); }
-
-.at-heatmap-side button[data-on='true'] {
-  background: color-mix(in srgb, var(--clay) 16%, var(--card));
-  border-color: var(--clay);
-  color: var(--clay);
-}
+.at-heatmap-side button[data-on='true'] { color: var(--at-on-clay); }
 
 .at-heatmap-info { flex: 1; min-width: 0; }
 
