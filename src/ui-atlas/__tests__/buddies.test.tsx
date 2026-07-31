@@ -74,6 +74,7 @@ function renderBuddies(
     // `AppDataProvider` reloads routines on mount, which under test means
     // fetching from an empty local database and clearing what was just set.
     loadSavedRoutines: async () => {},
+    buddiesFocus: initialCode ? { code: initialCode } : null,
   });
 
   const rows = buildBuddyRows(links);
@@ -110,7 +111,7 @@ function renderBuddies(
       <AppActionsProvider>
         <SocialContext.Provider value={social}>
           <div className="app at">
-            <AtlasBuddies onClose={() => {}} initialCode={initialCode} />
+            <AtlasBuddies />
           </div>
         </SocialContext.Provider>
       </AppActionsProvider>

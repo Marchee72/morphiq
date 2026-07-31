@@ -2,7 +2,7 @@ import type { StaticKey } from '../i18n/types';
 
 export type { Lang, Mode } from '../presentation/state/preferences';
 
-export type ScreenId = 'today' | 'train' | 'library' | 'body' | 'coach';
+export type ScreenId = 'today' | 'train' | 'library' | 'body' | 'coach' | 'buddies';
 
 export const SCREENS: { id: ScreenId; labelKey: StaticKey }[] = [
   { id: 'today', labelKey: 'nav.today' },
@@ -10,6 +10,7 @@ export const SCREENS: { id: ScreenId; labelKey: StaticKey }[] = [
   { id: 'library', labelKey: 'nav.library' },
   { id: 'body', labelKey: 'nav.body' },
   { id: 'coach', labelKey: 'nav.coach' },
+  { id: 'buddies', labelKey: 'nav.buddies' },
 ];
 
 /* ------------------------------------------------------------------ *

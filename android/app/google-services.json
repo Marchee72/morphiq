@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "96815720749",
+    "project_id": "morphiq-app",
+    "storage_bucket": "morphiq-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:96815720749:android:2dd7628eb6e331c1ab8ba4",
+        "android_client_info": {
+          "package_name": "com.morphiq.app2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcdqBIfeVsFWdxiy5rI8_JiMsjRz0Mzn0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

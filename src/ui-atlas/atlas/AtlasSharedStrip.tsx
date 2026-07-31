@@ -3,7 +3,7 @@ import { LogOut } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useSocial } from '../data/useSocial';
 import { useElapsedSeconds } from '../components/useTicker';
-import type { PresenceRowVM } from '../derive/social';
+import { presenceProgress, type PresenceRowVM } from '../derive/social';
 
 /**
  * Who else is in the gym with you, while you are training.
@@ -51,14 +51,7 @@ const SharedRow: React.FC<{ row: PresenceRowVM }> = ({ row }) => {
   // The ticking value stays at the render edge, as everywhere else — nothing
   // that counts belongs in a view model.
   const elapsed = useElapsedSeconds(row.startedAt);
-
-  const progress = row.exerciseName && row.setNumber && row.setCount
-    ? t('buddy.progress', {
-        exercise: row.exerciseName,
-        n: String(row.setNumber),
-        total: String(row.setCount),
-      })
-    : t('buddy.warmingUp');
+  const progress = presenceProgress(row, t);
 
   return (
     <div className="at-shared-row">

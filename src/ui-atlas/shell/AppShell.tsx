@@ -10,6 +10,7 @@ import { AtlasTrain } from '../atlas/AtlasTrain';
 import { AtlasLibrary } from '../atlas/AtlasLibrary';
 import { AtlasBody } from '../atlas/AtlasBody';
 import { AtlasCoach } from '../atlas/AtlasCoach';
+import { AtlasBuddies } from '../atlas/AtlasBuddies';
 import { AtlasNav } from '../atlas/AtlasNav';
 import { AtlasSkeleton } from '../atlas/AtlasStates';
 
@@ -24,6 +25,7 @@ const SCREENS: Record<ScreenId, React.FC> = {
   library: AtlasLibrary,
   body: AtlasBody,
   coach: AtlasCoach,
+  buddies: AtlasBuddies,
 };
 
 export const AppShell: React.FC = () => {

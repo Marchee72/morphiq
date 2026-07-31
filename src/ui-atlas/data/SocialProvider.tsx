@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { sseTransport } from '../../data/social/socialStream';
+import { watchPushNotifications } from '../../data/social/pushNotifications';
 import { useStore } from '../../presentation/state/store';
 import { useSocialStore } from '../../presentation/state/socialStore';
 import {
@@ -106,24 +107,34 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [available, profileId]);
 
   /**
-   * A code arriving in the URL, from an invite link opened in a browser.
+   * The Buddies tab reached from outside the app itself: a `?buddy=CODE`
+   * invite link opened in a browser, or a tap on a push notification — see
+   * `public/sw.js`'s `notificationclick`, which opens `?buddyLinkId=` for a
+   * message and `?buddies=1` for a presence alert (fanned out to everyone
+   * notified at once, so it names no single conversation).
    *
    * Consumed once and stripped from the address bar: leaving it there means a
-   * refresh reopens the sheet for a code that has already been spent, and the
-   * only thing that can report is "not valid".
+   * refresh re-triggers a code already spent, or reopens a thread the tap was
+   * about a minute ago.
    */
   useEffect(() => {
     if (!available) return;
     const params = new URLSearchParams(window.location.search);
     const code = params.get('buddy');
-    if (!code) return;
+    const linkId = params.get('buddyLinkId');
+    const justBuddies = params.get('buddies');
+    if (!code && !linkId && !justBuddies) return;
 
     params.delete('buddy');
+    params.delete('buddyLinkId');
+    params.delete('buddies');
     const query = params.toString();
     window.history.replaceState(
       {}, '', `${window.location.pathname}${query ? `?${query}` : ''}`,
     );
-    actions.openOverlay('buddies', { buddyCode: code });
+    actions.navigate('buddies');
+    if (code) useStore.getState().setBuddiesFocus({ code });
+    else if (linkId) useStore.getState().setBuddiesFocus({ linkId });
   }, [available, actions]);
 
   const rows = useMemo(() => buildBuddyRows(links), [links]);
@@ -140,6 +151,18 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Publishing this device's own session. Mounted here so it runs wherever the
   // app is, not only while the Train screen happens to be on screen.
   usePresencePublisher();
+
+  // Native push taps and foreground arrivals — a no-op on web, where the
+  // service worker owns both instead (see `public/sw.js`). Mounted once,
+  // unconditionally, so a tap lands correctly no matter which screen the app
+  // opened on.
+  useEffect(() => watchPushNotifications({
+    toBuddiesTab: () => actions.navigate('buddies'),
+    toBuddyLink: linkId => {
+      actions.navigate('buddies');
+      useStore.getState().setBuddiesFocus({ linkId });
+    },
+  }), [actions]);
 
   const conversation = useCallback((linkId: string) => {
     const held = messages[linkId];

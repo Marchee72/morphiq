@@ -13,6 +13,7 @@ import express from 'express';
 import {
   guardActingProfile, guardBuddyLink, guardSharedSession, ownsStrict,
 } from './auth.js';
+import { sendPushToProfiles, vapidPublicKey } from './push/send.js';
 
 /**
  * No `0/O`, no `1/I/L`. A code's whole job is to survive being read aloud in a
@@ -320,6 +321,62 @@ export function socialRoutes(pool) {
       [String(profileId)],
     );
     return rows[0].n;
+  }
+
+  /** Same name a partner's row already shows — the profile's, falling back to the Google account's. */
+  async function profileName(profileId) {
+    const { rows } = await pool.query(
+      `SELECT COALESCE(p.name, u.name) AS name
+         FROM user_profiles p
+         LEFT JOIN users u ON u.id = p.user_id
+        WHERE p.id::text = $1`,
+      [String(profileId)],
+    );
+    return rows[0]?.name || null;
+  }
+
+  /**
+   * A partner just started training — notify the other side of every
+   * non-blocked friendship. Fire-and-forget from the caller: a push provider
+   * being slow or down must never delay the presence write it is reacting to.
+   */
+  async function notifyPresenceStarted(profileId) {
+    try {
+      const { rows } = await pool.query(
+        `SELECT CASE WHEN "profileIdA" = $1 THEN "profileIdB" ELSE "profileIdA" END AS "buddyProfileId"
+           FROM buddy_links
+          WHERE $1 IN ("profileIdA", "profileIdB")
+            AND "blockedByProfileId" IS NULL
+            AND "removedByA" IS NULL AND "removedByB" IS NULL`,
+        [String(profileId)],
+      );
+      if (rows.length === 0) return;
+
+      const name = await profileName(profileId);
+      await sendPushToProfiles(pool, rows.map(r => r.buddyProfileId), {
+        title: name || 'A training partner',
+        body: 'just started training',
+        // No `linkId`: each recipient's link to the starter is a different row,
+        // and this one send fans out to all of them at once. The tap opens the
+        // tab rather than one particular conversation.
+        data: { type: 'presence' },
+      });
+    } catch (err) { console.error('[push] presence notify failed:', err.message); }
+  }
+
+  /** A message just landed — notify the one recipient the link already resolved. */
+  async function notifyMessage(link, kind, text) {
+    try {
+      const name = await profileName(link.mine);
+      const body = kind === 'text' ? (text ?? '').slice(0, 80)
+        : kind === 'routine' ? 'shared a routine with you'
+        : 'invited you to train together';
+      await sendPushToProfiles(pool, [link.theirs], {
+        title: name || 'New message',
+        body,
+        data: { type: 'message', linkId: link.id },
+      });
+    } catch (err) { console.error('[push] message notify failed:', err.message); }
   }
 
   // ─── Buddies ──────────────────────────────────────────────────────────────
@@ -685,7 +742,7 @@ export function socialRoutes(pool) {
         if (member.length > 0) sharedSessionId = String(s.sharedSessionId);
       }
 
-      await pool.query(
+      const { rows: written } = await pool.query(
         `INSERT INTO live_sessions ("profileId", "sessionKey", "startedAt", "exerciseName",
                                     "exerciseIndex", "exerciseCount", "setNumber", "setCount",
                                     "setsDone", "setsPlanned", "sharedSessionId",
@@ -703,7 +760,8 @@ export function socialRoutes(pool) {
                "setsPlanned" = EXCLUDED."setsPlanned",
                "sharedSessionId" = EXCLUDED."sharedSessionId",
                "updatedAt" = NOW(),
-               "endedAt" = NULL`,
+               "endedAt" = NULL
+         RETURNING (xmax = 0) AS inserted`,
         [
           profileId, String(s.sessionKey ?? ''), s.startedAt ?? new Date(),
           s.exerciseName ?? null, s.exerciseIndex ?? null, s.exerciseCount ?? null,
@@ -712,6 +770,10 @@ export function socialRoutes(pool) {
         ],
       );
       res.status(204).end();
+
+      // After the response, and only for a session that just began — a
+      // heartbeat updating the same session must never re-notify.
+      if (written[0]?.inserted) void notifyPresenceStarted(profileId);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -1007,6 +1069,7 @@ export function socialRoutes(pool) {
         [req.link.id, req.link.mine, kind, text, stored != null ? JSON.stringify(stored) : null],
       );
       res.status(201).json(toMessage(rows[0]));
+      void notifyMessage(req.link, kind, text);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
@@ -1233,6 +1296,54 @@ export function socialRoutes(pool) {
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
+  });
+
+  // ─── Push notifications ─────────────────────────────────────────────────────
+
+  /** The public half of the VAPID pair, for `PushManager.subscribe`. Not a secret. */
+  router.get('/push/vapid-public-key', (req, res) => {
+    res.json({ publicKey: vapidPublicKey() });
+  });
+
+  /**
+   * Registers (or refreshes) one device for push.
+   *
+   * Keyed on the token itself, not replacing whatever the profile had before:
+   * a phone and a browser tab are two devices for the same profile, and both
+   * should hear about a partner arriving.
+   */
+  router.post('/push/register', actingProfile, async (req, res) => {
+    try {
+      const profileId = String(req.body.profileId);
+      const { platform, token } = req.body ?? {};
+      if (platform !== 'android' && platform !== 'web') {
+        return res.status(400).json({ error: 'Unknown platform' });
+      }
+      if (typeof token !== 'string' || token.length === 0 || token.length > 4096) {
+        return res.status(400).json({ error: 'Invalid token' });
+      }
+
+      await pool.query(
+        `INSERT INTO push_tokens ("profileId", platform, token)
+         VALUES ($1, $2, $3)
+         ON CONFLICT ("profileId", platform, token) DO UPDATE SET "updatedAt" = NOW()`,
+        [profileId, platform, token],
+      );
+      res.status(204).end();
+    } catch (err) { res.status(500).json({ error: err.message }); }
+  });
+
+  /** Opting out, or a clean sign-out — the device stops being one of this profile's targets. */
+  router.delete('/push/register', actingProfile, async (req, res) => {
+    try {
+      const profileId = String(req.body.profileId);
+      const { token } = req.body ?? {};
+      await pool.query(
+        'DELETE FROM push_tokens WHERE "profileId" = $1 AND token = $2',
+        [profileId, String(token ?? '')],
+      );
+      res.status(204).end();
+    } catch (err) { res.status(500).json({ error: err.message }); }
   });
 
   return router;

@@ -11,6 +11,7 @@ export const es: Translations = {
   'nav.library': 'Buscar',
   'nav.body': 'Cuerpo',
   'nav.coach': 'Coach',
+  'nav.buddies': 'Compañeros',
   'nav.settings': 'Ajustes',
 
   // ── Común ─────────────────────────────────────────────────────
@@ -501,6 +502,8 @@ export const es: Translations = {
   'buddy.forProfile': 'Compañeros de {name}',
   'buddy.none': 'Todavía no tienes compañeros',
   'buddy.noneSub': 'Pásale un código a alguien y podréis coordinar vuestras sesiones desde aquí.',
+  'buddy.unavailable': 'Los compañeros de entreno necesitan una cuenta',
+  'buddy.unavailableSub': 'Hace falta un servidor y una sesión iniciada. Inicia sesión desde Ajustes para añadir compañeros aquí.',
   'buddy.since': 'Compañeros desde el {date}',
   'buddy.count_one': '{n} compañero',
   'buddy.count_other': '{n} compañeros',
@@ -567,7 +570,14 @@ export const es: Translations = {
   'buddy.presenceOn': 'Sí',
   'buddy.presenceOff': 'No',
 
+  // Notificaciones
+  'buddy.pushToggle': 'Avisarme',
+  'buddy.pushSub': 'Un aviso cuando un compañero empieza a entrenar o te escribe, incluso con la app cerrada.',
+  'buddy.pushUnsupported': 'No disponible en este dispositivo.',
+  'buddy.pushError': 'No se pudo activar: {message}',
+
   // Entrenar juntos
+  'buddy.trainNow': 'Entrenar',
   'buddy.together': 'Entrenar juntos',
   'buddy.togetherSub': 'Cada uno hace su propio entreno, con sus propios pesos.',
   'buddy.togetherInviteMine': 'Le propusiste a {name} entrenar juntos',

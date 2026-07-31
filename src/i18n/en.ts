@@ -13,6 +13,7 @@ export const en = {
   'nav.library': 'Find',
   'nav.body': 'Body',
   'nav.coach': 'Coach',
+  'nav.buddies': 'Buddies',
   'nav.settings': 'Settings',
 
   // ── Common ────────────────────────────────────────────────────
@@ -504,6 +505,8 @@ export const en = {
   'buddy.forProfile': 'Partners of {name}',
   'buddy.none': 'No partners yet',
   'buddy.noneSub': 'Send someone a code and you can coordinate your sessions here.',
+  'buddy.unavailable': 'Training partners need an account',
+  'buddy.unavailableSub': 'This needs a server to connect to and a signed-in session. Sign in from Settings to add partners here.',
   'buddy.since': 'Partners since {date}',
   'buddy.count_one': '{n} partner',
   'buddy.count_other': '{n} partners',
@@ -570,7 +573,16 @@ export const en = {
   'buddy.presenceOn': 'On',
   'buddy.presenceOff': 'Off',
 
+  // Push notifications
+  'buddy.pushToggle': 'Notify me',
+  'buddy.pushSub': 'A notification when a partner starts training or sends a message — even while the app is closed.',
+  'buddy.pushUnsupported': 'Not available on this device.',
+  'buddy.pushError': 'Could not turn that on: {message}',
+
   // Training together
+  /** The row's quick action — short on purpose, next to Pause/Remove, which are
+   *  also chip-length rather than full sentences. */
+  'buddy.trainNow': 'Train',
   'buddy.together': 'Train together',
   'buddy.togetherSub': 'You each do your own workout, at your own weights.',
   'buddy.togetherInviteMine': 'You asked {name} to train together',

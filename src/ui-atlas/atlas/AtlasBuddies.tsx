@@ -1,58 +1,114 @@
-import React, { useState } from 'react';
-import { PauseCircle, PlayCircle, Trash2, UserPlus, Users, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Dumbbell, PauseCircle, PlayCircle, Trash2, UserPlus, Users } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useStore } from '../../presentation/state/store';
 import { useSocial } from '../data/useSocial';
-import type { BuddyRowVM } from '../derive/social';
+import { presenceProgress, type BuddyRowVM } from '../derive/social';
 import { AtlasSheet } from './AtlasSheet';
 import { AtlasStates } from './AtlasStates';
+import { AtlasChoice } from './AtlasField';
 import { AtlasBuddyInvite } from './AtlasBuddyInvite';
 import { AtlasBuddyRedeem } from './AtlasBuddyRedeem';
 import { AtlasBuddyChat } from './AtlasBuddyChat';
-import { useDismissOnBack } from '../components/useDismissOnBack';
+import {
+  disablePush, enablePush, isPushEnabledFor, isPushSupported,
+} from '../../data/social/pushNotifications';
 
 type Panel = 'invite' | 'redeem' | null;
 
 /**
- * Training partners.
+ * Training partners — the tab where a partner is added, removed, chatted with,
+ * or trained with.
  *
- * A full-screen overlay rather than a sixth tab: the dock is full at 390px, and
- * this is an errand — you come here to add someone or to stop training with
- * them, not several times a day. The signal that actually belongs on a daily
- * screen is a partner's presence, which lands on Today.
- *
- * Nested panels use local state, the way `AtlasSettings` does, because the shell
- * holds one overlay at a time.
+ * `buddiesFocus` is a one-shot instruction left by whoever navigated here (an
+ * invite link, or a tap on a partner elsewhere): applied on mount, then
+ * cleared, so a later visit to this tab starts clean.
  */
-export const AtlasBuddies: React.FC<{
-  onClose: () => void;
-  initialCode?: string;
-}> = ({ onClose, initialCode }) => {
+export const AtlasBuddies: React.FC = () => {
   const { t, tp, fmt } = useT();
   const activeProfile = useStore(state => state.activeProfile);
-  const { ready, rows, error, removeBuddy, setBlocked } = useSocial();
+  const updateProfile = useStore(state => state.updateProfile);
+  const buddiesFocus = useStore(state => state.buddiesFocus);
+  const clearBuddiesFocus = useStore(state => state.clearBuddiesFocus);
+  const {
+    available, ready, rows, error, removeBuddy, setBlocked, training, shared, startShared,
+  } = useSocial();
+  const trainingByLink = new Map(training.map(row => [row.linkId, row]));
 
-  // Opened straight onto redemption when a code arrived in the link: the person
-  // following it has one thing to do, and it is not reading a list.
-  const [panel, setPanel] = useState<Panel>(initialCode ? 'redeem' : null);
+  const [panel, setPanel] = useState<Panel>(buddiesFocus?.code ? 'redeem' : null);
   const [confirming, setConfirming] = useState<BuddyRowVM | null>(null);
   const [chatting, setChatting] = useState<BuddyRowVM | null>(null);
+  // Which `linkId` has already been opened, so a partner tapped elsewhere opens
+  // their chat exactly once even though the match below re-runs every render
+  // until the row it refers to has actually loaded.
+  const [appliedFocusLinkId, setAppliedFocusLinkId] = useState<string | undefined>(undefined);
+  const focusCode = buddiesFocus?.code;
+  const focusLinkId = buddiesFocus?.linkId;
 
-  useDismissOnBack(true, onClose, 'buddies');
+  const [pushOn, setPushOn] = useState(() => !!activeProfile?.id && isPushEnabledFor(activeProfile.id));
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  const togglePush = async (id: string, next: boolean) => {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      if (next) await enablePush(id);
+      else await disablePush(id);
+      setPushOn(next);
+    } catch (err) {
+      setPushError((err as Error).message);
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  // Adjusted during render rather than in an Effect: this is state derived from
+  // a value that just arrived (`buddiesFocus`), not a subscription to anything
+  // external, so React's own guidance is to fold it into the render instead of
+  // adding a render-then-effect round trip.
+  if (focusLinkId && focusLinkId !== appliedFocusLinkId) {
+    const row = rows.find(r => r.linkId === focusLinkId);
+    if (row) {
+      setAppliedFocusLinkId(focusLinkId);
+      setChatting(row);
+    }
+  }
+
+  // Clearing the flag genuinely is a side effect on something external (the
+  // store), so it stays in an Effect — but only once it has been acted on,
+  // otherwise a `linkId` naming a partner that has not loaded yet would be
+  // discarded before the render above ever gets a chance to match it.
+  useEffect(() => {
+    if (focusCode) clearBuddiesFocus();
+  }, [focusCode, clearBuddiesFocus]);
+
+  useEffect(() => {
+    if (appliedFocusLinkId) clearBuddiesFocus();
+  }, [appliedFocusLinkId, clearBuddiesFocus]);
 
   return (
-    <div className="at-settings">
-      <div className="at-editor-head">
+    <>
+      <div className="at-greet">
         <div>
           <small>{activeProfile ? t('buddy.forProfile', { name: activeProfile.name }) : 'MorphIQ'}</small>
-          <h3 className="at-serif">{t('buddy.title')}</h3>
+          <h1>{t('buddy.title')}</h1>
         </div>
-        <button className="at-round" onClick={onClose} aria-label={t('common.close')}>
-          <X size={17} />
-        </button>
       </div>
 
       <div className="at-pad at-settings-body">
+        {/* Nothing here works without a server and a signed-in session — see
+            `socialAvailable`. The tab itself stays reachable either way, since
+            hiding a dock icon by build mode would shift the whole row under
+            people who never notice why. */}
+        {!available ? (
+          <AtlasStates
+            icon={<Users size={20} />}
+            title={t('buddy.unavailable')}
+            body={t('buddy.unavailableSub')}
+          />
+        ) : (
+          <>
         <div className="at-card at-settings-stack">
           <div>
             <span className="at-field-label">{t('buddy.subtitle')}</span>
@@ -67,6 +123,47 @@ export const AtlasBuddies: React.FC<{
             </button>
           </div>
         </div>
+
+        {/* Presence sharing, moved in from Settings — this tab is now where
+            everything about a partner is managed, including whether they can
+            see you train. */}
+        {activeProfile && (
+          <div className="at-card at-settings-stack">
+            <AtlasChoice
+              label={t('buddy.presenceToggle')}
+              value={activeProfile.sharePresence === false ? 'off' : 'on'}
+              onChange={value => void updateProfile({ ...activeProfile, sharePresence: value === 'on' })}
+              options={[
+                { value: 'on', label: t('buddy.presenceOn') },
+                { value: 'off', label: t('buddy.presenceOff') },
+              ]}
+            />
+            <small className="at-field-hint">{t('buddy.presenceSub')}</small>
+          </div>
+        )}
+
+        {/* Push registration lives on the device, not the profile, so this is
+            read from the device rather than from anything the server sent. */}
+        {activeProfile?.id && (
+          <div className="at-card at-settings-stack">
+            {isPushSupported() ? (
+              <AtlasChoice
+                label={t('buddy.pushToggle')}
+                value={pushOn ? 'on' : 'off'}
+                onChange={value => { if (!pushBusy) void togglePush(activeProfile.id!, value === 'on'); }}
+                options={[
+                  { value: 'on', label: t('buddy.presenceOn') },
+                  { value: 'off', label: t('buddy.presenceOff') },
+                ]}
+              />
+            ) : (
+              <span className="at-field-label">{t('buddy.pushUnsupported')}</span>
+            )}
+            <small className="at-field-hint">
+              {pushError ? t('buddy.pushError', { message: pushError }) : t('buddy.pushSub')}
+            </small>
+          </div>
+        )}
 
         {/* Offline keeps whatever was loaded on screen and says so, rather than
             blanking a list that is probably still accurate. */}
@@ -85,7 +182,9 @@ export const AtlasBuddies: React.FC<{
             action={{ label: t('buddy.invite'), onClick: () => setPanel('invite') }}
           />
         ) : (
-          rows.map(row => (
+          rows.map(row => {
+            const live = trainingByLink.get(row.linkId);
+            return (
             <div key={row.linkId} className="at-card at-buddy-row" data-muted={row.muted}>
               {/* The whole identity block opens the conversation. Muted
                   partners are not tappable: nothing can be sent through a
@@ -103,7 +202,9 @@ export const AtlasBuddies: React.FC<{
                       ? t('buddy.blockedByMe')
                       : row.blockedByThem
                         ? t('buddy.blockedByThem')
-                        : t('buddy.since', { date: fmt.dmy(row.since) })}
+                        : live
+                          ? <><span className="at-buddy-dot" aria-hidden="true" /> {presenceProgress(live, t)}</>
+                          : t('buddy.since', { date: fmt.dmy(row.since) })}
                   </small>
                 </div>
                 {row.unread > 0 && !row.muted && (
@@ -114,6 +215,15 @@ export const AtlasBuddies: React.FC<{
               </button>
 
               <div className="at-buddy-actions">
+                {/* One tap to train together, without going through the
+                    conversation first. Hidden once this device is already in a
+                    session — offering it again would just re-propose the room
+                    you are standing in. */}
+                {!row.muted && !shared && (
+                  <button className="at-chip" onClick={() => void startShared(row.linkId)}>
+                    <Dumbbell size={14} /> {t('buddy.trainNow')}
+                  </button>
+                )}
                 {/* Offered only to the side that blocked. The other side seeing
                     "resume" would promise something the server refuses. */}
                 {row.blockedByMe ? (
@@ -130,7 +240,10 @@ export const AtlasBuddies: React.FC<{
                 </button>
               </div>
             </div>
-          ))
+            );
+          })
+        )}
+          </>
         )}
       </div>
 
@@ -139,7 +252,7 @@ export const AtlasBuddies: React.FC<{
       {/* Mounted only while open, so each visit starts on an empty field rather
           than on the code that failed last time. */}
       {panel === 'redeem' && (
-        <AtlasBuddyRedeem onClose={() => setPanel(null)} initialCode={initialCode} />
+        <AtlasBuddyRedeem onClose={() => setPanel(null)} initialCode={focusCode} />
       )}
 
       {/* Mounted only while open so the conversation stops being followed the
@@ -173,6 +286,6 @@ export const AtlasBuddies: React.FC<{
       >
         <p className="at-field-hint">{t('buddy.removeConfirmSub')}</p>
       </AtlasSheet>
-    </div>
+    </>
   );
 };
