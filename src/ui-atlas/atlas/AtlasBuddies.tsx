@@ -6,7 +6,7 @@ import { useSocial } from '../data/useSocial';
 import { presenceProgress, type BuddyRowVM } from '../derive/social';
 import { AtlasSheet } from './AtlasSheet';
 import { AtlasStates } from './AtlasStates';
-import { AtlasChoice } from './AtlasField';
+import { AtlasSwitch } from './AtlasField';
 import { AtlasBuddyInvite } from './AtlasBuddyInvite';
 import { AtlasBuddyRedeem } from './AtlasBuddyRedeem';
 import { AtlasBuddyChat } from './AtlasBuddyChat';
@@ -129,14 +129,10 @@ export const AtlasBuddies: React.FC = () => {
             see you train. */}
         {activeProfile && (
           <div className="at-card at-settings-stack">
-            <AtlasChoice
+            <AtlasSwitch
               label={t('buddy.presenceToggle')}
-              value={activeProfile.sharePresence === false ? 'off' : 'on'}
-              onChange={value => void updateProfile({ ...activeProfile, sharePresence: value === 'on' })}
-              options={[
-                { value: 'on', label: t('buddy.presenceOn') },
-                { value: 'off', label: t('buddy.presenceOff') },
-              ]}
+              checked={activeProfile.sharePresence !== false}
+              onChange={checked => void updateProfile({ ...activeProfile, sharePresence: checked })}
             />
             <small className="at-field-hint">{t('buddy.presenceSub')}</small>
           </div>
@@ -147,14 +143,10 @@ export const AtlasBuddies: React.FC = () => {
         {activeProfile?.id && (
           <div className="at-card at-settings-stack">
             {isPushSupported() ? (
-              <AtlasChoice
+              <AtlasSwitch
                 label={t('buddy.pushToggle')}
-                value={pushOn ? 'on' : 'off'}
-                onChange={value => { if (!pushBusy) void togglePush(activeProfile.id!, value === 'on'); }}
-                options={[
-                  { value: 'on', label: t('buddy.presenceOn') },
-                  { value: 'off', label: t('buddy.presenceOff') },
-                ]}
+                checked={pushOn}
+                onChange={checked => { if (!pushBusy) void togglePush(activeProfile.id!, checked); }}
               />
             ) : (
               <span className="at-field-label">{t('buddy.pushUnsupported')}</span>

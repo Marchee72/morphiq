@@ -14,6 +14,7 @@ import { AtlasInstallCard } from './AtlasInstallCard';
 import { GoogleButton } from './GoogleButton';
 import { getUser } from '../../data/auth/session';
 import { signOut, isGoogleConfigured } from '../../data/auth/googleSignIn';
+import { useSocialStore } from '../../presentation/state/socialStore';
 
 type Panel = 'profile' | 'equipment' | 'data' | null;
 
@@ -136,7 +137,13 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   className="at-btn"
                   data-ghost="true"
                   style={{ justifyContent: 'center' }}
-                  onClick={async () => { await signOut(); setAccount(null); }}
+                  onClick={async () => {
+                    await signOut();
+                    setAccount(null);
+                    // Symmetric with the sign-in fix in `GoogleButton`: `available`
+                    // is otherwise stuck at whatever it was computed as on load.
+                    useSocialStore.getState().reset();
+                  }}
                 >
                   {t('auth.signOut')}
                 </button>

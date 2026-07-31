@@ -570,8 +570,6 @@ export const en = {
   'buddy.warmingUp': 'Just started',
   'buddy.presenceToggle': 'Show when I train',
   'buddy.presenceSub': 'Partners see the exercise you are on and how far through you are. Never your weights.',
-  'buddy.presenceOn': 'On',
-  'buddy.presenceOff': 'Off',
 
   // Push notifications
   'buddy.pushToggle': 'Notify me',

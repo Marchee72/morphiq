@@ -567,8 +567,6 @@ export const es: Translations = {
   'buddy.warmingUp': 'Acaba de empezar',
   'buddy.presenceToggle': 'Mostrar cuándo entreno',
   'buddy.presenceSub': 'Tus compañeros ven en qué ejercicio vas y cuánto llevas. Los pesos nunca.',
-  'buddy.presenceOn': 'Sí',
-  'buddy.presenceOff': 'No',
 
   // Notificaciones
   'buddy.pushToggle': 'Avisarme',
