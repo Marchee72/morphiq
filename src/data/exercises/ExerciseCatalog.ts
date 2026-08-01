@@ -30,7 +30,7 @@ export class ExerciseCatalog {
     this.byId = new Map(exercises.map(e => [e.id, e]));
     this.index = exercises.map(exercise => ({
       exercise,
-      haystack: [exercise.name, exercise.target, exercise.muscleGroup, exercise.category, exercise.equipment]
+      haystack: [exercise.name, exercise.nameEs, exercise.target, exercise.muscleGroup, exercise.category, exercise.equipment]
         .join(' ')
         .toLowerCase(),
     }));

@@ -47,6 +47,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
   const activeSession = useStore(s => s.activeSession);
   const savedRoutines = useStore(s => s.savedRoutines);
   const favoriteExerciseIds = useStore(s => s.favoriteExerciseIds);
+  const lang = useStore(s => s.language);
   const chatHistory = useStore(s => s.chatHistory);
   const isAiLoading = useStore(s => s.isAiLoading);
   const getExerciseStats = useStore(s => s.getExerciseStats);
@@ -245,8 +246,8 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     // never mapped into view models, only the sliced result a screen actually shows.
     search: (query, filters) => catalog?.search(query, filters) ?? [],
     byId: id => catalog?.getById(id),
-    toItem: exercise => toCatalogItem(exercise, usage, favorites),
-  }), [catalog, usage, favorites]);
+    toItem: exercise => toCatalogItem(exercise, usage, favorites, lang),
+  }), [catalog, usage, favorites, lang]);
 
   const exerciseHistory = useCallback(
     (exerciseName: string) => buildExerciseHistory(setsForDerivation, exerciseName),

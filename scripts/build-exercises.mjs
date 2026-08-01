@@ -1,14 +1,20 @@
 // scripts/build-exercises.mjs
 // Vendors the hasaneyldrm/exercises-dataset into src/data/exercises/exercises.json,
-// stripped to English-only fields per the design spec (media stays on the CDN).
-import { writeFile, mkdir } from 'node:fs/promises';
+// stripped to English + Spanish fields per the design spec (media stays on the CDN).
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SOURCE_URL = 'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/data/exercises.json';
-const OUT_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'data', 'exercises', 'exercises.json');
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const OUT_FILE = path.join(HERE, '..', 'src', 'data', 'exercises', 'exercises.json');
+// The upstream dataset has no Spanish `name` field, so names are translated once and
+// checked in here rather than fetched — see src/data/exercises/names.es.json for how it was built.
+const NAMES_ES_FILE = path.join(HERE, '..', 'src', 'data', 'exercises', 'names.es.json');
 
 const REQUIRED = ['id', 'name', 'category', 'equipment', 'target', 'muscle_group', 'image', 'gif_url', 'attribution'];
+
+const namesEs = JSON.parse(await readFile(NAMES_ES_FILE, 'utf8'));
 
 const res = await fetch(SOURCE_URL);
 if (!res.ok) throw new Error(`Download failed: HTTP ${res.status}`);
@@ -22,9 +28,12 @@ const stripped = raw.map((ex, i) => {
     }
   }
   const steps = ex.instruction_steps?.en;
+  const stepsEs = ex.instruction_steps?.es;
+  const id = String(ex.id);
   return {
-    id: String(ex.id),
+    id,
     name: ex.name,
+    nameEs: namesEs[id] ?? ex.name,
     category: ex.category,
     equipment: ex.equipment,
     target: ex.target,
@@ -33,6 +42,9 @@ const stripped = raw.map((ex, i) => {
     instructionSteps: Array.isArray(steps)
       ? steps
       : (typeof ex.instructions?.en === 'string' ? [ex.instructions.en] : []),
+    instructionStepsEs: Array.isArray(stepsEs)
+      ? stepsEs
+      : (typeof ex.instructions?.es === 'string' ? [ex.instructions.es] : []),
     image: ex.image,
     gifUrl: ex.gif_url,
     attribution: ex.attribution,

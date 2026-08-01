@@ -5,6 +5,7 @@ import { useAppData, useAppActions } from '../data/useAppData';
 import { useExerciseSearch } from '../data/useExerciseSearch';
 import { ExerciseThumb } from '../components/ExerciseThumb';
 import { MUSCLE_GROUP_LABELS } from '../derive/muscleLoad';
+import { EXERCISE_EQUIPMENT_LABELS } from '../../data/exercises/exerciseLabels';
 import type { CatalogItemVM } from '../types';
 import type { Exercise } from '../../core/entities/Exercise';
 import { BodyMap, type Side } from './BodyMap';
@@ -46,7 +47,7 @@ export const AtlasLibrary: React.FC = () => {
         <span className="at-ex-body">
           <b>{item.name}</b>
           <span>
-            {item.equipment}
+            {EXERCISE_EQUIPMENT_LABELS[item.equipment] ? t(EXERCISE_EQUIPMENT_LABELS[item.equipment]) : item.equipment}
             {item.bestKg ? ` · ${t('library.best').toLowerCase()} ${fmt.n(item.bestKg, 1)} ${t('unit.kg')}` : ''}
           </span>
         </span>
@@ -118,7 +119,7 @@ export const AtlasLibrary: React.FC = () => {
             data-on={search.equipment === facet.id}
             onClick={() => search.setEquipment(search.equipment === facet.id ? null : facet.id)}
           >
-            {facet.id}<sup>{facet.count}</sup>
+            {EXERCISE_EQUIPMENT_LABELS[facet.id] ? t(EXERCISE_EQUIPMENT_LABELS[facet.id]) : facet.id}<sup>{facet.count}</sup>
           </button>
         ))}
       </div>

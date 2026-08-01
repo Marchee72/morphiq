@@ -6,8 +6,8 @@ import {
 } from '../session';
 
 const exercise = (over: Partial<Exercise> = {}): Exercise => ({
-  id: '0025', name: 'Barbell Bench Press', category: 'chest', equipment: 'barbell',
-  target: 'pectorals', muscleGroup: 'chest', secondaryMuscles: [], instructionSteps: [],
+  id: '0025', name: 'Barbell Bench Press', nameEs: 'Press de banca con barra', category: 'chest', equipment: 'barbell',
+  target: 'pectorals', muscleGroup: 'chest', secondaryMuscles: [], instructionSteps: [], instructionStepsEs: [],
   image: 'images/0025.jpg', gifUrl: 'videos/0025.gif', attribution: '', ...over,
 });
 

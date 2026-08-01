@@ -5,6 +5,7 @@ import { useStore } from '../../presentation/state/store';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { mediaUrl } from '../derive/catalog';
 import { normalizeName } from '../derive/records';
+import { EXERCISE_EQUIPMENT_LABELS, MUSCLE_NAME_LABELS } from '../../data/exercises/exerciseLabels';
 import { AtlasSheet } from './AtlasSheet';
 import type { Exercise } from '../../core/entities/Exercise';
 
@@ -20,7 +21,7 @@ export const AtlasExerciseDetail: React.FC<{
   exercise: Exercise | null;
   onClose: () => void;
 }> = ({ exercise, onClose }) => {
-  const { t, tp, fmt } = useT();
+  const { t, tp, fmt, lang } = useT();
   const { catalog, session, exerciseHistory } = useAppData();
   const actions = useAppActions();
   const favouriteIds = useStore(s => s.favoriteExerciseIds);
@@ -33,13 +34,19 @@ export const AtlasExerciseDetail: React.FC<{
   const secondary = exercise.secondaryMuscles.filter(Boolean);
   const past = exerciseHistory(exercise.name);
   const now = new Date();
+  const displayName = lang === 'es' ? exercise.nameEs : exercise.name;
+  const equipmentLabel = EXERCISE_EQUIPMENT_LABELS[exercise.equipment];
+  const targetLabel = MUSCLE_NAME_LABELS[exercise.target];
+  const steps = lang === 'es' && exercise.instructionStepsEs.length > 0
+    ? exercise.instructionStepsEs
+    : exercise.instructionSteps;
 
   return (
     <AtlasSheet
       open
       onClose={onClose}
-      title={exercise.name}
-      subtitle={`${exercise.equipment} · ${exercise.target}`}
+      title={displayName}
+      subtitle={`${equipmentLabel ? t(equipmentLabel) : exercise.equipment} · ${targetLabel ? t(targetLabel) : exercise.target}`}
       footer={
         <>
           <button
@@ -66,7 +73,7 @@ export const AtlasExerciseDetail: React.FC<{
         <img
           className="at-detail-gif"
           src={mediaUrl(exercise.gifUrl)}
-          alt={exercise.name}
+          alt={displayName}
           loading="lazy"
         />
       )}
@@ -78,7 +85,7 @@ export const AtlasExerciseDetail: React.FC<{
         </div>
         <div>
           <small>{t('detail.primary')}</small>
-          <b>{exercise.target}</b>
+          <b>{targetLabel ? t(targetLabel) : exercise.target}</b>
         </div>
       </div>
 
@@ -112,11 +119,11 @@ export const AtlasExerciseDetail: React.FC<{
         </div>
       )}
 
-      {exercise.instructionSteps.length > 0 && (
+      {steps.length > 0 && (
         <div>
           <div className="at-field-label">{t('detail.instructions')}</div>
           <ol className="at-detail-steps">
-            {exercise.instructionSteps.map((step, i) => (
+            {steps.map((step, i) => (
               <li key={`${normalizeName(exercise.name)}-${i}`}>{step}</li>
             ))}
           </ol>
@@ -128,7 +135,9 @@ export const AtlasExerciseDetail: React.FC<{
           <div className="at-field-label">{t('detail.secondary')}</div>
           <div className="at-choice">
             {secondary.map(muscle => (
-              <span key={muscle} className="at-chip" data-static="true">{muscle}</span>
+              <span key={muscle} className="at-chip" data-static="true">
+                {MUSCLE_NAME_LABELS[muscle] ? t(MUSCLE_NAME_LABELS[muscle]) : muscle}
+              </span>
             ))}
           </div>
         </div>
