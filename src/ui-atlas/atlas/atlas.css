@@ -962,6 +962,16 @@
   padding: 18px;
 }
 
+/* Three windows (7/30/90 days, min/avg/max) leave a lone tile on a second row
+   in the default two-column grid. Opt-in so the existing 2- and 4-tile blocks
+   keep the layout they were built for. */
+.at-summary-stats[data-cols='3'] {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.at-summary-stats[data-cols='3'] b { font-size: 19px; }
+
 .at-summary-stats > div {
   background: var(--card);
   border-radius: 20px;
@@ -1259,6 +1269,46 @@
 .at-bignum b small { font-size: 18px; color: var(--muted); }
 
 .at-bignum span { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; font-weight: 600; }
+
+/* A trend card is a button: `.at-card` was written for divs, so the UA styles
+   a button brings — centred text, its own font, a border — have to be undone. */
+.at-trend-card {
+  width: 100%;
+  display: block;
+  text-align: left;
+  appearance: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  padding: 16px 16px 10px;
+  cursor: pointer;
+  transition: transform 0.12s ease-out;
+}
+
+.at-trend-card:active { transform: scale(0.99); }
+
+.at-chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.at-metric-source {
+  margin: 10px 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.at-metric-about {
+  margin: 14px 4px 4px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--cocoa);
+}
 
 .at-goal { margin: 18px 18px 0; }
 

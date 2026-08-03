@@ -12,6 +12,7 @@ import { AppRoot } from './ui-atlas/AppRoot';
 import { AtlasSplash } from './ui-atlas/atlas/AtlasSplash';
 import { AtlasAuthGate } from './ui-atlas/atlas/AtlasAuthGate';
 import { AtlasErrorBoundary } from './ui-atlas/atlas/AtlasErrorBoundary';
+import { HEALTH_IMPORT_DAYS } from './ui-atlas/derive/bodyMetrics';
 
 /** The splash holds for at least this long, so a fast load does not flash it. */
 const SPLASH_MIN_MS = 1100;
@@ -25,6 +26,8 @@ const SPLASH_FADE_MS = 400;
 const SPLASH_MAX_MS = 8000;
 /** Enough for Today's step card and the week behind it in its detail sheet. */
 const STEP_HISTORY_DAYS = 7;
+/** Workouts only ever feed recent history, so they keep their own shorter reach. */
+const WORKOUT_HISTORY_DAYS = 30;
 
 function App() {
   const { loadProfiles, profiles, activeProfile } = useStore();
@@ -147,16 +150,34 @@ function App() {
       } catch (err) { console.warn('Step sync failed', err); }
     };
 
+    /**
+     * Weigh-ins, over the window the Body charts are drawn for.
+     *
+     * Split out of `autoSync` so the resume listener can call it too. It used to
+     * run once per launch, which meant stepping off the scale and returning to a
+     * backgrounded app showed yesterday's weight until you killed the app.
+     * Re-running is cheap and idempotent: `importMeasurements` dedupes by minute
+     * against what is already in Dexie, so a repeat import writes nothing.
+     */
+    const readBodyComposition = async () => {
+      if (!permitted || !healthProvider.importBodyComposition) return;
+      try {
+        const since = new Date();
+        since.setDate(since.getDate() - HEALTH_IMPORT_DAYS);
+        const measurements = await healthProvider.importBodyComposition(since, activeProfile);
+        if (!cancelled && measurements.length > 0) {
+          await useStore.getState().importMeasurements(measurements);
+        }
+      } catch (err) { console.warn('Body composition sync failed', err); }
+    };
+
     const autoSync = async () => {
       try {
         permitted = await healthProvider.requestPermissions();
         if (permitted) {
-          const since = new Date(); since.setDate(since.getDate() - 30);
+          const since = new Date(); since.setDate(since.getDate() - WORKOUT_HISTORY_DAYS);
           const workouts = await healthProvider.importWorkouts(since);
-          if (healthProvider.importBodyComposition) {
-            const measurements = await healthProvider.importBodyComposition(since, activeProfile);
-            if (measurements.length > 0) await useStore.getState().importMeasurements(measurements);
-          }
+          await readBodyComposition();
           await useStore.getState().importWorkouts(workouts);
           await readSteps();
         }
@@ -164,7 +185,10 @@ function App() {
     };
     autoSync();
 
-    const resumed = CapApp.addListener('resume', () => { void readSteps(); });
+    const resumed = CapApp.addListener('resume', () => {
+      void readSteps();
+      void readBodyComposition();
+    });
     return () => {
       cancelled = true;
       resumed.then(l => l.remove());

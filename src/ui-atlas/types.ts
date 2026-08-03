@@ -34,7 +34,7 @@ export interface ProfileVM {
 }
 
 export type MetricKey =
-  | 'weight' | 'bodyFat' | 'muscleMass' | 'bodyWater'
+  | 'weight' | 'bodyFat' | 'muscleMass' | 'muscleMassPct' | 'bmi' | 'bodyWater'
   | 'visceralFat' | 'bmr' | 'metabolicAge' | 'protein';
 
 export interface MetricPointVM {

@@ -1,15 +1,16 @@
-import React, { useId } from 'react';
+import React, { useState } from 'react';
 import { Scale } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { metricByKey } from '../derive/bodyMetrics';
 import { goalProgress } from '../derive/profile';
-import { sparkArea, sparkPath } from '../derive/spark';
+import type { MetricPointVM } from '../types';
+import { AtlasMetricChart } from './AtlasMetricChart';
+import { AtlasMetricDetail } from './AtlasMetricDetail';
 import { AtlasStates } from './AtlasStates';
 
-const CHART_W = 300;
-const CHART_H = 90;
-const CHART_PAD = 6;
+/** The metrics that get a chart on the tab itself. The rest are a tap away. */
+const CHARTED = ['weight', 'bodyFat', 'muscleMass'] as const;
 
 /** The annotated figure. Non-interactive — the tappable map lives on Library. */
 const BodyFigure: React.FC = () => (
@@ -28,13 +29,11 @@ const BodyFigure: React.FC = () => (
 );
 
 export const AtlasBody: React.FC = () => {
-  const { body, profile, training } = useAppData();
+  const { body, profile } = useAppData();
   const actions = useAppActions();
-  const { t, fmt } = useT();
+  const { t, tp, fmt } = useT();
 
-  // `useId` rather than a literal: the showcase's `id="atFill"` was
-  // document-global and collided the moment two Body screens rendered at once.
-  const fillId = useId();
+  const [detail, setDetail] = useState<MetricPointVM | null>(null);
   const now = new Date();
 
   const weight = metricByKey(body.metrics, 'weight');
@@ -73,13 +72,19 @@ export const AtlasBody: React.FC = () => {
     { side: 'right', style: { right: 14, top: 128 } },
   ] as const;
 
+  const charts = CHARTED
+    .map(key => metricByKey(body.metrics, key))
+    .filter((m): m is MetricPointVM => Boolean(m?.series));
+
   return (
     <>
       <div className="at-greet" style={{ paddingBottom: 4 }}>
         <div>
+          {/* The date, not a device name: the source is not stored per reading,
+              and the hardcoded "Mi Scale 2" was a lie for every manual weigh-in. */}
           <small>
-            {body.latestAt ? `${fmt.relativeDay(body.latestAt, now)} · ` : ''}
-            {t('body.lastReading', { device: 'Mi Scale 2', n: body.readingCount })}
+            {body.latestAt ? `${t('body.lastUpdated')} ${fmt.dmy(body.latestAt)} · ` : ''}
+            {tp('body.readings', body.readingCount)}
           </small>
           <h1>{t('body.title')}</h1>
         </div>
@@ -128,34 +133,26 @@ export const AtlasBody: React.FC = () => {
         </div>
       )}
 
-      {series && (
+      {charts.length > 0 && (
         <>
-          <div className="at-rail-head"><h3>{t('body.composition')}</h3><button onClick={() => actions.openOverlay('logWeight')}>{t('today.weight')}</button></div>
-          <div className="at-pad" style={{ paddingBottom: 22 }}>
-            <div className="at-card" style={{ padding: '18px 16px 12px' }}>
-              <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} width="100%" height={CHART_H} preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--clay)" stopOpacity="0.28" />
-                    <stop offset="100%" stopColor="var(--clay)" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-                <path d={sparkArea(series, CHART_W, CHART_H, CHART_PAD)} fill={`url(#${fillId})`} />
-                <path
-                  d={sparkPath(series, CHART_W, CHART_H, CHART_PAD)}
-                  fill="none" stroke="var(--clay)" strokeWidth="2.5" strokeLinecap="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </svg>
-              <div className="at-goal-row" style={{ marginTop: 8, fontSize: 11 }}>
-                {/* Real month labels across the 12-week window, not the showcase's fixed May/June/July. */}
-                {[11, 6, 0].map(weeksAgo => (
-                  <span key={weeksAgo}>
-                    {fmt.monthShort(new Date(now.getTime() - weeksAgo * 7 * 86_400_000))}
+          <div className="at-rail-head"><h3>{t('body.trends')}</h3><button onClick={() => actions.openOverlay('logWeight')}>{t('body.newReading')}</button></div>
+          <div className="at-pad" style={{ paddingBottom: 22, display: 'grid', gap: 12 }}>
+            {charts.map(metric => (
+              <button
+                key={metric.key}
+                className="at-card at-trend-card"
+                onClick={() => setDetail(metric)}
+              >
+                <div className="at-goal-row">
+                  <b>{t(metric.labelKey)}</b>
+                  <span>
+                    {fmt.n(metric.value, metric.decimals)} {t(metric.unitKey)}
+                    {metric.delta30d !== null && ` · ${fmt.signed(metric.delta30d, metric.decimals)}`}
                   </span>
-                ))}
-              </div>
-            </div>
+                </div>
+                <AtlasMetricChart series={metric.series!} decimals={metric.decimals} now={now} />
+              </button>
+            ))}
           </div>
         </>
       )}
@@ -164,7 +161,12 @@ export const AtlasBody: React.FC = () => {
       <div className="at-pad" style={{ paddingBottom: 22 }}>
         <div className="at-card" style={{ padding: '8px 20px' }}>
           {body.metrics.filter(m => m.key !== 'weight' && m.value > 0).map((metric, i) => (
-            <div key={metric.key} className="at-routine-item" style={{ borderTop: i === 0 ? 'none' : undefined }}>
+            <button
+              key={metric.key}
+              className="at-routine-item"
+              style={{ borderTop: i === 0 ? 'none' : undefined }}
+              onClick={() => setDetail(metric)}
+            >
               <span>
                 {t(metric.labelKey)}
                 <small>
@@ -173,27 +175,13 @@ export const AtlasBody: React.FC = () => {
                     : t('body.overMonth', { delta: fmt.signed(metric.delta30d, metric.decimals), unit: '' })}
                 </small>
               </span>
-              <b>{fmt.n(metric.value, metric.decimals)}</b>
-            </div>
+              <b>{fmt.n(metric.value, metric.decimals)} {t(metric.unitKey)}</b>
+            </button>
           ))}
         </div>
       </div>
 
-      {training.records.length > 0 && (
-        <>
-          <div className="at-rail-head"><h3>{t('body.records')}</h3></div>
-          <div className="at-pad" style={{ paddingBottom: 22 }}>
-            <div className="at-card" style={{ padding: '8px 20px' }}>
-              {training.records.slice(0, 4).map((record, i) => (
-                <div key={record.exerciseName} className="at-routine-item" style={{ borderTop: i === 0 ? 'none' : undefined }}>
-                  <span>{record.exerciseName}<small>{fmt.relativeDay(record.at, now)}</small></span>
-                  <b>{fmt.kgReps(record.weightKg, record.reps)}</b>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
+      <AtlasMetricDetail metric={detail} latestAt={body.latestAt} onClose={() => setDetail(null)} />
     </>
   );
 };

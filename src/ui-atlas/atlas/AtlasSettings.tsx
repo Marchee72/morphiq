@@ -7,6 +7,7 @@ import { WebHealthProvider } from '../../data/health/WebHealthProvider';
 import { ALL_EQUIPMENT } from '../../features/settings/gymEquipmentData';
 import { LANGUAGES, MODES } from '../../presentation/state/preferences';
 import { MAX_HEIGHT_CM, MIN_HEIGHT_CM, parseHeightCm } from '../../core/entities/UserProfile';
+import { HEALTH_IMPORT_DAYS } from '../derive/bodyMetrics';
 import { AtlasSheet } from './AtlasSheet';
 import { AtlasInput, AtlasChoice } from './AtlasField';
 import { AppMark } from './AppMark';
@@ -54,7 +55,12 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
       since.setDate(since.getDate() - 30);
       const workouts = await provider.importWorkouts(since);
       if (provider.importBodyComposition) {
-        const measurements = await provider.importBodyComposition(since, activeProfile);
+        // Reaches back further than the workouts do: the Body charts cover
+        // 12 weeks, and a 30-day import leaves two thirds of every chart
+        // filled by gap-filling over readings Health Connect already holds.
+        const bodySince = new Date();
+        bodySince.setDate(bodySince.getDate() - HEALTH_IMPORT_DAYS);
+        const measurements = await provider.importBodyComposition(bodySince, activeProfile);
         if (measurements.length > 0) await importMeasurements(measurements);
       }
       await importWorkouts(workouts);
