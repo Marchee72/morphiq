@@ -4,6 +4,7 @@ import { useT } from '../../i18n';
 import { useAppActions, useAppData } from '../data/useAppData';
 import { useExerciseSearch, MUSCLE_GROUPS } from '../data/useExerciseSearch';
 import { MUSCLE_GROUP_LABELS } from '../derive/muscleLoad';
+import { EXERCISE_EQUIPMENT_LABELS } from '../../data/exercises/exerciseLabels';
 import { ExerciseThumb } from '../components/ExerciseThumb';
 import { useDismissOnBack } from '../components/useDismissOnBack';
 import type { CatalogItemVM } from '../types';
@@ -47,7 +48,7 @@ export const AtlasExercisePicker: React.FC<{
         <span className="at-ex-body">
           <b>{item.name}</b>
           <span>
-            {item.equipment}
+            {EXERCISE_EQUIPMENT_LABELS[item.equipment] ? t(EXERCISE_EQUIPMENT_LABELS[item.equipment]) : item.equipment}
             {item.bestKg ? ` · ${fmt.n(item.bestKg, 1)} ${t('unit.kg')}` : ''}
           </span>
         </span>
@@ -127,7 +128,7 @@ export const AtlasExercisePicker: React.FC<{
                 data-on={search.equipment === facet.id}
                 onClick={() => search.setEquipment(search.equipment === facet.id ? null : facet.id)}
               >
-                {facet.id}<sup>{facet.count}</sup>
+                {EXERCISE_EQUIPMENT_LABELS[facet.id] ? t(EXERCISE_EQUIPMENT_LABELS[facet.id]) : facet.id}<sup>{facet.count}</sup>
               </button>
             ))}
           </div>

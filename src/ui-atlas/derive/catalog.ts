@@ -1,4 +1,5 @@
 import type { Exercise } from '../../core/entities/Exercise';
+import type { Lang } from '../../presentation/state/preferences';
 import type { CatalogItemVM, MuscleGroupId } from '../types';
 import { GROUP_TO_CATEGORIES } from './muscleLoad';
 import { normalizeName, type ExerciseUsageMap } from './records';
@@ -20,11 +21,12 @@ export function toCatalogItem(
   exercise: Exercise,
   usage: ExerciseUsageMap,
   favorites: Set<string>,
+  lang: Lang = 'en',
 ): CatalogItemVM {
   const used = usage.get(normalizeName(exercise.name));
   return {
     id: exercise.id,
-    name: exercise.name,
+    name: lang === 'es' ? exercise.nameEs : exercise.name,
     category: exercise.category,
     equipment: exercise.equipment,
     target: exercise.target,
