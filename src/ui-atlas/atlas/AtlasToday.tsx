@@ -12,6 +12,7 @@ import { AtlasStates } from './AtlasStates';
 import { AtlasSessionDetail } from './AtlasSessionDetail';
 import { AtlasTodayDetail, type TodayDetail } from './AtlasTodayDetail';
 import { AtlasHeatMap } from './AtlasHeatMap';
+import { AtlasBuddyStrip } from './AtlasBuddyStrip';
 
 /**
  * Today — the screen that answers "what do I need to know right now".
@@ -98,6 +99,10 @@ export const AtlasToday: React.FC = () => {
           </button>
         </div>
       )}
+
+      {/* A partner training right now, if any — renders nothing otherwise, so it
+          costs nothing on the common path. */}
+      <AtlasBuddyStrip />
 
       {/* Directly under the hero, because it is the first thing you want and the
           hero cannot carry it: once a session is finished the hero goes back to

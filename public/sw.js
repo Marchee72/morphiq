@@ -136,3 +136,44 @@ self.addEventListener('fetch', event => {
     event.respondWith(cacheFirst(request));
   }
 });
+
+/**
+ * A partner started training, or sent a message — the server's `web-push`
+ * payload is `{ title, body, data }`, `data` carrying just enough to route the
+ * tap (see `notificationclick`). Never a weight or a rep: the payload is
+ * exactly what the server already shows in-app, nothing added for the banner.
+ */
+self.addEventListener('push', event => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch { /* malformed payload, show nothing extra */ }
+
+  const title = payload.title || 'MorphIQ';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: payload.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: payload.data?.type, // a second "started training" replaces the first rather than stacking
+    data: payload.data || {},
+  }));
+});
+
+/** Opens the app on the Buddies tab — on the sender's thread, for a message. */
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+
+  const data = event.notification.data || {};
+  const target = data.type === 'message' && data.linkId
+    ? `/?buddyLinkId=${encodeURIComponent(data.linkId)}`
+    : '/?buddies=1';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(async clientsArr => {
+      const existing = clientsArr.find(c => 'focus' in c);
+      if (existing) {
+        if ('navigate' in existing) await existing.navigate(target);
+        return existing.focus();
+      }
+      return self.clients.openWindow(target);
+    }),
+  );
+});

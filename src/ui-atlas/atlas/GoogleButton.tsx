@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useT } from '../../i18n';
 import { signInWithGoogle, isGoogleConfigured } from '../../data/auth/googleSignIn';
+import { useStore } from '../../presentation/state/store';
+import { useSocialStore } from '../../presentation/state/socialStore';
 
 /** Google's mark, inlined — a remote image would fail offline and on a cold WebView. */
 const GoogleG: React.FC = () => (
@@ -33,6 +35,12 @@ export const GoogleButton: React.FC<{
     setError(null);
     try {
       const result = await signInWithGoogle();
+      // `available` is computed once, at module load — true everywhere else,
+      // but a sign-in happening mid-session is exactly the moment it goes
+      // stale. Every entry point funnels through here, so this is the one
+      // place that needs to know: friendships just became possible.
+      const profileId = useStore.getState().activeProfile?.id;
+      if (profileId) void useSocialStore.getState().load(profileId);
       onSignedIn?.(result.adoptedProfiles);
     } catch (err) {
       console.error('Google sign-in failed:', err);

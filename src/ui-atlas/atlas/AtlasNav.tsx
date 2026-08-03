@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dumbbell, Home, Scale, Search, Sparkles } from 'lucide-react';
+import { Dumbbell, Home, Scale, Search, Sparkles, Users } from 'lucide-react';
 import { useT } from '../../i18n';
 import { SCREENS, type ScreenId } from '../types';
 
@@ -9,6 +9,7 @@ const ICONS: Record<ScreenId, React.ReactNode> = {
   library: <Search size={18} />,
   body: <Scale size={18} />,
   coach: <Sparkles size={18} />,
+  buddies: <Users size={18} />,
 };
 
 /**

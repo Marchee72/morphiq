@@ -1,6 +1,7 @@
 import type {
   BuddyInvite, BuddyLink, BuddyMessage, BuddyMessageKind, BuddyPresence, SharedRoutine,
 } from '../../core/entities/Buddy';
+import type { TFn } from '../../i18n';
 
 /**
  * One partner as the list shows them.
@@ -162,6 +163,27 @@ export function buildSharedRows(
   return training
     .filter(row => row.sharedSessionId === sharedSessionId)
     .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+}
+
+/**
+ * What a partner's row of `training` reads as, everywhere it is shown — the
+ * exercise and how far through it they are, or that they have just started.
+ *
+ * Takes `t` rather than living in a component: three places show this exact
+ * line (Today's strip, the shared-session strip, and the Buddies list), and
+ * they had each grown their own copy before this existed.
+ */
+export function presenceProgress(
+  row: Pick<PresenceRowVM, 'exerciseName' | 'setNumber' | 'setCount'>,
+  t: TFn,
+): string {
+  return row.exerciseName && row.setNumber && row.setCount
+    ? t('buddy.progress', {
+        exercise: row.exerciseName,
+        n: String(row.setNumber),
+        total: String(row.setCount),
+      })
+    : t('buddy.warmingUp');
 }
 
 function startOfDay(date: Date): Date {

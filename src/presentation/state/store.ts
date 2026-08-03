@@ -62,7 +62,15 @@ const aiCoach = new DeepSeekCoach();
  * handler, the scroll-reset behaviour and the e2e selectors all survived the
  * rename. `settings` is reachable from the Today header, never from the nav.
  */
-export type AppScreenId = 'today' | 'train' | 'library' | 'body' | 'coach' | 'settings';
+export type AppScreenId = 'today' | 'train' | 'library' | 'body' | 'coach' | 'buddies' | 'settings';
+
+/** What the Buddies tab should do the moment it mounts, then forget. */
+export interface BuddiesFocus {
+  /** An invite code arriving from a `?buddy=CODE` link — opens straight onto redeem. */
+  code?: string;
+  /** A partner tapped from elsewhere (Today's strip) — opens straight onto their chat. */
+  linkId?: string;
+}
 
 export interface ActiveSessionExercise {
   id: string;
@@ -173,6 +181,8 @@ interface StoreState {
   selectedWorkoutForCoach: WorkoutLog | null;
   activeCoachSubTab: 'chat' | 'routine' | 'history';
   activeTab: AppScreenId;
+  /** Consumed once by `AtlasBuddies` on mount, then cleared. */
+  buddiesFocus: BuddiesFocus | null;
   activeWorkout: WorkoutLog | null;
   isGymModeOpen: boolean;
   activeSession: {
@@ -194,6 +204,8 @@ interface StoreState {
 
   // Actions
   setActiveTab: (tab: AppScreenId) => void;
+  setBuddiesFocus: (focus: BuddiesFocus) => void;
+  clearBuddiesFocus: () => void;
   setSelectedWorkoutForCoach: (workout: WorkoutLog | null) => void;
   setActiveCoachSubTab: (tab: 'chat' | 'routine' | 'history') => void;
   setActiveWorkout: (workout: WorkoutLog | null) => void;
@@ -342,6 +354,7 @@ export const useStore = create<StoreState>((set, get) => ({
   selectedWorkoutForCoach: null,
   activeCoachSubTab: 'chat',
   activeTab: 'today',
+  buddiesFocus: null,
   activeWorkout: null,
   isGymModeOpen: false,
   activeSession: null,
@@ -350,6 +363,8 @@ export const useStore = create<StoreState>((set, get) => ({
   setDailySteps: (days) => set({ dailySteps: days }),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
+  setBuddiesFocus: (focus) => set({ buddiesFocus: focus }),
+  clearBuddiesFocus: () => set({ buddiesFocus: null }),
   setSelectedWorkoutForCoach: (workout) => set({ selectedWorkoutForCoach: workout }),
   setActiveCoachSubTab: (tab) => set({ activeCoachSubTab: tab }),
   setActiveWorkout: (workout) => set({ activeWorkout: workout }),

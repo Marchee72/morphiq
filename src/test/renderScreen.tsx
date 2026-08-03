@@ -16,6 +16,7 @@ import { AtlasTrain } from '../ui-atlas/atlas/AtlasTrain';
 import { AtlasLibrary } from '../ui-atlas/atlas/AtlasLibrary';
 import { AtlasBody } from '../ui-atlas/atlas/AtlasBody';
 import { AtlasCoach } from '../ui-atlas/atlas/AtlasCoach';
+import { AtlasBuddies } from '../ui-atlas/atlas/AtlasBuddies';
 import type { ScreenId } from '../ui-atlas/types';
 
 const SCREENS: Record<ScreenId, React.FC> = {
@@ -24,6 +25,7 @@ const SCREENS: Record<ScreenId, React.FC> = {
   library: AtlasLibrary,
   body: AtlasBody,
   coach: AtlasCoach,
+  buddies: AtlasBuddies,
 };
 
 /**

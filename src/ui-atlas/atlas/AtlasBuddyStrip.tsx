@@ -2,7 +2,9 @@ import React from 'react';
 import { useT } from '../../i18n';
 import { useSocial } from '../data/useSocial';
 import { useAppActions } from '../data/useAppData';
+import { useStore } from '../../presentation/state/store';
 import { useElapsedSeconds } from '../components/useTicker';
+import { presenceProgress } from '../derive/social';
 
 /**
  * Partners who are training right now.
@@ -34,19 +36,15 @@ const StripRow: React.FC<{ row: ReturnType<typeof useSocial>['training'][number]
   // nothing that counts belongs in a view model. It already floors at zero, so
   // a partner's clock running fast shows 0:00 rather than a countdown.
   const elapsed = useElapsedSeconds(row.startedAt);
-
-  const progress = row.exerciseName && row.setNumber && row.setCount
-    ? t('buddy.progress', {
-        exercise: row.exerciseName,
-        n: String(row.setNumber),
-        total: String(row.setCount),
-      })
-    : t('buddy.warmingUp');
+  const progress = presenceProgress(row, t);
 
   return (
     <button
       className="at-card at-buddy-live"
-      onClick={() => actions.openOverlay('buddies', { buddyLinkId: row.linkId })}
+      onClick={() => {
+        actions.navigate('buddies');
+        useStore.getState().setBuddiesFocus({ linkId: row.linkId });
+      }}
     >
       <span className="at-buddy-dot" aria-hidden="true" />
       <span className="at-buddy-livetext">

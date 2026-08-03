@@ -1116,6 +1116,8 @@
 
 .at-map-legend p { margin: 0 0 12px; font-size: 12px; color: var(--muted); line-height: 1.45; }
 
+/* Just spacing: the Front/Back control itself is `.at-seg`, rendered by
+   `AtlasSegment` inside this wrapper. */
 .at-map-side { margin-top: 4px; }
 
 .at-chiprail {
@@ -1144,13 +1146,23 @@
   color: var(--muted);
   cursor: pointer;
   white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 
-/* Clay rather than an ink fill. Chip rails sit on `--sand` as often as on a
-   card, and `--at-tonal` is a shade off `--sand` in light mode — the accent is
-   the only fill that stays legible on both surfaces without swapping roles
-   after dark. */
-.at-chip[data-on='true'] { background: var(--clay); border-color: var(--clay); color: var(--at-on-clay); }
+.at-chip:active { transform: scale(0.96); }
+
+/* Tonal rather than solid: a soft clay-tinted fill with clay text and border.
+   Solid clay is already spoken for by `data-danger` (Remove, Pause) — a
+   selection is not a warning, and the two must not read as the same weight
+   of action. The tint still ties a selected chip to the one accent color
+   every other "this is live" signal in the app uses (the active nav tab,
+   the primary button), just softened for something reversible. Both sides of
+   the mix follow the theme, so nothing inverts after dark. */
+.at-chip[data-on='true'] {
+  background: color-mix(in srgb, var(--clay) 16%, var(--card));
+  border-color: var(--clay);
+  color: var(--clay);
+}
 
 .at-grid {
   display: grid;
@@ -1871,6 +1883,47 @@ button.at-routine-item { cursor: pointer; }
 }
 
 .at-field-hint { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+
+/* ---------- switch (a single on/off preference) ---------- */
+
+.at-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.at-switch-row .at-field-label { margin: 0; }
+
+.at-switch {
+  flex-shrink: 0;
+  position: relative;
+  width: 46px;
+  height: 27px;
+  padding: 0;
+  border: 1.5px solid var(--hair);
+  border-radius: 999px;
+  background: var(--at-tonal);
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.at-switch[data-on='true'] { background: var(--clay); border-color: var(--clay); }
+.at-switch:active .at-switch-knob { width: 22px; } /* a squash on press, the way a real switch gives */
+
+.at-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), width 0.12s ease;
+}
+
+.at-switch[data-on='true'] .at-switch-knob { transform: translateX(19px); }
 
 .at-input-wrap { position: relative; display: flex; align-items: center; }
 
@@ -3282,8 +3335,8 @@ button.at-routine-item { cursor: pointer; }
   color: var(--muted);
 }
 
-/* The figure column is 96px wide, so the two labels get a smaller type size
-   than the segmented control's default to keep them off each other. */
+/* Also an `.at-seg`, but the figure column is 96px wide, so the two labels get
+   a smaller type size than the control's default to keep them off each other. */
 .at-heatmap-side { margin-top: 8px; }
 .at-heatmap-side button { font-size: 11px; min-height: 38px; }
 

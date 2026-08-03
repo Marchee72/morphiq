@@ -73,6 +73,40 @@ export const AtlasTextarea: React.FC<{
   </AtlasField>
 );
 
+/**
+ * A single on/off preference — its own control rather than a two-chip
+ * `AtlasChoice`, because a boolean is not a choice between two named things.
+ * The label sits beside the switch rather than above it, so the row reads as
+ * one statement ("Show when I train: on") instead of a question and an answer.
+ */
+export const AtlasSwitch: React.FC<{
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  hint?: string;
+}> = ({ label, checked, onChange, hint }) => {
+  const id = useId();
+  return (
+    <div className="at-field">
+      <div className="at-switch-row">
+        <label className="at-field-label" htmlFor={id}>{label}</label>
+        <button
+          id={id}
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          className="at-switch"
+          data-on={checked}
+          onClick={() => onChange(!checked)}
+        >
+          <span className="at-switch-knob" />
+        </button>
+      </div>
+      {hint && <span className="at-field-hint">{hint}</span>}
+    </div>
+  );
+};
+
 export interface AtlasOption<T extends string> {
   value: T;
   label: string;

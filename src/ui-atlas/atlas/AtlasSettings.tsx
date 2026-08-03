@@ -1,21 +1,20 @@
 import React, { useState } from 'react';
-import { Check, Database, Dumbbell, Monitor, Moon, RefreshCw, Sun, Trash2, Users, X } from 'lucide-react';
+import { Check, Database, Dumbbell, Monitor, Moon, RefreshCw, Sun, Trash2, X } from 'lucide-react';
 import { useStore } from '../../presentation/state/store';
 import { useT } from '../../i18n';
-import { useSocial } from '../data/useSocial';
-import { useAppActions } from '../data/useAppData';
 import { CapacitorHealthProvider } from '../../data/health/CapacitorHealthProvider';
 import { WebHealthProvider } from '../../data/health/WebHealthProvider';
 import { ALL_EQUIPMENT } from '../../features/settings/gymEquipmentData';
 import { LANGUAGES, MODES } from '../../presentation/state/preferences';
 import { MAX_HEIGHT_CM, MIN_HEIGHT_CM, parseHeightCm } from '../../core/entities/UserProfile';
 import { AtlasSheet } from './AtlasSheet';
-import { AtlasInput, AtlasChoice, AtlasSegment } from './AtlasField';
+import { AtlasInput, AtlasChoice } from './AtlasField';
 import { AppMark } from './AppMark';
 import { AtlasInstallCard } from './AtlasInstallCard';
 import { GoogleButton } from './GoogleButton';
 import { getUser } from '../../data/auth/session';
 import { signOut, isGoogleConfigured } from '../../data/auth/googleSignIn';
+import { useSocialStore } from '../../presentation/state/socialStore';
 
 type Panel = 'profile' | 'equipment' | 'data' | null;
 
@@ -27,9 +26,7 @@ type Panel = 'profile' | 'equipment' | 'data' | null;
  * only because each was written against the old `Sheet` primitive.
  */
 export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { t, tp, fmt } = useT();
-  const social = useSocial();
-  const actions = useAppActions();
+  const { t, fmt } = useT();
   const {
     profiles, activeProfile, setActiveProfile, updateProfile,
     theme, setTheme, language, setLanguage,
@@ -140,7 +137,13 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   className="at-btn"
                   data-ghost="true"
                   style={{ justifyContent: 'center' }}
-                  onClick={async () => { await signOut(); setAccount(null); }}
+                  onClick={async () => {
+                    await signOut();
+                    setAccount(null);
+                    // Symmetric with the sign-in fix in `GoogleButton`: `available`
+                    // is otherwise stuck at whatever it was computed as on load.
+                    useSocialStore.getState().reset();
+                  }}
                 >
                   {t('auth.signOut')}
                 </button>
@@ -152,42 +155,6 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                 <small className="at-field-hint">{t('auth.why')}</small>
               </>
             )}
-          </div>
-        )}
-
-        {/* Training partners. Anchored right after the account block, because
-            that is where the app's only notion of an identity other than a local
-            profile already lives — and a partner is one of those. Absent
-            entirely when a friendship cannot exist: local mode has no server to
-            be social against, and signed out every social route answers 401. */}
-        {social.available && (
-          <div className="at-card at-settings-stack">
-            <button
-              className="at-settings-row at-settings-tap"
-              onClick={() => { onClose(); actions.openOverlay('buddies'); }}
-            >
-              <div>
-                <span className="at-field-label">{t('buddy.title')}</span>
-                <small>
-                  {social.rows.length > 0 ? tp('buddy.count', social.rows.length) : t('buddy.none')}
-                </small>
-              </div>
-              <span className="at-settings-icon"><Users size={17} /></span>
-            </button>
-
-            <AtlasSegment
-              label={t('buddy.presenceToggle')}
-              value={activeProfile?.sharePresence === false ? 'off' : 'on'}
-              onChange={value => {
-                if (!activeProfile) return;
-                void updateProfile({ ...activeProfile, sharePresence: value === 'on' });
-              }}
-              options={[
-                { value: 'on', label: t('buddy.presenceOn') },
-                { value: 'off', label: t('buddy.presenceOff') },
-              ]}
-            />
-            <small className="at-field-hint">{t('buddy.presenceSub')}</small>
           </div>
         )}
 

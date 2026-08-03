@@ -145,7 +145,7 @@ export interface SocialState {
 export type OverlayId =
   | 'settings' | 'logWeight' | 'addFood' | 'exercisePicker'
   | 'dayNote' | 'sessionEditor' | 'quickAdd' | 'history'
-  | 'startSession' | 'routineMerge' | 'buddies';
+  | 'startSession' | 'routineMerge';
 
 /**
  * What an overlay is being opened *for*.
@@ -162,10 +162,6 @@ export type OverlayId =
 export interface OverlayPayload {
   swapIndex?: number;
   routine?: RoutineTemplate;
-  /** Opens the partners overlay straight onto one friendship. */
-  buddyLinkId?: string;
-  /** A code arriving from an invite link, so redeeming needs no typing. */
-  buddyCode?: string;
 }
 
 export interface AppActions {
