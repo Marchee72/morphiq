@@ -1359,18 +1359,23 @@ button.at-routine-item { cursor: pointer; }
 
 /* ---------- dock nav ---------- */
 
+/* Floats over the scrolling body instead of sitting in its own strip, so the
+   page background never shows as a band under the pill. Absolute (not fixed)
+   keeps it inside `.app`, which is already the fixed frame. */
 .at-dock {
-  flex-shrink: 0;
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  z-index: 5; /* over the page and the train action bar (3), under the summary (20) */
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  margin: 0 18px 22px;
   padding: 7px;
   background: var(--at-dock-bg);
   border-radius: 999px;
   box-shadow: 0 14px 30px -14px var(--at-shadow);
-  margin-bottom: calc(22px + env(safe-area-inset-bottom, 0px));
 }
 
 .at-dock button {

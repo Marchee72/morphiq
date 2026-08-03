@@ -86,8 +86,11 @@
   background: inherit;
 }
 
+/* The dock floats over this, so the last item needs room to clear it:
+   58px pill + 22px offset + the safe area it also sits above. */
 .app-scroll {
   flex: 1;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
