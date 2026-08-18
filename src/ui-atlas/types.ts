@@ -34,8 +34,7 @@ export interface ProfileVM {
 }
 
 export type MetricKey =
-  | 'weight' | 'bodyFat' | 'muscleMass' | 'muscleMassPct' | 'bmi' | 'bodyWater'
-  | 'visceralFat' | 'bmr' | 'metabolicAge' | 'protein';
+  | 'weight' | 'bodyFat' | 'muscleMass' | 'muscleMassPct' | 'bmi' | 'bodyWater' | 'bmr';
 
 export interface MetricPointVM {
   key: MetricKey;
@@ -160,6 +159,28 @@ export interface StreakVM {
 
 export type FeelingId = 'feeling_100' | 'good' | 'sore' | 'pain' | 'low_energy';
 
+/**
+ * The numbers that describe a session you did not log set by set.
+ *
+ * A run recorded by the watch has no weight and no reps, and rendering it with
+ * the strength tiles produced "0 sets · 0.0 t" — which reads as a session you
+ * failed to log rather than one that was never about sets. These fields already
+ * existed on `WorkoutLog`; they simply had nowhere to go.
+ *
+ * Every field is optional because sources disagree about what they record: a
+ * treadmill run has no distance, a yoga session has neither distance nor steps.
+ * The render shows the tiles it has and omits the rest.
+ */
+export interface CardioVM {
+  /** How to read the distance — min/km, km/h, or null when there is none. */
+  readout: 'pace' | 'speed' | null;
+  distanceKm?: number;
+  calories?: number;
+  avgHeartRate?: number;
+  maxHeartRate?: number;
+  steps?: number;
+}
+
 export interface HistoryEntryVM {
   id: string;
   at: Date;
@@ -169,6 +190,13 @@ export interface HistoryEntryVM {
   sets: number;
   feeling?: FeelingId;
   prs: number;
+  /**
+   * Present only when the session carried no logged sets but did carry activity
+   * numbers — i.e. it came from the watch rather than from the set logger.
+   * Its absence is what every strength path already assumes, so the branch is
+   * simply `entry.cardio ? … : …`.
+   */
+  cardio?: CardioVM;
   /**
    * Distinct exercises the session contained, in the order they were performed.
    *
@@ -209,6 +237,16 @@ export interface TodayTrainingVM {
   volumeKg: number;
   minutes: number;
   prs: number;
+  /**
+   * The day's activity sessions — runs, rides, walks — and their totals.
+   *
+   * Kept apart from `sets`/`volumeKg` rather than folded in, because a day can
+   * hold both a gym session and a run and the two do not add up to anything.
+   */
+  cardioSessions: HistoryEntryVM[];
+  cardioDistanceKm: number;
+  cardioCalories: number;
+  cardioMinutes: number;
   /** The most recent finished session before today, for the "last trained" read. */
   previous: HistoryEntryVM | null;
   /** Days since `previous`, or null when there is no earlier session at all. */

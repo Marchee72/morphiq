@@ -1,11 +1,11 @@
 import type { Exercise } from '../../core/entities/Exercise';
 import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
-import type { FeelingId } from '../types';
+import type { CardioVM, FeelingId } from '../types';
 import type { HistorySetVM } from './exerciseHistory';
 import { isCountedSet } from './muscleLoad';
 import { normalizeName } from './records';
-import { setVolume } from './history';
+import { setVolume, buildCardio } from './history';
 
 /**
  * One past session, opened up.
@@ -43,6 +43,8 @@ export interface SessionDetailVM {
   feeling?: FeelingId;
   notes?: string;
   exercises: SessionDetailExerciseVM[];
+  /** Set when the session was an activity rather than logged sets. See `CardioVM`. */
+  cardio?: CardioVM;
 }
 
 type ResolveExercise = (set: { exerciseId?: string; exerciseName: string }) => Exercise | undefined;
@@ -107,5 +109,6 @@ export function buildSessionDetail(
     feeling: log.feelingTag as FeelingId | undefined,
     notes: log.bodyNotes || undefined,
     exercises,
+    cardio: buildCardio(log, counted.length),
   };
 }

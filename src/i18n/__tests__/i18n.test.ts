@@ -124,6 +124,41 @@ describe('formatters', () => {
   });
 });
 
+describe('pace and speed', () => {
+  const en_ = makeFormatters('en');
+  const es_ = makeFormatters('es');
+
+  it('reads a distance and a duration as minutes per kilometre', () => {
+    expect(en_.pace(5, 30)).toBe('6:00 /km');
+    expect(en_.pace(10, 52)).toBe('5:12 /km');
+  });
+
+  it('pads the seconds so a pace never reads as 5:7', () => {
+    expect(en_.pace(6, 30)).toBe('5:00 /km');
+    expect(en_.pace(7, 36)).toBe('5:09 /km');
+  });
+
+  it('carries rounded-up seconds into the next minute', () => {
+    // 4:59.7 must be 5:00, never 4:60.
+    const paceStr = en_.pace(60.12, 300)!;
+    expect(paceStr).not.toContain(':60');
+  });
+
+  it('returns null rather than dividing by zero', () => {
+    // A treadmill run records no distance; a zero-length record records no time.
+    expect(en_.pace(0, 30)).toBe(null);
+    expect(en_.pace(5, 0)).toBe(null);
+    expect(en_.pace(undefined, 30)).toBe(null);
+    expect(en_.speed(0, 30)).toBe(null);
+    expect(en_.speed(5, 0)).toBe(null);
+  });
+
+  it('reads a ride as kilometres per hour, in the local decimal mark', () => {
+    expect(en_.speed(24, 60)).toBe('24.0 km/h');
+    expect(es_.speed(24, 60)).toBe('24,0 km/h');
+  });
+});
+
 describe('upTo', () => {
   const en_ = makeFormatters('en');
   const es_ = makeFormatters('es');

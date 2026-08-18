@@ -35,10 +35,6 @@ export function generateMockMeasurements(profileId: string): Measurement[] {
       bodyWater,
       boneMass: 3.4,
       muscleMass,
-      visceralFat: 6,
-      metabolicAge: 27,
-      protein: 18.2,
-      bodyType: 4,
     });
   }
 
@@ -145,6 +141,12 @@ export function generateMockWorkouts(profileId: string): {
       type: 'Outdoor Running',
       duration: 35,
       caloriesBurned: 340,
+      // On the log, not just the set: Health Connect puts an activity's distance
+      // and heart rate on the session itself, and that is where the UI reads them.
+      distanceKm: 5.2,
+      avgHeartRate: 152,
+      maxHeartRate: 171,
+      steps: 5840,
       description: 'Morning tempo run along the park route',
       source: 'health-connect' as const,
       daysAgo: 7,
@@ -159,15 +161,11 @@ export function generateMockWorkouts(profileId: string): {
     d.setDate(d.getDate() - t.daysAgo);
     d.setHours(17, 30, 0);
 
-    workouts.push({
-      profileId,
-      timestamp: d,
-      type: t.type,
-      duration: t.duration,
-      caloriesBurned: t.caloriesBurned,
-      description: t.description,
-      source: t.source,
-    });
+    // Spread rather than list the fields: the cardio template carries distance,
+    // heart rate and steps that the strength ones do not, and naming each field
+    // here is how they got dropped in the first place.
+    const { sets: _sets, daysAgo: _daysAgo, ...log } = t;
+    workouts.push({ profileId, timestamp: d, ...log });
 
     setsByWorkoutIndex[idx] = t.sets.map(s => ({
       profileId,
@@ -177,4 +175,57 @@ export function generateMockWorkouts(profileId: string): {
   });
 
   return { workouts, setsByWorkoutIndex };
+}
+
+/* ------------------------------------------------------------------ *
+ * Recognising demo rows again
+ *
+ * `clearMockData` used to delete every measurement, meal and session the
+ * profile had — it was a byte-for-byte copy of `clearDatabaseData`. So
+ * "clear the demo" wiped real training history, and because it never
+ * actually removed the demo in a way seeding could detect, re-seeding
+ * stacked another copy on top: one production profile ended up with ten
+ * duplicates of every demo weigh-in and 252 demo meals.
+ *
+ * These predicates live beside the generators on purpose. Change a value
+ * above without changing it here and the demo becomes undeletable again,
+ * which is exactly how the first version rotted.
+ * ------------------------------------------------------------------ */
+
+/** Generated values are literals, but a round trip through NUMERIC is not exact. */
+const near = (a: number, b: number) => Math.abs(a - b) < 0.001;
+
+/**
+ * The constants `generateMockMeasurements` writes on every row.
+ *
+ * Impedance carries most of the weight here: a real reading is either 500, the
+ * neutral value both import paths stamp on, or 0 when nothing but a weight was
+ * recorded. Nothing genuine ever lands in the demo's 469-495 band. Bone mass is
+ * kept alongside it because a real one is computed and never exactly 3.4.
+ */
+export function isMockMeasurement(m: Pick<Measurement, 'boneMass' | 'impedance'>): boolean {
+  // impedance is `495 - i * 2` for i = 13..0.
+  return near(m.boneMass, 3.4) && m.impedance >= 469 && m.impedance <= 495;
+}
+
+const MOCK_MEALS = new Set([
+  'Oatmeal & Protein Shake',
+  'Grilled Chicken & Quinoa Salad',
+  'Greek Yogurt & Almonds',
+  'Salmon & Roasted Vegetables',
+]);
+
+export function isMockFoodLog(f: Pick<FoodLog, 'description'>): boolean {
+  return MOCK_MEALS.has(f.description);
+}
+
+const MOCK_WORKOUTS = new Set([
+  'Barbell Bench Press, Incline DB Flyes, Overhead Cable Extensions',
+  'Lat Pulldowns, Barbell Rows, Hammer Curls',
+  'Barbell Squats, Romanian Deadlifts, Leg Extensions',
+  'Morning tempo run along the park route',
+]);
+
+export function isMockWorkout(w: Pick<WorkoutLog, 'description'>): boolean {
+  return MOCK_WORKOUTS.has(w.description);
 }

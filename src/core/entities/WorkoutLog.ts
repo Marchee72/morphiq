@@ -9,6 +9,7 @@ export interface WorkoutLog {
   
   // New fields for Health Connect / Samsung Health integration
   distanceKm?: number;    // for running/cycling/walking
+  steps?: number;         // steps taken during the activity itself
   avgHeartRate?: number;  // from Health Connect
   maxHeartRate?: number;
   source?: 'manual' | 'health-connect';  // track origin

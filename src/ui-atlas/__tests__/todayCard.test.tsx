@@ -141,10 +141,12 @@ describe('Today — steps', () => {
   const dayString = (date: Date) =>
     `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}-${`${date.getDate()}`.padStart(2, '0')}`;
 
-  it('shows an em-dash, not a zero, when the phone has reported nothing', () => {
+  it('shows no chip at all when the phone has reported nothing', () => {
+    // Was an em-dash, on the reasoning that a zero would read as "you did not
+    // move". A dash reads as a broken sensor, which is no better — a chip with
+    // no number behind it now simply does not render.
     render();
-    const steps = screen.getByRole('button', { name: /steps this week|pasos de la semana/i });
-    expect(steps.querySelector('b')?.textContent).toMatch(/^—/);
+    expect(screen.queryByRole('button', { name: /steps this week|pasos de la semana/i })).toBeNull();
   });
 
   it("shows today's steps once the health source has answered", async () => {

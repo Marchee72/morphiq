@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  ArrowRight, Check, Dumbbell, Footprints, Heart, Scale, Sparkles, Trophy, UtensilsCrossed,
+  ArrowRight, Bike, Check, Dumbbell, Footprints, Heart, Scale, Sparkles, Trophy, UtensilsCrossed,
 } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
@@ -13,6 +13,7 @@ import { AtlasSessionDetail } from './AtlasSessionDetail';
 import { AtlasTodayDetail, type TodayDetail } from './AtlasTodayDetail';
 import { AtlasHeatMap } from './AtlasHeatMap';
 import { AtlasBuddyStrip } from './AtlasBuddyStrip';
+import { AtlasSessionRow } from './AtlasSessionRow';
 
 /**
  * Today — the screen that answers "what do I need to know right now".
@@ -22,6 +23,24 @@ import { AtlasBuddyStrip } from './AtlasBuddyStrip';
  * What changed is that every number is real, and every previously-dead button
  * now goes somewhere.
  */
+/**
+ * How far along a chip's number is against its target.
+ *
+ * Protein, calories and steps all have one, but the rail only ever said so in
+ * words — "38 g left" makes you do the arithmetic to know whether that is
+ * nearly done or barely started. Clamped at 100% so going over target fills the
+ * bar rather than overflowing the card; the text still says by how much.
+ */
+const MomentBar: React.FC<{ value: number; target: number }> = ({ value, target }) => {
+  if (!target || target <= 0) return null;
+  const pct = Math.min(100, Math.max(0, (value / target) * 100));
+  return (
+    <span className="at-moment-bar" aria-hidden="true">
+      <i style={{ width: `${pct}%` }} />
+    </span>
+  );
+};
+
 export const AtlasToday: React.FC = () => {
   const {
     profile, body, session, sessionExercises, sessionTotals, nutrition, training, steps,
@@ -42,6 +61,16 @@ export const AtlasToday: React.FC = () => {
   const heroImage = sessionExercises[0]?.image;
   const heroName = sessionExercises[0]?.name ?? session?.title ?? '';
 
+  /**
+   * A session with nothing in it yet has no lift to show.
+   *
+   * The disc is a photo frame, and `ExerciseThumb` falls back to initials when
+   * it has no picture — so an empty session put the two letters of "Push A" in a
+   * circle cropped half off the edge of the hero, which reads as a failed image
+   * rather than as a session waiting to be filled. No lift, no frame.
+   */
+  const showDisc = Boolean(heroImage);
+
   // Tapping a card explains its number before it offers the tab that owns it.
   const [detail, setDetail] = useState<TodayDetail | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -60,6 +89,135 @@ export const AtlasToday: React.FC = () => {
    */
   const doneToday = training.today;
   const trainedToday = doneToday.sessions.length > 0;
+
+  /**
+   * A day of nothing but activities — a run, a ride — has no sets and no
+   * tonnage, so the strength tiles would read `0 sets · 0.0 t` over a day you
+   * did train. A mixed day keeps the strength tiles: the run is already named
+   * in the session list above them.
+   */
+  const cardioOnly = trainedToday && doneToday.cardioSessions.length === doneToday.sessions.length;
+
+  /**
+   * The rail, as a list rather than five hand-written cards.
+   *
+   * A chip with nothing behind it is worse than no chip: "— kg" and "0 g" read
+   * as a broken reading rather than as "you have not logged this today", and
+   * four of them pushed the one number that mattered off the edge of the
+   * screen. Each entry is pushed only when it has something to say, so the rail
+   * is exactly as long as the day has been.
+   *
+   * Order is by immediacy: what you did, then what your body did without you,
+   * then what you logged.
+   */
+  const moments: {
+    key: string;
+    icon: React.ReactNode;
+    value: string;
+    unit?: string;
+    label: React.ReactNode;
+    bar?: { value: number; target: number };
+    onClick: () => void;
+    ariaLabel?: string;
+  }[] = [];
+
+  // What you actually did today leads the rail — until now a run appeared
+  // nowhere on this screen.
+  for (const entry of doneToday.cardioSessions) {
+    const rate = entry.cardio?.readout === 'speed'
+      ? fmt.speed(entry.cardio.distanceKm, entry.durationMin)
+      : fmt.pace(entry.cardio?.distanceKm, entry.durationMin);
+    const hasDistance = entry.cardio?.distanceKm != null;
+    moments.push({
+      key: `activity-${entry.id}`,
+      icon: entry.cardio?.readout === 'speed' ? <Bike size={17} /> : <Footprints size={17} />,
+      value: hasDistance ? fmt.n(entry.cardio!.distanceKm!, 2) : String(entry.durationMin),
+      unit: hasDistance ? t('unit.km') : 'min',
+      label: <>{entry.title}{rate && ` · ${rate}`}</>,
+      onClick: () => setSessionId(entry.id),
+    });
+  }
+
+  if (body.hasData && weight?.value != null) {
+    moments.push({
+      key: 'weight',
+      icon: <Scale size={17} />,
+      value: fmt.n(weight.value, 1),
+      unit: t('unit.kg'),
+      label: (
+        <>
+          {t('today.weight')}
+          {weight.delta7d != null && ` · ${fmt.signed(weight.delta7d)} ${t('unit.kg')} / ${t('today.change7d')}`}
+          {weight.delta7d == null && weight.delta30d != null
+            && ` · ${t('body.overMonth', { delta: fmt.signed(weight.delta30d), unit: t('unit.kg') })}`}
+        </>
+      ),
+      onClick: () => setDetail({ kind: 'weight' }),
+    });
+  }
+
+  // Null is "the phone has not answered", which is not the same as not walking.
+  if (steps.today != null) {
+    moments.push({
+      key: 'steps',
+      icon: <Footprints size={17} />,
+      value: fmt.n(steps.today),
+      unit: t('unit.steps'),
+      // The weekly average is the only target steps have, and the one people
+      // compare today against.
+      bar: steps.weeklyAvg != null ? { value: steps.today, target: steps.weeklyAvg } : undefined,
+      label: (
+        <>
+          {t('today.steps')}
+          {steps.weeklyAvg != null && ` · ${t('today.stepsAvg', { n: fmt.n(steps.weeklyAvg) })}`}
+        </>
+      ),
+      onClick: () => setDetail({ kind: 'steps' }),
+      ariaLabel: t('today.stepsDetail'),
+    });
+  }
+
+  if (nutrition.protein.eaten > 0) {
+    moments.push({
+      key: 'protein',
+      icon: <UtensilsCrossed size={17} />,
+      value: fmt.n(nutrition.protein.eaten),
+      unit: t('unit.g'),
+      bar: { value: nutrition.protein.eaten, target: nutrition.protein.target },
+      label: `${t('today.protein')} · ${fmt.n(Math.max(0, nutrition.protein.target - nutrition.protein.eaten))} ${t('unit.g')}`,
+      onClick: () => setDetail({ kind: 'nutrition', macro: 'protein' }),
+    });
+  }
+
+  if (volumeKg > 0) {
+    moments.push({
+      key: 'volume',
+      icon: <Dumbbell size={17} />,
+      value: fmt.n(volumeKg / 1000, 1),
+      unit: t('unit.tonnes'),
+      label: (
+        <>
+          {session ? t('today.sessionVolume') : t('today.weekVolume')}
+          {session
+            ? sessionTotals.prs > 0 ? ` · ${sessionTotals.prs} PR` : ''
+            : ` · ${tp('history.sessions', training.weeklyStats.workouts)}`}
+        </>
+      ),
+      onClick: () => setDetail({ kind: 'volume' }),
+    });
+  }
+
+  if (nutrition.calories.eaten > 0) {
+    moments.push({
+      key: 'calories',
+      icon: <Heart size={17} />,
+      value: fmt.n(nutrition.calories.eaten),
+      unit: t('unit.kcal'),
+      bar: { value: nutrition.calories.eaten, target: nutrition.calories.target },
+      label: `${t('today.calories')} · ${fmt.n(nutrition.calories.target)}`,
+      onClick: () => setDetail({ kind: 'nutrition', macro: 'calories' }),
+    });
+  }
   
 
   return (
@@ -75,18 +233,27 @@ export const AtlasToday: React.FC = () => {
       </div>
 
       {session ? (
-        <div className="at-hero">
-          <div className="at-hero-disc">
-            <ExerciseThumb name={heroName} image={heroImage} />
-          </div>
+        <div className="at-hero" data-nodisc={!showDisc}>
+          {showDisc && (
+            <div className="at-hero-disc">
+              <ExerciseThumb name={heroName} image={heroImage} />
+            </div>
+          )}
           <span className="at-hero-tag">● {t('today.inProgress')} · {fmt.duration(elapsed)}</span>
           <h2>{session.title}</h2>
           <p>
-            {tp('today.setsLeft', setsLeft)}
-            {next && ` · ${t('today.nextIs', { name: next.ex.name, weight: fmt.n(next.set.lastWeightKg ?? next.set.weightKg, 1) })}`}
+            {/* "0 sets left" is not what an empty session has left to do — it is
+                what it has not been given yet. */}
+            {sessionExercises.length === 0 ? t('today.sessionEmpty') : (
+              <>
+                {tp('today.setsLeft', setsLeft)}
+                {next && ` · ${t('today.nextIs', { name: next.ex.name, weight: fmt.n(next.set.lastWeightKg ?? next.set.weightKg, 1) })}`}
+              </>
+            )}
           </p>
           <button className="at-btn" onClick={() => actions.navigate('train')}>
-            {t('today.continueSession')} <i><ArrowRight size={16} /></i>
+            {sessionExercises.length === 0 ? t('today.pickFirst') : t('today.continueSession')}
+            <i><ArrowRight size={16} /></i>
           </button>
         </div>
       ) : (
@@ -115,7 +282,9 @@ export const AtlasToday: React.FC = () => {
       <div className="at-pad" style={{ paddingTop: 16 }}>
         <div className="at-card at-todaytrain" data-trained={trainedToday}>
           <div className="at-todaytrain-head">
-            <span className="at-todaytrain-icon"><Dumbbell size={16} /></span>
+            <span className="at-todaytrain-icon">
+              {cardioOnly ? <Footprints size={16} /> : <Dumbbell size={16} />}
+            </span>
             <div>
               <small>{t('today.trainingToday')}</small>
               <b>
@@ -133,19 +302,45 @@ export const AtlasToday: React.FC = () => {
               {doneToday.exercises.length > 0 && (
                 <p className="at-todaytrain-list">{doneToday.exercises.join(' · ')}</p>
               )}
+              {/* Sets and tonnes describe nothing about a day that was a run.
+                  When the day held both, the lifting tiles win and the run is
+                  already named in the list above. */}
               <div className="at-todaytrain-stats">
-                <div>
-                  <b>{tp('unit.sets', doneToday.sets)}</b>
-                  <small>{t('today.setsLogged')}</small>
-                </div>
-                <div>
-                  <b>{fmt.n(doneToday.volumeKg / 1000, 1)} {t('unit.tonnes')}</b>
-                  <small>{t('today.volume')}</small>
-                </div>
-                <div>
-                  <b>{doneToday.minutes} min</b>
-                  <small>{t('summary.duration')}</small>
-                </div>
+                {cardioOnly ? (
+                  <>
+                    <div>
+                      <b>{doneToday.minutes} min</b>
+                      <small>{t('summary.duration')}</small>
+                    </div>
+                    {doneToday.cardioDistanceKm > 0 && (
+                      <div>
+                        <b>{fmt.km(doneToday.cardioDistanceKm)}</b>
+                        <small>{t('cardio.distance')}</small>
+                      </div>
+                    )}
+                    {doneToday.cardioCalories > 0 && (
+                      <div>
+                        <b>{fmt.kcal(doneToday.cardioCalories)}</b>
+                        <small>{t('today.calories')}</small>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <b>{tp('unit.sets', doneToday.sets)}</b>
+                      <small>{t('today.setsLogged')}</small>
+                    </div>
+                    <div>
+                      <b>{fmt.n(doneToday.volumeKg / 1000, 1)} {t('unit.tonnes')}</b>
+                      <small>{t('today.volume')}</small>
+                    </div>
+                    <div>
+                      <b>{doneToday.minutes} min</b>
+                      <small>{t('summary.duration')}</small>
+                    </div>
+                  </>
+                )}
               </div>
               {doneToday.prs > 0 && (
                 <p className="at-todaytrain-pr">
@@ -184,58 +379,34 @@ export const AtlasToday: React.FC = () => {
       </div>
       )}
 
+      {moments.length > 0 && (
+      <>
       <div className="at-rail-head">
-        <h3>{t('today.soFar')}</h3>
-        <button onClick={() => actions.navigate('body')}>{t('common.seeAll')}</button>
+        <h3>{t('today.yourDay')}</h3>
+        {/* Was the Body tab, which covers two of the five chips. The day sheet
+            already covers all of them. */}
+        <button onClick={() => setDetail({ kind: 'day', date: now })}>{t('common.seeAll')}</button>
       </div>
       <div className="at-rail">
-        <button className="at-moment" onClick={() => setDetail({ kind: 'weight' })}>
-          <span className="at-moment-icon"><Scale size={17} /></span>
-          <b>{body.hasData ? fmt.n(weight?.value ?? 0, 1) : '—'}<small>{t('unit.kg')}</small></b>
-          <span>
-            {t('today.weight')}
-            {weight?.delta7d != null && ` · ${fmt.signed(weight.delta7d)} ${t('unit.kg')} / ${t('today.change7d')}`}
-            {weight?.delta7d == null && weight?.delta30d != null
-              && ` · ${t('body.overMonth', { delta: fmt.signed(weight.delta30d), unit: t('unit.kg') })}`}
-          </span>
-        </button>
-        {/* Steps sit next to weight rather than at the end of the rail: they are
-            the other thing that happened to your body today without you logging
-            anything. An em-dash when the phone has not answered — a zero would
-            read as "you did not move". */}
-        <button
-          className="at-moment"
-          onClick={() => setDetail({ kind: 'steps' })}
-          aria-label={t('today.stepsDetail')}
-        >
-          <span className="at-moment-icon"><Footprints size={17} /></span>
-          <b>{steps.today == null ? '—' : fmt.n(steps.today)}<small>{t('unit.steps')}</small></b>
-          <span>
-            {t('today.steps')}
-            {steps.weeklyAvg != null && ` · ${t('today.stepsAvg', { n: fmt.n(steps.weeklyAvg) })}`}
-          </span>
-        </button>
-        <button className="at-moment" onClick={() => setDetail({ kind: 'nutrition', macro: 'protein' })}>
-          <span className="at-moment-icon"><UtensilsCrossed size={17} /></span>
-          <b>{fmt.n(nutrition.protein.eaten)}<small>{t('unit.g')}</small></b>
-          <span>{t('today.protein')} · {fmt.n(Math.max(0, nutrition.protein.target - nutrition.protein.eaten))} {t('unit.g')}</span>
-        </button>
-        <button className="at-moment" onClick={() => setDetail({ kind: 'volume' })}>
-          <span className="at-moment-icon"><Dumbbell size={17} /></span>
-          <b>{fmt.n(volumeKg / 1000, 1)}<small>{t('unit.tonnes')}</small></b>
-          <span>
-            {session ? t('today.sessionVolume') : t('today.weekVolume')}
-            {session
-              ? sessionTotals.prs > 0 ? ` · ${sessionTotals.prs} PR` : ''
-              : ` · ${tp('history.sessions', training.weeklyStats.workouts)}`}
-          </span>
-        </button>
-        <button className="at-moment" onClick={() => setDetail({ kind: 'nutrition', macro: 'calories' })}>
-          <span className="at-moment-icon"><Heart size={17} /></span>
-          <b>{fmt.n(nutrition.calories.eaten)}<small>{t('unit.kcal')}</small></b>
-          <span>{t('today.calories')} · {fmt.n(nutrition.calories.target)}</span>
-        </button>
+        {moments.map((moment, i) => (
+          <button
+            key={moment.key}
+            className="at-moment"
+            onClick={moment.onClick}
+            aria-label={moment.ariaLabel}
+            // Staggered entrance: the rail assembles left to right instead of
+            // appearing all at once, which is what makes the order readable.
+            style={{ animationDelay: `${Math.min(i, 6) * 45}ms` }}
+          >
+            <span className="at-moment-icon">{moment.icon}</span>
+            <b>{moment.value}{moment.unit && <small>{moment.unit}</small>}</b>
+            {moment.bar && <MomentBar value={moment.bar.value} target={moment.bar.target} />}
+            <span>{moment.label}</span>
+          </button>
+        ))}
       </div>
+      </>
+      )}
 
       <div className="at-rail-head">
         <h3>{t('today.thisWeek')}</h3>
@@ -279,24 +450,13 @@ export const AtlasToday: React.FC = () => {
           <div className="at-pad" style={{ paddingBottom: 22 }}>
             <div className="at-card" style={{ padding: '8px 20px' }}>
               {training.history.slice(0, 3).map((entry, i) => (
-                <button
+                <AtlasSessionRow
                   key={entry.id}
-                  className="at-routine-item"
-                  style={{ borderTop: i === 0 ? 'none' : undefined, width: '100%' }}
+                  entry={entry}
+                  time={fmt.relativeDay(entry.at, now)}
                   onClick={() => setSessionId(entry.id)}
-                  aria-label={t('history.openSession', { name: entry.title })}
-                >
-                  <span>
-                    {entry.title}
-                    <small>
-                      {fmt.relativeDay(entry.at, now)} · {entry.durationMin} min · {tp('unit.sets', entry.sets)}
-                    </small>
-                  </span>
-                  <b>
-                    {entry.prs > 0 && <Trophy size={13} color="var(--clay)" />}
-                    {fmt.n(entry.volumeKg / 1000, 1)} {t('unit.tonnes')}
-                  </b>
-                </button>
+                  first={i === 0}
+                />
               ))}
             </div>
           </div>

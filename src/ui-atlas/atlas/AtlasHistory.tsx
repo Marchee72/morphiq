@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, ChevronRight, Search, Trophy, X } from 'lucide-react';
+import { CalendarDays, Search, X } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppActions, useAppData } from '../data/useAppData';
 import { useDismissOnBack } from '../components/useDismissOnBack';
 import { dayKey, startOfDay, MS_PER_DAY } from '../derive/buckets';
 import type { HistoryEntryVM } from '../types';
 import { AtlasStates } from './AtlasStates';
+import { AtlasSessionRow } from './AtlasSessionRow';
 
 /**
  * Every session you have logged, by day.
@@ -39,9 +40,6 @@ function fromDateInput(value: string): Date | null {
 function foldForSearch(value: string): string {
   return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 }
-
-/** How many exercise names a session row lists before it summarises the rest. */
-const NAMES_SHOWN = 3;
 
 export const AtlasHistory: React.FC<{
   open: boolean;
@@ -226,35 +224,17 @@ export const AtlasHistory: React.FC<{
               </div>
               <div className="at-card" style={{ padding: '8px 20px' }}>
                 {day.entries.map((entry, i) => (
-                  <button
+                  // `showExercises` is what the session was, as opposed to what
+                  // it was called — most titles are "Strength Training".
+                  <AtlasSessionRow
                     key={entry.id}
-                    className="at-routine-item"
-                    style={{ borderTop: i === 0 ? 'none' : undefined, width: '100%' }}
+                    entry={entry}
+                    time={fmt.clock(entry.at)}
                     onClick={() => onOpenSession(entry.id)}
-                    aria-label={t('history.openSession', { name: entry.title })}
-                  >
-                    <span>
-                      {entry.title}
-                      <small>
-                        {fmt.clock(entry.at)} · {entry.durationMin} min · {tp('unit.sets', entry.sets)}
-                        {entry.prs > 0 && ` · ${entry.prs} PR`}
-                      </small>
-                      {/* What the session was, as opposed to what it was
-                          called. Most titles are "Strength Training". */}
-                      {entry.exercises.length > 0 && (
-                        <small className="at-history-exercises">
-                          {entry.exercises.slice(0, NAMES_SHOWN).join(' · ')}
-                          {entry.exercises.length > NAMES_SHOWN
-                            && ` +${entry.exercises.length - NAMES_SHOWN}`}
-                        </small>
-                      )}
-                    </span>
-                    <b>
-                      {entry.prs > 0 && <Trophy size={13} color="var(--clay)" />}
-                      {fmt.n(entry.volumeKg / 1000, 1)} {t('unit.tonnes')}
-                      <ChevronRight size={15} />
-                    </b>
-                  </button>
+                    showExercises
+                    showChevron
+                    first={i === 0}
+                  />
                 ))}
               </div>
             </div>

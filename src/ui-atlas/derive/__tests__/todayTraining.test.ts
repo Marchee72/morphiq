@@ -32,6 +32,41 @@ describe('buildTodayTraining', () => {
     expect(today.volumeKg).toBe(0);
   });
 
+  it('totals a day of activities apart from sets and volume', () => {
+    const today = buildTodayTraining(
+      history(entry('w1', 3 * 3_600_000, {
+        title: 'Running', sets: 0, volumeKg: 0, durationMin: 32, exercises: [],
+        cardio: { readout: 'pace', distanceKm: 6.4, calories: 410, avgHeartRate: 152 },
+      })),
+      NOW,
+    );
+    expect(today.cardioSessions).toHaveLength(1);
+    expect(today.cardioDistanceKm).toBeCloseTo(6.4);
+    expect(today.cardioCalories).toBe(410);
+    expect(today.cardioMinutes).toBe(32);
+    // The strength totals stay honestly zero rather than borrowing the run's.
+    expect(today.sets).toBe(0);
+    expect(today.volumeKg).toBe(0);
+  });
+
+  it('keeps sets and volume on a day that mixed lifting with a run', () => {
+    const today = buildTodayTraining(
+      history(
+        entry('w1', 3 * 3_600_000, { sets: 12, volumeKg: 5000, durationMin: 60 }),
+        entry('w2', 8 * 3_600_000, {
+          title: 'Running', sets: 0, volumeKg: 0, durationMin: 30, exercises: [],
+          cardio: { readout: 'pace', distanceKm: 5, calories: 300 },
+        }),
+      ),
+      NOW,
+    );
+    expect(today.sessions).toHaveLength(2);
+    expect(today.cardioSessions).toHaveLength(1);
+    expect(today.sets).toBe(12);
+    expect(today.volumeKg).toBe(5000);
+    expect(today.cardioDistanceKm).toBe(5);
+  });
+
   it('totals every session logged today', () => {
     const today = buildTodayTraining(
       history(

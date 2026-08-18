@@ -6,6 +6,7 @@ import { metricByKey } from '../derive/bodyMetrics';
 import { dayKey } from '../derive/buckets';
 import type { MuscleGroupId } from '../types';
 import { AtlasSheet } from './AtlasSheet';
+import { AtlasSessionRow } from './AtlasSessionRow';
 
 /**
  * What is behind a Today card.
@@ -234,20 +235,13 @@ export const AtlasTodayDetail: React.FC<{
       entries.length > 0 ? (
         <div className="at-card" style={{ padding: '8px 20px' }}>
           {entries.map((entry, i) => (
-            <button
+            <AtlasSessionRow
               key={entry.id}
-              className="at-routine-item"
-              style={{ borderTop: i === 0 ? 'none' : undefined, width: '100%' }}
+              entry={entry}
+              time={fmt.clock(entry.at)}
               onClick={() => { onClose(); onOpenSession(entry.id); }}
-            >
-              <span>
-                {entry.title}
-                <small>
-                  {fmt.clock(entry.at)} · {entry.durationMin} min · {tp('unit.sets', entry.sets)}
-                </small>
-              </span>
-              <b>{fmt.n(entry.volumeKg / 1000, 1)} {t('unit.tonnes')}</b>
-            </button>
+              first={i === 0}
+            />
           ))}
         </div>
       ) : (

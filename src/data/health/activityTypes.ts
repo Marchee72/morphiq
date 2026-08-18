@@ -34,15 +34,68 @@ const STRENGTH_PATTERNS: RegExp[] = [
  * source could not classify, so treating it as strength is what let an
  * 83-minute 'OTHER' record absorb 81 sets.
  */
-export function isStrengthActivity(type: string | undefined): boolean {
-  if (!type) return false;
-  const normalized = type
+function normalizeType(type: string): string {
+  return type
     .toLowerCase()
     .replace(/[_-]+/g, ' ')
     // Strip accents so 'musculación' matches the plain-ASCII pattern.
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .trim();
-  return STRENGTH_PATTERNS.some(pattern => pattern.test(normalized));
+}
+
+export function isStrengthActivity(type: string | undefined): boolean {
+  if (!type) return false;
+  return STRENGTH_PATTERNS.some(pattern => pattern.test(normalizeType(type)));
+}
+
+/**
+ * Activities whose distance is read as a pace — minutes per kilometre.
+ *
+ * Prefix matches rather than whole words, because sources spell the same
+ * activity as 'RUNNING', 'Outdoor Running' and 'run'. `\brun` catches all
+ * three without also matching 'running shoes'-style noise we never see here.
+ */
+const PACE_PATTERNS: RegExp[] = [
+  /\brun/,
+  /\bjog/,
+  /\bwalk/,
+  /\bhik/,
+  /\btrail/,
+  /\bcorrer\b/,        // Spanish-locale sources
+  /\btrote\b/,
+  /\bcaminata\b/,
+  /\bcaminar\b/,
+  /\bmarcha\b/,
+  /\bsenderismo\b/,
+];
+
+/** Activities whose distance is read as a speed — kilometres per hour. */
+const SPEED_PATTERNS: RegExp[] = [
+  /\bcycl/,
+  /\bbik/,
+  /\bcicl/,          // ciclismo
+  /\bbicicl/,        // bicicleta — the word boundary above stops short of it
+  /\bspinning\b/,
+  /\bskat/,
+  /\browing\b/,
+  /\bremo\b/,
+  /\bpatin/,
+];
+
+/**
+ * How to read an activity's distance, or null when distance is not the point.
+ *
+ * A run and a bike ride both record kilometres, but nobody reads a ride in
+ * minutes per kilometre or a run in km/h. Strength is checked first so a
+ * 'gym bike' style label does not get a pace it has no distance for.
+ */
+export function distanceReadout(type: string | undefined): 'pace' | 'speed' | null {
+  if (!type) return null;
+  const normalized = normalizeType(type);
+  if (STRENGTH_PATTERNS.some(pattern => pattern.test(normalized))) return null;
+  if (PACE_PATTERNS.some(pattern => pattern.test(normalized))) return 'pace';
+  if (SPEED_PATTERNS.some(pattern => pattern.test(normalized))) return 'speed';
+  return null;
 }
 
 /**

@@ -39,6 +39,12 @@ export const AtlasSessionDetail: React.FC<{
   }
 
   const feeling = FEELING_OPTIONS.find(f => f.id === detail.feeling);
+  const { cardio } = detail;
+  const rate = cardio?.readout === 'speed'
+    ? fmt.speed(cardio.distanceKm, detail.durationMin)
+    : cardio?.readout === 'pace'
+      ? fmt.pace(cardio.distanceKm, detail.durationMin)
+      : null;
 
   return (
     <AtlasSheet
@@ -48,23 +54,67 @@ export const AtlasSessionDetail: React.FC<{
       subtitle={`${fmt.dmy(detail.at)} · ${fmt.clock(detail.at)} · ${fmt.relativeDay(detail.at, now)}`}
       footer={<button className="at-btn" onClick={onClose}>{t('common.close')}</button>}
     >
+      {/* An activity and a lifting session answer different questions, so they
+          get different tiles. Only the ones with a number are rendered — a
+          treadmill run has no distance, and a dash in its place says nothing. */}
       <div className="at-summary-stats">
         <div>
           <b>{detail.durationMin}<i>min</i></b>
           <small>{t('summary.duration')}</small>
         </div>
-        <div>
-          <b>{fmt.n(detail.volumeKg)}<i>{t('unit.kg')}</i></b>
-          <small>{t('summary.volume')}</small>
-        </div>
-        <div>
-          <b>{detail.setsDone}</b>
-          <small>{t('summary.sets')}</small>
-        </div>
-        <div>
-          <b>{detail.exercises.length}</b>
-          <small>{t('summary.exercises')}</small>
-        </div>
+
+        {cardio ? (
+          <>
+            {cardio.distanceKm != null && (
+              <div>
+                <b>{fmt.n(cardio.distanceKm, 2)}<i>{t('unit.km')}</i></b>
+                <small>{t('cardio.distance')}</small>
+              </div>
+            )}
+            {rate && (
+              <div>
+                <b>{rate}</b>
+                <small>{cardio.readout === 'speed' ? t('cardio.speed') : t('cardio.pace')}</small>
+              </div>
+            )}
+            {cardio.calories != null && (
+              <div>
+                <b>{fmt.n(cardio.calories)}<i>{t('unit.kcal')}</i></b>
+                <small>{t('today.calories')}</small>
+              </div>
+            )}
+            {cardio.avgHeartRate != null && (
+              <div>
+                <b>{fmt.n(cardio.avgHeartRate)}<i>bpm</i></b>
+                <small>
+                  {t('cardio.avgHr')}
+                  {cardio.maxHeartRate != null && ` · ${t('cardio.maxHr', { n: fmt.n(cardio.maxHeartRate) })}`}
+                </small>
+              </div>
+            )}
+            {cardio.steps != null && (
+              <div>
+                <b>{fmt.n(cardio.steps)}</b>
+                <small>{t('today.steps')}</small>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div>
+              <b>{fmt.n(detail.volumeKg)}<i>{t('unit.kg')}</i></b>
+              <small>{t('summary.volume')}</small>
+            </div>
+            <div>
+              <b>{detail.setsDone}</b>
+              <small>{t('summary.sets')}</small>
+            </div>
+            <div>
+              <b>{detail.exercises.length}</b>
+              <small>{t('summary.exercises')}</small>
+            </div>
+          </>
+        )}
       </div>
 
       {feeling && (
@@ -80,7 +130,10 @@ export const AtlasSessionDetail: React.FC<{
         </div>
       )}
 
-      {detail.exercises.length > 0 ? (
+      {cardio ? (
+        // Not "no sets were logged" — for a run there were never sets to log.
+        <p className="at-summary-empty">{t('cardio.fromWatch')}</p>
+      ) : detail.exercises.length > 0 ? (
         <div className="at-past">
           {detail.exercises.map(exercise => {
             // Free-text exercises carry no catalogue entry, so there is nothing

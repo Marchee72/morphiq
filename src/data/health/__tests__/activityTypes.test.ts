@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { isStrengthActivity, logInterval, overlaps, MERGE_TOLERANCE_MS } from '../activityTypes';
+import {
+  distanceReadout, isStrengthActivity, logInterval, overlaps, MERGE_TOLERANCE_MS,
+} from '../activityTypes';
 
 describe('isStrengthActivity', () => {
   it('accepts the spellings Health Connect sources actually send', () => {
@@ -35,6 +37,37 @@ describe('isStrengthActivity', () => {
   it('treats a missing type as not strength', () => {
     expect(isStrengthActivity(undefined)).toBe(false);
     expect(isStrengthActivity('')).toBe(false);
+  });
+});
+
+describe('distanceReadout', () => {
+  it('reads foot activities as a pace', () => {
+    for (const type of [
+      'RUNNING', 'Outdoor Running', 'running', 'TREADMILL_RUNNING',
+      'WALKING', 'Caminata', 'Correr', 'HIKING', 'Senderismo', 'Trail Running',
+    ]) {
+      expect(distanceReadout(type), type).toBe('pace');
+    }
+  });
+
+  it('reads wheeled and rowed activities as a speed', () => {
+    for (const type of [
+      'BIKING', 'Cycling', 'Ciclismo', 'SPINNING', 'ROWING', 'Remo', 'Patinaje',
+    ]) {
+      expect(distanceReadout(type), type).toBe('speed');
+    }
+  });
+
+  it('gives lifting no readout — it covers no distance', () => {
+    for (const type of ['STRENGTH_TRAINING', 'Musculación', 'Gym', 'Pesas']) {
+      expect(distanceReadout(type), type).toBe(null);
+    }
+  });
+
+  it('gives no readout to activities that record no distance', () => {
+    for (const type of ['YOGA', 'OTHER', 'Workout', 'PILATES', undefined, '']) {
+      expect(distanceReadout(type), String(type)).toBe(null);
+    }
   });
 });
 

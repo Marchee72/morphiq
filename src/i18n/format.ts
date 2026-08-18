@@ -46,6 +46,17 @@ export interface Formatters {
   relativeDay(date: Date, now?: Date): string;
   /** '92.5 kg × 3' */
   kgReps(weightKg: number, reps: number): string;
+  /** '5.21 km' */
+  km(value: number): string;
+  /**
+   * Minutes per kilometre, as '5:42 /km'. Null when it cannot be computed —
+   * a treadmill run with no distance, or a zero-length record.
+   */
+  pace(distanceKm: number | undefined, minutes: number): string | null;
+  /** Kilometres per hour, as '24.3 km/h'. Null under the same conditions as `pace`. */
+  speed(distanceKm: number | undefined, minutes: number): string | null;
+  /** '148 bpm' */
+  bpm(value: number): string;
 }
 
 const LOCALE: Record<Lang, string> = { en: 'en-GB', es: 'es-ES' };
@@ -109,5 +120,22 @@ export function makeFormatters(lang: Lang): Formatters {
       return dayMonth.format(date);
     },
     kgReps: (weightKg, reps) => `${num(weightKg, weightKg % 1 === 0 ? 0 : 1)} kg × ${num(reps)}`,
+    km: value => `${num(value, 2)} km`,
+    // Both guard against a zero on either side: a record with no distance or no
+    // duration divides to Infinity, which renders as '∞ /km'.
+    pace: (distanceKm, minutes) => {
+      if (!distanceKm || distanceKm <= 0 || !minutes || minutes <= 0) return null;
+      const perKm = minutes / distanceKm;
+      const mins = Math.floor(perKm);
+      const secs = Math.round((perKm - mins) * 60);
+      // 4:60 is 5:00. Rounding the seconds up to a full minute has to carry.
+      const [m, s] = secs === 60 ? [mins + 1, 0] : [mins, secs];
+      return `${m}:${String(s).padStart(2, '0')} /km`;
+    },
+    speed: (distanceKm, minutes) => {
+      if (!distanceKm || distanceKm <= 0 || !minutes || minutes <= 0) return null;
+      return `${num(distanceKm / (minutes / 60), 1)} km/h`;
+    },
+    bpm: value => `${num(value)} bpm`,
   };
 }

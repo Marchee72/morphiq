@@ -283,8 +283,12 @@ app.post('/api/profiles/:id/restore', async (req, res) => {
 // ─── Measurements ─────────────────────────────────────────────────────────────
 app.get('/api/profiles/:id/measurements', async (req, res) => {
   try {
+    // Columns, not `*`: visceral fat, metabolic age, protein and body type were
+    // dropped from the model, and a stray `*` would put them back on the wire.
     const { rows } = await pool.query(
-      'SELECT * FROM measurements WHERE "profileId" = $1 ORDER BY timestamp ASC',
+      `SELECT id, "profileId", timestamp, weight, impedance, bmi, bmr,
+              "bodyFat", "bodyWater", "boneMass", "muscleMass"
+         FROM measurements WHERE "profileId" = $1 ORDER BY timestamp ASC`,
       [req.params.id]
     );
     res.json(rows.map(r => ({
@@ -292,8 +296,6 @@ app.get('/api/profiles/:id/measurements', async (req, res) => {
       weight: num(r.weight), impedance: num(r.impedance), bmi: num(r.bmi),
       bmr: num(r.bmr), bodyFat: num(r.bodyFat), bodyWater: num(r.bodyWater),
       boneMass: num(r.boneMass), muscleMass: num(r.muscleMass),
-      visceralFat: num(r.visceralFat), metabolicAge: num(r.metabolicAge),
-      protein: num(r.protein), bodyType: num(r.bodyType),
     })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -303,11 +305,10 @@ app.post('/api/measurements', ownBody, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO measurements ("profileId", timestamp, weight, impedance, bmi, bmr,
-        "bodyFat", "bodyWater", "boneMass", "muscleMass", "visceralFat", "metabolicAge", protein, "bodyType")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        "bodyFat", "bodyWater", "boneMass", "muscleMass")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [m.profileId, m.timestamp || new Date(), m.weight, m.impedance, m.bmi, m.bmr,
-       m.bodyFat, m.bodyWater, m.boneMass, m.muscleMass, m.visceralFat, m.metabolicAge,
-       m.protein, m.bodyType]
+       m.bodyFat, m.bodyWater, m.boneMass, m.muscleMass]
     );
     const r = rows[0];
     res.status(201).json({ ...r, id: r.id.toString() });
@@ -384,6 +385,7 @@ app.get('/api/profiles/:id/workout-logs', async (req, res) => {
       duration: num(r.duration),
       caloriesBurned: num(r.caloriesBurned),
       distanceKm: num(r.distanceKm),
+      steps: num(r.steps),
       avgHeartRate: num(r.avgHeartRate),
       maxHeartRate: num(r.maxHeartRate)
     })));
@@ -394,8 +396,8 @@ app.post('/api/workout-logs', ownBody, async (req, res) => {
   const w = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO workout_logs ("profileId", timestamp, type, description, duration, "caloriesBurned", "distanceKm", "avgHeartRate", "maxHeartRate", "source", "externalId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      `INSERT INTO workout_logs ("profileId", timestamp, type, description, duration, "caloriesBurned", "distanceKm", steps, "avgHeartRate", "maxHeartRate", "source", "externalId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
       [
         w.profileId,
         w.timestamp || new Date(),
@@ -404,6 +406,7 @@ app.post('/api/workout-logs', ownBody, async (req, res) => {
         w.duration,
         w.caloriesBurned,
         w.distanceKm,
+        w.steps,
         w.avgHeartRate,
         w.maxHeartRate,
         w.source || 'manual',
@@ -417,6 +420,7 @@ app.post('/api/workout-logs', ownBody, async (req, res) => {
       duration: num(r.duration),
       caloriesBurned: num(r.caloriesBurned),
       distanceKm: num(r.distanceKm),
+      steps: num(r.steps),
       avgHeartRate: num(r.avgHeartRate),
       maxHeartRate: num(r.maxHeartRate)
     });
@@ -428,10 +432,10 @@ app.put('/api/workout-logs/:id', guardRow(pool, 'workout_logs'), ownBody, async 
   try {
     const { rows } = await pool.query(
       `UPDATE workout_logs 
-       SET "profileId" = $1, timestamp = $2, type = $3, description = $4, duration = $5, 
-           "caloriesBurned" = $6, "distanceKm" = $7, "avgHeartRate" = $8, "maxHeartRate" = $9, 
-           "source" = $10, "externalId" = $11
-       WHERE id = $12 RETURNING *`,
+       SET "profileId" = $1, timestamp = $2, type = $3, description = $4, duration = $5,
+           "caloriesBurned" = $6, "distanceKm" = $7, steps = $8, "avgHeartRate" = $9, "maxHeartRate" = $10,
+           "source" = $11, "externalId" = $12
+       WHERE id = $13 RETURNING *`,
       [
         w.profileId,
         w.timestamp,
@@ -440,6 +444,7 @@ app.put('/api/workout-logs/:id', guardRow(pool, 'workout_logs'), ownBody, async 
         w.duration,
         w.caloriesBurned,
         w.distanceKm,
+        w.steps,
         w.avgHeartRate,
         w.maxHeartRate,
         w.source || 'manual',
@@ -457,6 +462,7 @@ app.put('/api/workout-logs/:id', guardRow(pool, 'workout_logs'), ownBody, async 
       duration: num(r.duration),
       caloriesBurned: num(r.caloriesBurned),
       distanceKm: num(r.distanceKm),
+      steps: num(r.steps),
       avgHeartRate: num(r.avgHeartRate),
       maxHeartRate: num(r.maxHeartRate)
     });

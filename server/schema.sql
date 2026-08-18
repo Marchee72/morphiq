@@ -23,12 +23,16 @@ CREATE TABLE IF NOT EXISTS measurements (
   "bodyFat" NUMERIC,
   "bodyWater" NUMERIC,
   "boneMass" NUMERIC,
-  "muscleMass" NUMERIC,
-  "visceralFat" NUMERIC,
-  "metabolicAge" NUMERIC,
-  protein NUMERIC,
-  "bodyType" NUMERIC
+  "muscleMass" NUMERIC
 );
+
+-- Visceral fat, metabolic age, protein % and body type were dropped: Health
+-- Connect has no record for any of them, so nothing ever measured them — they
+-- came from reverse engineered scale formulas over height/weight/age/sex.
+ALTER TABLE measurements DROP COLUMN IF EXISTS "visceralFat";
+ALTER TABLE measurements DROP COLUMN IF EXISTS "metabolicAge";
+ALTER TABLE measurements DROP COLUMN IF EXISTS protein;
+ALTER TABLE measurements DROP COLUMN IF EXISTS "bodyType";
 
 CREATE TABLE IF NOT EXISTS food_logs (
   id SERIAL PRIMARY KEY,
@@ -51,6 +55,7 @@ CREATE TABLE IF NOT EXISTS workout_logs (
   duration NUMERIC,
   "caloriesBurned" NUMERIC,
   "distanceKm" NUMERIC,
+  steps NUMERIC,
   "avgHeartRate" NUMERIC,
   "maxHeartRate" NUMERIC,
   "source" TEXT DEFAULT 'manual',
@@ -90,6 +95,7 @@ ALTER TABLE workout_logs ADD COLUMN IF NOT EXISTS "avgHeartRate" NUMERIC;
 ALTER TABLE workout_logs ADD COLUMN IF NOT EXISTS "maxHeartRate" NUMERIC;
 ALTER TABLE workout_logs ADD COLUMN IF NOT EXISTS "source" TEXT DEFAULT 'manual';
 ALTER TABLE workout_logs ADD COLUMN IF NOT EXISTS "externalId" TEXT;
+ALTER TABLE workout_logs ADD COLUMN IF NOT EXISTS steps NUMERIC;
 ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS "trainingProfile" TEXT;
 ALTER TABLE workout_sets ADD COLUMN IF NOT EXISTS "notes" TEXT;
 

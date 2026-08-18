@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkoutLog } from '../../../core/entities/WorkoutLog';
 import type { WorkoutSet } from '../../../core/entities/WorkoutSet';
-import { buildHistory, buildWeeklyStats, buildWeeklyVolume, totalVolume } from '../history';
+import { buildCardio, buildHistory, buildWeeklyStats, buildWeeklyVolume, totalVolume } from '../history';
 
 const NOW = new Date(2026, 6, 27, 12);
 const DAY = 86_400_000;
@@ -30,8 +30,81 @@ describe('totalVolume', () => {
   });
 });
 
+describe('buildCardio', () => {
+  const run = (over: Partial<WorkoutLog> = {}) => log('w1', 0, {
+    type: 'Running', duration: 32, distanceKm: 6.4,
+    avgHeartRate: 152, maxHeartRate: 171, steps: 5840, source: 'health-connect', ...over,
+  });
+
+  it('carries the activity numbers of a session with no sets', () => {
+    expect(buildCardio(run(), 0)).toEqual({
+      readout: 'pace',
+      distanceKm: 6.4,
+      calories: 400,
+      avgHeartRate: 152,
+      maxHeartRate: 171,
+      steps: 5840,
+    });
+  });
+
+  it('reads a ride as a speed', () => {
+    expect(buildCardio(run({ type: 'Cycling' }), 0)?.readout).toBe('speed');
+  });
+
+  it('yields nothing when the session has logged sets — those are the point', () => {
+    // A gym session whose calories the watch also recorded is still a gym
+    // session; cardio tiles would bury the sets.
+    expect(buildCardio(run(), 12)).toBeUndefined();
+  });
+
+  it('yields nothing when there are no activity numbers to show', () => {
+    const bare = log('w1', 0, {
+      type: 'Yoga', caloriesBurned: undefined, distanceKm: undefined,
+      avgHeartRate: undefined, steps: undefined,
+    });
+    expect(buildCardio(bare, 0)).toBeUndefined();
+  });
+
+  it('drops a zero rather than showing an empty tile', () => {
+    // Health Connect sent no calories for a real 6.56 km run, and the import
+    // stores `w.calories || 0` — which surfaced as a "0 kcal" tile on the phone.
+    const noCalories = buildCardio(run({ caloriesBurned: 0 }), 0);
+    expect(noCalories?.calories).toBeUndefined();
+    expect(noCalories?.distanceKm).toBe(6.4);
+
+    const noHr = buildCardio(run({ avgHeartRate: 0, maxHeartRate: 0, steps: 0 }), 0);
+    expect(noHr?.avgHeartRate).toBeUndefined();
+    expect(noHr?.steps).toBeUndefined();
+  });
+
+  it('yields nothing when every number is zero', () => {
+    const empty = run({
+      distanceKm: 0, caloriesBurned: 0, avgHeartRate: 0, maxHeartRate: 0, steps: 0,
+    });
+    expect(buildCardio(empty, 0)).toBeUndefined();
+  });
+
+  it('keeps a distance-less activity that still burned calories', () => {
+    const yoga = log('w1', 0, { type: 'Yoga', caloriesBurned: 180 });
+    expect(buildCardio(yoga, 0)).toMatchObject({ readout: null, calories: 180 });
+  });
+});
+
 describe('buildHistory', () => {
   const setsByLog = { w1: [set('a'), set('b', { weight: 80, reps: 5 })] };
+
+  it('marks a synced run as an activity, and a lifted session as not', () => {
+    const entries = buildHistory(
+      [log('w1', 1), log('w2', 2, { type: 'Running', distanceKm: 6.4, source: 'health-connect' })],
+      setsByLog,
+    );
+    const byId = Object.fromEntries(entries.map(e => [e.id, e]));
+    expect(byId.w1.cardio).toBeUndefined();
+    expect(byId.w2.cardio).toMatchObject({ readout: 'pace', distanceKm: 6.4 });
+    // The run still reports zero sets and zero volume — it just no longer
+    // depends on those being read as the headline.
+    expect(byId.w2.sets).toBe(0);
+  });
 
   it('returns sessions newest first', () => {
     const entries = buildHistory([log('w1', 5), log('w2', 1)], {});

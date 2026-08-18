@@ -5,8 +5,35 @@ import type { UserProfile } from '../../core/entities/UserProfile';
 import type { Workout, HeartRateSample } from 'capacitor-health';
 import { getAge } from '../../core/entities/UserProfile';
 import { BodyComposition } from './BodyCompositionPlugin';
-import { BiaCalculator } from '../calculation/BiaCalculator';
+import { BiaCalculator, NEUTRAL_IMPEDANCE } from '../calculation/BiaCalculator';
 import { Capacitor } from '@capacitor/core';
+
+/**
+ * Health Connect's permission dialog does not always answer.
+ *
+ * The native side resolves the call it saved before launching the dialog, and
+ * an activity recreated while that dialog is up loses the call — the promise
+ * then never settles, in either direction, so a `catch` never runs either.
+ * Awaiting it directly wedged the entire sync: `requestPermissions` never
+ * returned, and every import sits behind its answer.
+ *
+ * Long enough for someone to actually read a Health Connect dialog, short
+ * enough that a dropped reply costs one sync instead of every sync.
+ */
+const PERMISSION_DIALOG_TIMEOUT_MS = 60_000;
+
+function settleWithin<T>(work: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    work,
+    new Promise<null>(resolve => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
+/** Either of these means Health Connect will hand over a weigh-in. */
+const BODY_READ_PERMISSIONS = [
+  'android.permission.health.READ_WEIGHT',
+  'android.permission.health.READ_BODY_FAT',
+];
 
 /** `YYYY-MM-DD` in the phone's own timezone — the day a user would call it. */
 export function localDayKey(date: Date): string {
@@ -24,6 +51,12 @@ export class CapacitorHealthProvider implements IHealthProvider {
     );
   }
 
+  /** What Health Connect says is granted right now, not what a dialog returned. */
+  private async hasBodyReadAccess(): Promise<boolean> {
+    const status = await settleWithin(BodyComposition.checkPermissions(), PERMISSION_DIALOG_TIMEOUT_MS);
+    return BODY_READ_PERMISSIONS.some(p => status?.permissions?.[p] === true);
+  }
+
   async requestPermissions(): Promise<boolean> {
     if (!this.isAvailable()) return false;
     try {
@@ -34,37 +67,45 @@ export class CapacitorHealthProvider implements IHealthProvider {
       });
 
       // Request BodyComposition permissions if native
+      let bodyGranted = false;
       if (Capacitor.isNativePlatform()) {
         try {
-          const perms = await BodyComposition.checkPermissions();
-          const hasWeight = perms?.permissions?.['android.permission.health.READ_WEIGHT'] === true;
-          const hasFat = perms?.permissions?.['android.permission.health.READ_BODY_FAT'] === true;
-          
-          if (!hasWeight || !hasFat) {
+          if (!(await this.hasBodyReadAccess())) {
             // Delay to avoid Android activity transition intent clashing
             await new Promise(resolve => setTimeout(resolve, 800));
-            await BodyComposition.requestPermissions();
+            await settleWithin(BodyComposition.requestPermissions(), PERMISSION_DIALOG_TIMEOUT_MS);
           }
+          // Re-read rather than trust the dialog's own reply: it is the one
+          // thing that is still right when the reply went missing.
+          bodyGranted = await this.hasBodyReadAccess();
         } catch (e) {
           console.warn('MorphIQ: BodyComposition permissions request warning:', e);
         }
       }
 
-      if (!result || !result.permissions) return false;
-      
       const permissionsMap: Record<string, boolean> = {};
-      if (Array.isArray(result.permissions)) {
+      if (Array.isArray(result?.permissions)) {
         result.permissions.forEach(p => {
           const key = Object.keys(p)[0];
           if (key) {
             permissionsMap[key] = p[key];
           }
         });
-      } else {
+      } else if (result?.permissions) {
         Object.assign(permissionsMap, result.permissions);
       }
 
-      return permissionsMap['READ_WORKOUTS'] === true;
+      /**
+       * Any granted read is enough to call the sync on.
+       *
+       * This asked for `READ_WORKOUTS` alone, and both callers gate all three
+       * imports on the answer — so granting weight but refusing exercise synced
+       * nothing at all, weigh-ins included, which have nothing to do with
+       * exercise permission. Each import already checks what it needs and
+       * returns an empty list when it is missing, so a false negative here is
+       * the only way to lose data that Health Connect was willing to give.
+       */
+      return bodyGranted || Object.values(permissionsMap).some(Boolean);
     } catch (e) {
       console.error('Failed to request health permissions:', e);
       return false;
@@ -106,6 +147,8 @@ export class CapacitorHealthProvider implements IHealthProvider {
           description: w.sourceName ? `${w.workoutType || 'Workout'} via ${w.sourceName}` : 'Synced Activity',
           caloriesBurned: Math.round(w.calories || 0),
           distanceKm: w.distance ? parseFloat((w.distance / 1000).toFixed(2)) : undefined,
+          // Already requested via `includeSteps` above; it was being dropped here.
+          steps: w.steps || undefined,
           avgHeartRate,
           maxHeartRate,
           source: 'health-connect',
@@ -189,38 +232,26 @@ export class CapacitorHealthProvider implements IHealthProvider {
           
           // Derived body metrics calculations matching watch inputs
           const leanMass = hasBia ? (r.leanMass || (weight - (weight * bodyFat / 100))) : 0;
-          const boneMass = hasBia ? (r.boneMass || BiaCalculator.getBoneMass(weight, height, age, gender, 500)) : 0;
-          
-          const bodyWater = hasBia 
-            ? (r.bodyWaterMass 
-              ? (r.bodyWaterMass / weight) * 100 
-              : BiaCalculator.getWaterPercentage(weight, height, age, gender, 500))
+          const boneMass = hasBia ? (r.boneMass || BiaCalculator.getBoneMass(weight, height, age, gender, NEUTRAL_IMPEDANCE)) : 0;
+
+          const bodyWater = hasBia
+            ? (r.bodyWaterMass
+              ? (r.bodyWaterMass / weight) * 100
+              : BiaCalculator.getWaterPercentage(weight, height, age, gender, NEUTRAL_IMPEDANCE))
             : 0;
 
           const muscleMass = hasBia ? Math.max(10, Math.min(120, leanMass - boneMass)) : 0;
 
-          const bmi = BiaCalculator.getBMI(weight, height);
-          const bmr = BiaCalculator.getBMR(weight, height, age, gender);
-          const visceralFat = hasBia ? BiaCalculator.getVisceralFat(weight, height, age, gender) : 0;
-          const protein = hasBia ? Math.max(5, Math.min(32, (muscleMass / weight) * 100 - bodyWater)) : 0;
-
-          const metabolicAge = hasBia ? BiaCalculator.getMetabolicAge(weight, height, age, gender, 500) : 0;
-          const bodyType = hasBia ? BiaCalculator.getBodyType(weight, height, age, gender, 500) : 4;
-
           return {
             timestamp: new Date(r.timestamp),
             weight,
-            impedance: hasBia ? 500 : 0, // Sync neutral fallback impedance
-            bmi,
-            bmr,
+            impedance: hasBia ? NEUTRAL_IMPEDANCE : 0,
+            bmi: BiaCalculator.getBMI(weight, height),
+            bmr: BiaCalculator.getBMR(weight, height, age, gender),
             bodyFat,
             bodyWater,
             boneMass,
             muscleMass,
-            visceralFat,
-            metabolicAge,
-            protein,
-            bodyType,
           };
         });
     } catch (e) {

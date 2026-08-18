@@ -1,9 +1,10 @@
 import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
-import type { FeelingId, HistoryEntryVM } from '../types';
+import type { CardioVM, FeelingId, HistoryEntryVM } from '../types';
 import { isCountedSet } from './muscleLoad';
 import { normalizeName } from './records';
 import { weeklyBuckets } from './buckets';
+import { distanceReadout } from '../../data/health/activityTypes';
 
 export function setVolume(set: WorkoutSet): number {
   if (!isCountedSet(set)) return 0;
@@ -30,6 +31,41 @@ function distinctExercises(sets: WorkoutSet[]): string[] {
     if (!byKey.has(key)) byKey.set(key, name);
   }
   return [...byKey.values()];
+}
+
+/**
+ * The activity numbers of a session, when they are the ones worth showing.
+ *
+ * Two conditions, both necessary. A session with logged sets is a strength
+ * session even if the watch also recorded its calories — the sets are the point,
+ * and a run's tiles would bury them. And a session with no activity numbers at
+ * all gets nothing rather than a row of dashes.
+ *
+ * Reads the log, not the sets: Health Connect never sends sets, so the log is
+ * where a synced activity actually keeps its distance and heart rate.
+ */
+export function buildCardio(log: WorkoutLog, countedSets: number): CardioVM | undefined {
+  if (countedSets > 0) return undefined;
+
+  /**
+   * Zero is absent, not measured. `importWorkouts` stores
+   * `Math.round(w.calories || 0)`, so a source that reports no calories writes a
+   * 0 — and a "0 kcal" tile is the same noise as the "0 sets" this replaced.
+   * None of these fields has a meaningful zero: a run of 0 km did not happen.
+   */
+  const cardio: CardioVM = {
+    readout: distanceReadout(log.type),
+    distanceKm: log.distanceKm || undefined,
+    calories: log.caloriesBurned || undefined,
+    avgHeartRate: log.avgHeartRate || undefined,
+    maxHeartRate: log.maxHeartRate || undefined,
+    steps: log.steps || undefined,
+  };
+
+  const hasNumbers = cardio.distanceKm != null || cardio.calories != null
+    || cardio.avgHeartRate != null || cardio.steps != null;
+
+  return hasNumbers ? cardio : undefined;
 }
 
 /**
@@ -61,6 +97,7 @@ export function buildHistory(
         feeling: log.feelingTag as FeelingId | undefined,
         prs: counted.filter(s => s.id && prSetIds.has(s.id)).length,
         exercises: distinctExercises(counted),
+        cardio: buildCardio(log, counted.length),
       };
     });
 }

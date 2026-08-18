@@ -26,6 +26,8 @@ export function buildTodayTraining(history: HistoryEntryVM[], now: Date): TodayT
     }
   }
 
+  const cardioSessions = today.filter(entry => entry.cardio);
+
   return {
     sessions: today,
     exercises: [...exercises.values()],
@@ -33,6 +35,10 @@ export function buildTodayTraining(history: HistoryEntryVM[], now: Date): TodayT
     volumeKg: today.reduce((total, entry) => total + entry.volumeKg, 0),
     minutes: today.reduce((total, entry) => total + entry.durationMin, 0),
     prs: today.reduce((total, entry) => total + entry.prs, 0),
+    cardioSessions,
+    cardioDistanceKm: cardioSessions.reduce((total, e) => total + (e.cardio?.distanceKm ?? 0), 0),
+    cardioCalories: cardioSessions.reduce((total, e) => total + (e.cardio?.calories ?? 0), 0),
+    cardioMinutes: cardioSessions.reduce((total, e) => total + e.durationMin, 0),
     previous,
     daysSincePrevious: previous
       ? Math.round((startOfDay(now).getTime() - startOfDay(previous.at).getTime()) / MS_PER_DAY)
