@@ -12,7 +12,7 @@ import type { FeelingId, SessionCursor, SessionSetVM } from '../types';
 import type { Exercise } from '../../core/entities/Exercise';
 import { AtlasGymHub } from './AtlasGymHub';
 import { AtlasSessionEditor } from './AtlasSessionEditor';
-import { AtlasStates } from './AtlasStates';
+import { AtlasSessionStart } from './AtlasSessionStart';
 import { AtlasDial } from './AtlasDial';
 import { AtlasSetList } from './AtlasSetList';
 import { AtlasSharedStrip } from './AtlasSharedStrip';
@@ -110,12 +110,28 @@ export const AtlasTrain: React.FC = () => {
     const endedAt = finishingAt ?? new Date();
     setFinishingAt(null);
     live.setFeeling(feeling, session.bodyNotes);
-    showSummary(buildSessionSummary(
-      { ...session, feelingTag: feeling },
-      sessionExercises,
-      sessionTotals,
-      endedAt,
-    ));
+
+    /**
+     * A session with nothing logged is discarded rather than filed, so there is
+     * no recap to give — the same reason a failed write pulls the summary back
+     * down.
+     *
+     * Read off the store rather than `sessionTotals`, which cannot answer this:
+     * `setsPlanned` counts the routine's target sets whether or not any were
+     * logged, so a three-exercise routine reports nine while the session holds
+     * none, and `setsDone` counts only ticked sets, so it reports none for a
+     * session that does have rows and will be saved. This is the same array the
+     * guard in `finishActiveSession` decides on.
+     */
+    const willBeSaved = (useStore.getState().activeSession?.sets.length ?? 0) > 0;
+    if (willBeSaved) {
+      showSummary(buildSessionSummary(
+        { ...session, feelingTag: feeling },
+        sessionExercises,
+        sessionTotals,
+        endedAt,
+      ));
+    }
     try {
       await live.finish();
     } catch {
@@ -171,11 +187,8 @@ export const AtlasTrain: React.FC = () => {
     return (
       <>
         {header}
-        <AtlasStates
-          title={t('train.noExercises')}
-          body={t('train.noExercisesSub')}
-          action={{ label: t('train.addExercise'), onClick: () => actions.openOverlay('exercisePicker') }}
-        />
+        <AtlasSessionStart />
+        <div className="at-train-spacer" />
         {sheets}
       </>
     );

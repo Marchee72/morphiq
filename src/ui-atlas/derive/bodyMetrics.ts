@@ -55,20 +55,22 @@ export const METRIC_SPECS: readonly MetricSpec[] = [
   },
   { key: 'bmi', read: field('bmi'), labelKey: 'body.metric.bmi', unitKey: 'unit.kgm2', decimals: 1, lowerIsBetter: 'goal' },
   { key: 'bodyWater', read: field('bodyWater'), labelKey: 'body.metric.bodyWater', unitKey: 'unit.pct', decimals: 1, lowerIsBetter: false },
-  { key: 'visceralFat', read: field('visceralFat'), labelKey: 'body.metric.visceralFat', unitKey: 'unit.idx', decimals: 0, lowerIsBetter: true },
   { key: 'bmr', read: field('bmr'), labelKey: 'body.metric.bmr', unitKey: 'unit.kcal', decimals: 0, lowerIsBetter: false },
-  { key: 'metabolicAge', read: field('metabolicAge'), labelKey: 'body.metric.metabolicAge', unitKey: 'unit.yr', decimals: 0, lowerIsBetter: true },
-  { key: 'protein', read: field('protein'), labelKey: 'body.metric.protein', unitKey: 'unit.pct', decimals: 1, lowerIsBetter: false },
 ] as const;
 
 /**
  * Which metrics a scale actually measures.
  *
  * Health Connect carries weight, body fat, lean mass, bone mass and body water
- * mass. Everything else `CapacitorHealthProvider` produces comes out of
- * `BiaCalculator` against a hardcoded 500 Ω impedance — a formula over
- * height/age/sex, not a reading. The detail sheet says which is which rather
- * than presenting a computed metabolic age as something the scale weighed.
+ * mass. What is left over — BMI and BMR — is derived, and the detail sheet says
+ * so rather than presenting a formula as something the scale weighed.
+ *
+ * Visceral fat, metabolic age and protein % used to sit on the other side of
+ * this line. They were not merely derived, they were unmeasurable: Health
+ * Connect has no record for any of them, so they came from reverse engineered
+ * scale formulas over height/age/sex with impedance pinned at a constant.
+ * Labelling them "derived" was not enough when the underlying reading did not
+ * exist at all, so they were removed. See `Measurement`.
  */
 const MEASURED_KEYS = new Set<MetricKey>(['weight', 'bodyFat', 'muscleMass', 'muscleMassPct', 'bodyWater']);
 

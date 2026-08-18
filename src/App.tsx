@@ -171,14 +171,33 @@ function App() {
       } catch (err) { console.warn('Body composition sync failed', err); }
     };
 
+    /**
+     * Activities the watch recorded, over the window history is drawn for.
+     *
+     * Same reasoning as `readBodyComposition` above, for the same reason: this
+     * used to run once per launch, so finishing a session on the watch and
+     * returning to a backgrounded app showed nothing until you killed it — which
+     * is the moment you go to Settings and press Sync by hand. Re-running is
+     * idempotent: `importWorkouts` dedupes on `externalId` against the 30 days
+     * already in the database, and the merge into a manual session moves that
+     * `externalId` onto the survivor so a repeat import matches it too.
+     */
+    const readWorkouts = async () => {
+      if (!permitted) return;
+      try {
+        const since = new Date();
+        since.setDate(since.getDate() - WORKOUT_HISTORY_DAYS);
+        const workouts = await healthProvider.importWorkouts(since);
+        if (!cancelled) await useStore.getState().importWorkouts(workouts);
+      } catch (err) { console.warn('Workout sync failed', err); }
+    };
+
     const autoSync = async () => {
       try {
         permitted = await healthProvider.requestPermissions();
         if (permitted) {
-          const since = new Date(); since.setDate(since.getDate() - WORKOUT_HISTORY_DAYS);
-          const workouts = await healthProvider.importWorkouts(since);
           await readBodyComposition();
-          await useStore.getState().importWorkouts(workouts);
+          await readWorkouts();
           await readSteps();
         }
       } catch (err) { console.error('Health sync error:', err); }
@@ -186,8 +205,14 @@ function App() {
     autoSync();
 
     const resumed = CapApp.addListener('resume', () => {
+      // Nothing was granted at launch, so there is nothing to re-read — ask
+      // again instead. Granting in Health Connect means leaving the app and
+      // coming back, and this is that moment: without it, permission given from
+      // its settings screen did nothing until the app was killed and relaunched.
+      if (!permitted) { void autoSync(); return; }
       void readSteps();
       void readBodyComposition();
+      void readWorkouts();
     });
     return () => {
       cancelled = true;

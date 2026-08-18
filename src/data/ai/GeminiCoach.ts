@@ -299,11 +299,7 @@ ${profile.availableEquipment && profile.availableEquipment.length > 0
 - Muscle Mass: ${latestMeasurement.muscleMass.toFixed(2)} kg
 - Bone Mass: ${latestMeasurement.boneMass.toFixed(2)} kg
 - Water %: ${latestMeasurement.bodyWater.toFixed(2)}%
-- Visceral Fat Index: ${latestMeasurement.visceralFat.toFixed(2)}
 - BMR: ${latestMeasurement.bmr.toFixed(2)} kcal/day
-- Metabolic Age: ${latestMeasurement.metabolicAge.toFixed(2)} years
-- Protein: ${latestMeasurement.protein.toFixed(2)}%
-- Body Type Index: ${latestMeasurement.bodyType}
 `;
   } else {
     prompt += `No measurements logged yet. Prompt the user to step on their scale to sync their metrics.\n`;

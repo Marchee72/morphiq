@@ -213,6 +213,33 @@ describe('Train — finishing', () => {
     await waitFor(() => expect(useStore.getState().activeSession).toBeNull());
   });
 
+  /**
+   * Finishing a session you logged nothing into used to file a "0 sets
+   * completed" workout and recap it. Both halves are wrong: the workout never
+   * happened, and the recap describes a record that no longer exists.
+   *
+   * The routine here plans three sets deliberately — `sessionTotals.setsPlanned`
+   * reports three for it, so a guard reading that would still show the summary.
+   */
+  it('files nothing and shows no recap for a session with nothing logged', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: { exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 3 }], sets: [] },
+    });
+
+    // With nothing logged the stage has no Finish of its own; it lives in the
+    // session editor, the same route the unlogged-sets warning test takes.
+    fireEvent.click(screen.getAllByRole('button', { name: /edit session/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /finish session/i }));
+    await waitFor(() => expect(text()).toMatch(/finish this session/i));
+    fireEvent.click(screen.getByRole('button', { name: /finish and save/i }));
+
+    // The session still ends — Finish was pressed and the user expects out.
+    await waitFor(() => expect(useStore.getState().activeSession).toBeNull());
+    expect(useSessionSummary.getState().summary).toBeNull();
+    expect(await db.workoutLogs.count()).toBe(0);
+  });
+
   it('records how the session felt at the point you can answer it', async () => {
     renderScreen('train', { data: 'rich', session: finishedSession });
 

@@ -371,11 +371,7 @@ describe('Zustand store state management', () => {
         bodyWater: 58.0,
         boneMass: 3.5,
         muscleMass: 67.5,
-        visceralFat: 6,
-        metabolicAge: 30,
-        protein: 21.0,
-        bodyType: 5,
-      }
+        }
     ]);
 
     const afterImportStore = useStore.getState();
@@ -394,11 +390,7 @@ describe('Zustand store state management', () => {
         bodyWater: 58.0,
         boneMass: 3.5,
         muscleMass: 67.5,
-        visceralFat: 6,
-        metabolicAge: 30,
-        protein: 21.0,
-        bodyType: 5,
-      }
+        }
     ]);
 
     const finalStore = useStore.getState();
@@ -651,6 +643,32 @@ describe('finishing the active session', () => {
         ],
       },
     });
+  });
+
+  /**
+   * Finishing used to file the log whatever was in it, so opening the gym and
+   * backing out through Finish left a "0 sets completed" workout in history,
+   * counting toward the streak. Three of them reached production.
+   */
+  it('discards a session with nothing logged instead of filing it', async () => {
+    useStore.setState({
+      activeSession: {
+        startTime: new Date(Date.now() - 5 * 60_000),
+        workoutType: 'Push A',
+        routineExercises: [{ id: 'e1', exerciseName: 'Bench Press', targetSets: 2 }],
+        sets: [],
+      },
+    });
+
+    await useStore.getState().finishActiveSession();
+
+    expect(await db.workoutLogs.count()).toBe(0);
+    expect(await db.workoutSets.count()).toBe(0);
+    // Still ends the session — the user pressed Finish and expects to be out.
+    expect(useStore.getState().activeSession).toBeNull();
+    expect(useStore.getState().isGymModeOpen).toBe(false);
+    // The guard returns before the flag is raised, so nothing is left latched.
+    expect(useStore.getState().isFinishingSession).toBe(false);
   });
 
   it('writes the workout and every set of it', async () => {

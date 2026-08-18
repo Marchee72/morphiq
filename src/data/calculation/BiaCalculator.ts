@@ -1,5 +1,17 @@
 import type { Measurement } from '../../core/entities/Measurement';
 
+/**
+ * The impedance to assume when a reading arrives without one.
+ *
+ * Health Connect carries no impedance field, and nobody types one in by hand —
+ * but half the formulas here need a number. 500 Ω sits in the middle of the
+ * adult range, so it shifts the derived figures as little as any single value
+ * can. Every metric computed from it is a formula over height/age/sex, not a
+ * measurement, which is why `isMeasured` in `bodyMetrics.ts` keeps them apart in
+ * the UI.
+ */
+export const NEUTRAL_IMPEDANCE = 500;
+
 export class BiaCalculator {
   // Clamp value to boundaries
   private static checkValueOverflow(value: number, minimum: number, maximum: number): number {
@@ -138,35 +150,6 @@ export class BiaCalculator {
     return this.checkValueOverflow(muscleMass, 10, 120);
   }
 
-  // Get Visceral Fat Index
-  public static getVisceralFat(
-    weight: number,
-    height: number,
-    age: number,
-    gender: 'male' | 'female'
-  ): number {
-    let vfal: number;
-    if (gender === 'female') {
-      if (weight > (13 - (height * 0.5)) * -1) {
-        const subsubcalc = ((height * 1.45) + (height * 0.1158) * height) - 120;
-        const subcalc = weight * 500 / subsubcalc;
-        vfal = (subcalc - 6) + (age * 0.07);
-      } else {
-        const subcalc = 0.691 + (height * -0.0024) + (height * -0.0024);
-        vfal = (((height * 0.027) - (subcalc * weight)) * -1) + (age * 0.07) - age;
-      }
-    } else {
-      if (height < weight * 1.6) {
-        const subcalc = ((height * 0.4) - (height * (height * 0.0826))) * -1;
-        vfal = ((weight * 305) / (subcalc + 48)) - 2.9 + (age * 0.15);
-      } else {
-        const subcalc = 0.765 + height * -0.0015;
-        vfal = (((height * 0.143) - (weight * subcalc)) * -1) + (age * 0.15) - 5.0;
-      }
-    }
-
-    return this.checkValueOverflow(vfal, 1, 50);
-  }
 
   // Get BMR
   public static getBMR(
@@ -187,37 +170,7 @@ export class BiaCalculator {
     return this.checkValueOverflow(bmr, 500, 10000);
   }
 
-  // Get Metabolic Age
-  public static getMetabolicAge(
-    weight: number,
-    height: number,
-    age: number,
-    gender: 'male' | 'female',
-    impedance: number
-  ): number {
-    let metabolicAge: number;
-    if (gender === 'female') {
-      metabolicAge = (height * -1.1165) + (weight * 1.5784) + (age * 0.4615) + (impedance * 0.0415) + 83.2548;
-    } else {
-      metabolicAge = (height * -0.7471) + (weight * 0.9161) + (age * 0.4184) + (impedance * 0.0517) + 54.2267;
-    }
-    return Math.floor(this.checkValueOverflow(metabolicAge, 15, 80));
-  }
 
-  // Get Protein Percentage
-  public static getProteinPercentage(
-    weight: number,
-    height: number,
-    age: number,
-    gender: 'male' | 'female',
-    impedance: number
-  ): number {
-    const muscle = this.getMuscleMass(weight, height, age, gender, impedance);
-    const water = this.getWaterPercentage(weight, height, age, gender, impedance);
-    const proteinPercentage = (muscle / weight) * 100 - water;
-
-    return this.checkValueOverflow(proteinPercentage, 5, 32);
-  }
 
   // Get BMI
   public static getBMI(weight: number, height: number): number {
@@ -270,35 +223,6 @@ export class BiaCalculator {
     return gender === 'female' ? [21.0, 28.0, 35.0, 40.0] : [11.0, 17.0, 22.0, 27.0]; // default fallback
   }
 
-  // Get Body Type (0-8 index)
-  public static getBodyType(
-    weight: number,
-    height: number,
-    age: number,
-    gender: 'male' | 'female',
-    impedance: number
-  ): number {
-    const fat = this.getFatPercentage(weight, height, age, gender, impedance);
-    const muscle = this.getMuscleMass(weight, height, age, gender, impedance);
-
-    const fatScale = this.getFatPercentageScale(age, gender);
-    const muscleScale = this.getMuscleMassScale(height, gender);
-
-    let fatFactor = 1; // normal
-    if (fat > fatScale[2]) {
-      fatFactor = 0; // high
-    } else if (fat < fatScale[1]) {
-      fatFactor = 2; // low
-    }
-
-    if (muscle > muscleScale[1]) {
-      return 2 + (fatFactor * 3);
-    } else if (muscle < muscleScale[0]) {
-      return (fatFactor * 3);
-    } else {
-      return 1 + (fatFactor * 3);
-    }
-  }
 
   // Get full metrics report
   public static calculateAll(
@@ -320,10 +244,6 @@ export class BiaCalculator {
       bodyWater: this.getWaterPercentage(weight, height, age, gender, impedance),
       boneMass: this.getBoneMass(weight, height, age, gender, impedance),
       muscleMass: this.getMuscleMass(weight, height, age, gender, impedance),
-      visceralFat: this.getVisceralFat(weight, height, age, gender),
-      metabolicAge: this.getMetabolicAge(weight, height, age, gender, impedance),
-      protein: this.getProteinPercentage(weight, height, age, gender, impedance),
-      bodyType: this.getBodyType(weight, height, age, gender, impedance),
     };
   }
 }

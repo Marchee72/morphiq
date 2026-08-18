@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { Check, Database, Dumbbell, Monitor, Moon, RefreshCw, Sun, Trash2, X } from 'lucide-react';
 import { useStore } from '../../presentation/state/store';
 import { useT } from '../../i18n';
@@ -9,7 +10,8 @@ import { LANGUAGES, MODES } from '../../presentation/state/preferences';
 import { MAX_HEIGHT_CM, MIN_HEIGHT_CM, parseHeightCm } from '../../core/entities/UserProfile';
 import { HEALTH_IMPORT_DAYS } from '../derive/bodyMetrics';
 import { AtlasSheet } from './AtlasSheet';
-import { AtlasInput, AtlasChoice } from './AtlasField';
+import { AtlasInput, AtlasChoice, AtlasSwitch } from './AtlasField';
+import { isBackgroundSyncOn, setBackgroundSync } from '../../data/health/BodyCompositionPlugin';
 import { AppMark } from './AppMark';
 import { AtlasInstallCard } from './AtlasInstallCard';
 import { GoogleButton } from './GoogleButton';
@@ -39,6 +41,20 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
   const [account, setAccount] = useState(getUser());
   const [status, setStatus] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [background, setBackground] = useState(isBackgroundSyncOn);
+
+  /**
+   * Health Connect can refuse background access after the switch is flipped, so
+   * the switch follows what `setBackgroundSync` reports, not what was asked for.
+   */
+  const toggleBackground = async (on: boolean) => {
+    try {
+      setBackground(await setBackgroundSync(on));
+    } catch (err) {
+      console.error('Background sync toggle failed', err);
+      setBackground(false);
+    }
+  };
 
   const syncHealth = async () => {
     if (!activeProfile) return;
@@ -184,17 +200,33 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           />
         </div>
 
-        {/* Health */}
-        <div className="at-card at-settings-stack">
-          <div>
-            <span className="at-field-label">{t('settings.health')}</span>
-            <small className="at-field-hint">{t('settings.healthSub')}</small>
+        {/*
+          Health, native only.
+
+          Every control here needs Health Connect, which does not exist in a
+          browser: Sync could only ever answer "no provider", and the background
+          switch could only flip itself back. Weigh-ins still reach the app on
+          web — Body's manual entry takes the scale's own figures — so hiding
+          this removes no way in, only two buttons that cannot work.
+        */}
+        {Capacitor.isNativePlatform() && (
+          <div className="at-card at-settings-stack">
+            <div>
+              <span className="at-field-label">{t('settings.health')}</span>
+              <small className="at-field-hint">{t('settings.healthSub')}</small>
+            </div>
+            <button className="at-btn" onClick={syncHealth} disabled={syncing} style={{ justifyContent: 'center' }}>
+              <RefreshCw size={15} /> {syncing ? t('settings.syncing') : t('settings.syncNow')}
+            </button>
+            {status && <span className="at-settings-status">{status}</span>}
+            <AtlasSwitch
+              label={t('settings.backgroundSync')}
+              checked={background}
+              onChange={toggleBackground}
+              hint={t('settings.backgroundSyncSub')}
+            />
           </div>
-          <button className="at-btn" onClick={syncHealth} disabled={syncing} style={{ justifyContent: 'center' }}>
-            <RefreshCw size={15} /> {syncing ? t('settings.syncing') : t('settings.syncNow')}
-          </button>
-          {status && <span className="at-settings-status">{status}</span>}
-        </div>
+        )}
 
         {/* Equipment */}
         <button className="at-card at-settings-row at-settings-tap" onClick={() => setPanel('equipment')}>

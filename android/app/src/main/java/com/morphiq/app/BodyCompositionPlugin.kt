@@ -42,7 +42,12 @@ class BodyCompositionPlugin : Plugin() {
     private lateinit var permissionsLauncher: ActivityResultLauncher<Set<String>>
     private val requestPermissionContext = AtomicReference<RequestPermissionContext?>()
 
-    data class RequestPermissionContext(val pluginCall: PluginCall)
+    /**
+     * `requested` rather than always reporting [requiredPermissions]: background
+     * access is asked for on its own, from its own toggle, and the reply has to
+     * describe the set that was actually put in front of the user.
+     */
+    data class RequestPermissionContext(val pluginCall: PluginCall, val requested: Set<String>)
 
     private fun ensureClientInitialized(): Boolean {
         if (!::healthConnectClient.isInitialized) {
@@ -70,7 +75,7 @@ class BodyCompositionPlugin : Plugin() {
             if (contextRef != null) {
                 val result = JSObject()
                 val readPermissions = JSObject()
-                for (perm in requiredPermissions) {
+                for (perm in contextRef.requested) {
                     readPermissions.put(perm, grantedPermissions.contains(perm))
                 }
                 result.put("permissions", readPermissions)
@@ -92,6 +97,14 @@ class BodyCompositionPlugin : Plugin() {
         "android.permission.health.WRITE_BODY_WATER_MASS",
         "android.permission.health.WRITE_WEIGHT"
     )
+
+    /**
+     * Kept out of [requiredPermissions] on purpose. It is only meaningful once
+     * someone turns background sync on, and Health Connect shows it in a dialog
+     * of its own — asking for it during the normal launch prompt would be one
+     * more thing to refuse before the app has explained what it is for.
+     */
+    private val backgroundPermission = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
 
     @PluginMethod
     fun isAvailable(call: PluginCall) {
@@ -131,15 +144,52 @@ class BodyCompositionPlugin : Plugin() {
             return
         }
 
+        launchPermissionRequest(call, requiredPermissions)
+    }
+
+    /**
+     * Health Connect's own dialog for reading data while the app is closed.
+     *
+     * Separate from [requestPermissions] because it is separate to the user too:
+     * granting every read permission does not grant this one.
+     */
+    @PluginMethod
+    fun requestBackgroundPermission(call: PluginCall) {
+        if (!ensureClientInitialized()) {
+            call.reject("Health Connect not available")
+            return
+        }
+        launchPermissionRequest(call, setOf(backgroundPermission))
+    }
+
+    private fun launchPermissionRequest(call: PluginCall, permissions: Set<String>) {
         CoroutineScope(Dispatchers.Main).launch {
             try {
-                requestPermissionContext.set(RequestPermissionContext(call))
-                permissionsLauncher.launch(requiredPermissions)
+                requestPermissionContext.set(RequestPermissionContext(call, permissions))
+                permissionsLauncher.launch(permissions)
             } catch (e: Exception) {
                 requestPermissionContext.set(null)
                 call.reject("Failed to launch permissions request: ${e.message}")
             }
         }
+    }
+
+    /**
+     * Start the periodic check for data that arrived while the app was closed.
+     *
+     * Enqueueing is all this does — see [HealthSyncWorker] for why the worker
+     * notifies rather than imports.
+     */
+    @PluginMethod
+    fun enableBackgroundSync(call: PluginCall) {
+        HealthSyncWorker.enable(context)
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun disableBackgroundSync(call: PluginCall) {
+        HealthSyncWorker.disable(context)
+        call.resolve()
     }
 
     @PluginMethod

@@ -139,11 +139,35 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     [measurements],
   );
 
-  // The catalogue keys on id, but history mostly carries names, so index by name once.
+  /**
+   * The catalogue keys on id, but history mostly carries names, so index by name
+   * once — under both languages' names.
+   *
+   * Spanish was the gap. Everything the user sees and stores is `nameEs` once
+   * they switch language: the picker shows it, a logged set records it, and a
+   * routine the coach writes names it. Indexing English alone meant every one of
+   * those failed to resolve back to a catalogue row, and the row is where the
+   * gif, still, target and equipment live — so a Spanish session showed two
+   * initials where the animation belongs. Resolution by id was unaffected, which
+   * is why only *some* exercises lost their gif: the ones that arrived without
+   * one.
+   *
+   * English is written second so it wins any tie. Nothing in the dataset
+   * actually ties — no Spanish name matches a different exercise's English name
+   * — but the day one does, the app's own catalogue name should be the one that
+   * survives.
+   */
   const exercisesByName = useMemo(() => {
     const index = new Map<string, Exercise>();
     if (catalog) {
-      for (const exercise of catalog.search('')) index.set(normalizeName(exercise.name), exercise);
+      const all = catalog.search('');
+      // An empty key would match every unnamed set, so it is never indexed.
+      const add = (name: string | undefined, exercise: Exercise) => {
+        const key = normalizeName(name ?? '');
+        if (key) index.set(key, exercise);
+      };
+      for (const exercise of all) add(exercise.nameEs, exercise);
+      for (const exercise of all) add(exercise.name, exercise);
     }
     return index;
   }, [catalog]);

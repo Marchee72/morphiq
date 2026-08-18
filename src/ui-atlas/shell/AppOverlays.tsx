@@ -63,7 +63,7 @@ export const AppOverlays: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       <AtlasLogWeightSheet
         open={overlay === 'logWeight'}
         onClose={onClose}
-        onSubmit={kg => { actions.logWeight(kg); onClose(); }}
+        onSubmit={(kg, bia) => { actions.logWeight(kg, bia); onClose(); }}
       />
 
       <AtlasExercisePicker

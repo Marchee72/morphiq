@@ -28,12 +28,6 @@ describe('BiaCalculator', () => {
     expect(bmrFemale).toBeGreaterThan(800);
   });
 
-  it('should calculate metabolic age within bounds', () => {
-    const age = BiaCalculator.getMetabolicAge(75, 175, 25, 'male', 500);
-    expect(age).toBeGreaterThanOrEqual(15);
-    expect(age).toBeLessThanOrEqual(80);
-  });
-
   it('should compile all calculations into a Measurement entity', () => {
     const report = BiaCalculator.calculateAll('profile-1', 75, 175, 25, 'male', 500);
     expect(report.profileId).toBe('profile-1');
@@ -44,6 +38,5 @@ describe('BiaCalculator', () => {
     expect(report.muscleMass).toBeGreaterThan(20);
     expect(report.boneMass).toBeGreaterThan(1);
     expect(report.bodyWater).toBeGreaterThan(30);
-    expect(report.visceralFat).toBeGreaterThanOrEqual(1);
   });
 });

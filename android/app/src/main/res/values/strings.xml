@@ -5,4 +5,17 @@
     <string name="package_name">com.morphiq.app</string>
     <string name="custom_url_scheme">com.morphiq.app</string>
     <string name="privacy_policy_url">https://morphiq.app/privacy</string>
+
+    <!--
+      HealthSyncWorker speaks from outside the WebView, so it cannot reach the
+      app's own catalogue in src/i18n. Android picks the translation by device
+      locale instead, which is right for everyone except someone who set the
+      app's language against their phone's.
+    -->
+    <string name="health_sync_channel_name">Health sync</string>
+    <string name="health_sync_channel_desc">Tells you when Samsung Health has new data waiting</string>
+    <string name="health_sync_title">MorphIQ</string>
+    <string name="health_sync_body_measurement">New measurement ready — open to import it</string>
+    <string name="health_sync_body_workout">New activity ready — open to import it</string>
+    <string name="health_sync_body_both">New measurement and activity ready — open to import them</string>
 </resources>

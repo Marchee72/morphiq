@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="health_sync_channel_name">Sincronización de salud</string>
+    <string name="health_sync_channel_desc">Te avisa cuando Samsung Health tiene datos nuevos</string>
+    <string name="health_sync_title">MorphIQ</string>
+    <string name="health_sync_body_measurement">Nueva medición lista — abrí la app para importarla</string>
+    <string name="health_sync_body_workout">Nueva actividad lista — abrí la app para importarla</string>
+    <string name="health_sync_body_both">Nueva medición y actividad listas — abrí la app para importarlas</string>
+</resources>

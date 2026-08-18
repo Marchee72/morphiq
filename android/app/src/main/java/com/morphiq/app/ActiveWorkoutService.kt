@@ -17,7 +17,9 @@ class ActiveWorkoutService : Service() {
 
         const val ACTION_START = "ACTION_START"
         const val ACTION_UPDATE = "ACTION_UPDATE"
-        const val ACTION_STOP = "ACTION_STOP"
+        // No ACTION_STOP: the plugin calls `stopService`, because delivering an
+        // action means starting the service, which the background restriction
+        // forbids at exactly the moment stopping matters.
 
         const val EXTRA_TITLE = "EXTRA_TITLE"
         const val EXTRA_START_TIME = "EXTRA_START_TIME"
@@ -40,21 +42,8 @@ class ActiveWorkoutService : Service() {
                 val setsCount = intent.getIntExtra(EXTRA_SETS_COUNT, 0)
                 updateNotification(title, startTimeMs, setsCount)
             }
-            ACTION_STOP -> {
-                stopWorkout()
-            }
         }
         return START_STICKY
-    }
-
-    private fun stopWorkout() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
-        stopSelf()
     }
 
     private fun createNotificationChannel() {

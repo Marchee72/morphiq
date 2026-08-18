@@ -41,3 +41,6 @@ e2e/screenshots/
 
 # Local recovery dumps from scripts/repair-workout-data.mjs — contain personal training data.
 workout-repair-backup-*.json
+
+# Full database snapshots taken before a cleanup — names, birth dates, weigh-ins.
+morphiq-db-backup-*.json

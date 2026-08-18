@@ -70,7 +70,7 @@ export const AppActionsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       useStore.getState().setActiveTab('today');
     },
 
-    logWeight: kg => useStore.getState().addManualMeasurement(kg),
+    logWeight: (kg, bia) => useStore.getState().addManualMeasurement(kg, bia),
     toggleFavorite: id => useStore.getState().toggleFavorite(id),
     sendCoachMessage: text => useStore.getState().sendChatMessage(text),
 

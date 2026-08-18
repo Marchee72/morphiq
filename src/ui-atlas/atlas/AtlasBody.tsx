@@ -61,7 +61,9 @@ export const AtlasBody: React.FC = () => {
   const toGo = profile.targetWeightKg === null ? null : +(weight.value - profile.targetWeightKg).toFixed(1);
   const progress = goalProgress(series?.[0] ?? null, weight.value, profile.targetWeightKg);
 
-  const callouts = (['muscleMass', 'bodyFat', 'bodyWater', 'visceralFat'] as const)
+  // BMI took visceral fat's place here: the layout below places four, and BMI
+  // is a figure that means something. Visceral fat was weight rescaled.
+  const callouts = (['muscleMass', 'bodyFat', 'bodyWater', 'bmi'] as const)
     .map(key => metricByKey(body.metrics, key))
     .filter((m): m is NonNullable<typeof m> => Boolean(m));
 

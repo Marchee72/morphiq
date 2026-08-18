@@ -24,11 +24,7 @@ describe('DeepSeekCoach', () => {
       bodyWater: 60.5,
       boneMass: 3.8,
       muscleMass: 80.0,
-      visceralFat: 6,
-      metabolicAge: 28,
-      protein: 21.0,
-      bodyType: 5,
-    },
+      },
     measurementHistory: [],
     recentFoodLogs: [
       {

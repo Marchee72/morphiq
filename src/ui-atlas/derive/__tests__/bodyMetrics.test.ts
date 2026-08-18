@@ -16,8 +16,7 @@ function measurement(daysAgo: number, over: Partial<Measurement> = {}): Measurem
     profileId: 'p1',
     timestamp: new Date(NOW.getTime() - daysAgo * MS_PER_DAY),
     weight: 80, impedance: 500, bmi: 24, bmr: 1700, bodyFat: 20, bodyWater: 55,
-    boneMass: 3, muscleMass: 60, visceralFat: 8, metabolicAge: 30, protein: 17, bodyType: 3,
-    ...over,
+    boneMass: 3, muscleMass: 60, ...over,
   };
 }
 
@@ -29,8 +28,10 @@ const profile = (over: Partial<UserProfile> = {}): UserProfile => ({
 describe('METRIC_SPECS', () => {
   it('covers every displayed metric in a stable order', () => {
     expect(METRIC_SPECS.map(s => s.key)).toEqual([
-      'weight', 'bodyFat', 'muscleMass', 'muscleMassPct', 'bmi', 'bodyWater',
-      'visceralFat', 'bmr', 'metabolicAge', 'protein',
+      // Visceral fat, metabolic age and protein used to sit in this list.
+      // Health Connect has no record for any of them, so nothing measured them
+      // — they were scale formulas over height/weight/age/sex. See `Measurement`.
+      'weight', 'bodyFat', 'muscleMass', 'muscleMassPct', 'bmi', 'bodyWater', 'bmr',
     ]);
   });
 
@@ -48,11 +49,11 @@ describe('METRIC_SPECS', () => {
   });
 
   it('marks only what a scale actually weighs as measured', () => {
-    // Metabolic age and BMR come out of BiaCalculator against a hardcoded
-    // impedance; the detail sheet must not present them as readings.
+    // BMI and BMR are formulas, not readings; the detail sheet must not
+    // present them as something the scale weighed.
     expect(isMeasured('bodyFat')).toBe(true);
     expect(isMeasured('muscleMassPct')).toBe(true);
-    expect(isMeasured('metabolicAge')).toBe(false);
+    expect(isMeasured('bmi')).toBe(false);
     expect(isMeasured('bmr')).toBe(false);
   });
 });
@@ -168,7 +169,6 @@ describe('buildBody', () => {
     // The Body screen filters on `value > 0`, so this is what hides them.
     const manual = measurement(1, {
       weight: 80, bmi: 25.3, bodyFat: 0, muscleMass: 0, bodyWater: 0,
-      visceralFat: 0, metabolicAge: 0, protein: 0,
     });
     const body = buildBody([manual], null, NOW);
     expect(metricByKey(body.metrics, 'muscleMassPct')!.value).toBe(0);

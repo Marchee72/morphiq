@@ -15,8 +15,7 @@ const profile = (over: Partial<UserProfile> = {}): UserProfile => ({
 
 const latest = (over: Partial<Measurement> = {}): Measurement => ({
   profileId: 'p1', timestamp: NOW, weight: 80, impedance: 500, bmi: 24, bmr: 1700,
-  bodyFat: 20, bodyWater: 55, boneMass: 3, muscleMass: 60, visceralFat: 8,
-  metabolicAge: 30, protein: 17, bodyType: 3, ...over,
+  bodyFat: 20, bodyWater: 55, boneMass: 3, muscleMass: 60, ...over,
 });
 
 const food = (over: Partial<FoodLog> = {}): FoodLog => ({

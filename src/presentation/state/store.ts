@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { UserProfile } from '../../core/entities/UserProfile';
 import { getAge } from '../../core/entities/UserProfile';
+import { BiaCalculator, NEUTRAL_IMPEDANCE } from '../../data/calculation/BiaCalculator';
 import type { Measurement } from '../../core/entities/Measurement';
 import type { FoodLog } from '../../core/entities/FoodLog';
 import type { WorkoutLog } from '../../core/entities/WorkoutLog';
@@ -32,7 +33,10 @@ import { normalizeName } from '../../ui-atlas/derive/records';
 import { DeepSeekCoach, chatCompletion, buildProviderFromEnv } from '../../data/ai/GeminiCoach';
 import type { AgentContext } from '../../core/interfaces/IAgent';
 import { isStrengthActivity, overlaps } from '../../data/health/activityTypes';
-import { generateMockMeasurements, generateMockFoodLogs, generateMockWorkouts } from '../../data/mock/mockData';
+import {
+  generateMockMeasurements, generateMockFoodLogs, generateMockWorkouts,
+  isMockMeasurement, isMockFoodLog, isMockWorkout,
+} from '../../data/mock/mockData';
 
 import { Capacitor } from '@capacitor/core';
 import {
@@ -152,6 +156,20 @@ export interface HistoricalExerciseStats {
   lastSets?: { weight: number; reps: number }[];
 }
 
+/**
+ * What a scale can tell you that a bathroom scale cannot, entered by hand.
+ *
+ * Only the three the app treats as genuinely measured (`MEASURED_KEYS` in
+ * `bodyMetrics.ts`) — everything else on the Body screen is derived, and
+ * offering it as an input would let someone type a metabolic age the app then
+ * presents as if it had been computed.
+ */
+export interface ManualBia {
+  bodyFat?: number;    // %
+  muscleMass?: number; // kg
+  bodyWater?: number;  // %
+}
+
 interface StoreState {
   profiles: UserProfile[];
   /**
@@ -248,7 +266,7 @@ interface StoreState {
   updateProfile: (profile: UserProfile) => Promise<void>;
   deleteProfile: (id: string) => Promise<void>;
   
-  addManualMeasurement: (weightKg: number) => Promise<void>;
+  addManualMeasurement: (weightKg: number, bia?: ManualBia) => Promise<void>;
   deleteMeasurement: (id: string) => Promise<void>;
   
   addFoodLog: (log: Omit<FoodLog, 'profileId' | 'timestamp'>) => Promise<void>;
@@ -650,6 +668,25 @@ export const useStore = create<StoreState>((set, get) => ({
     const session = get().activeSession;
     const profile = get().activeProfile;
     if (!session || !profile || get().isFinishingSession) return;
+
+    /**
+     * A session with nothing logged is discarded, not filed.
+     *
+     * Finishing wrote the log unconditionally, so opening the gym and backing
+     * out through Finish left a "0 sets completed" record behind — a workout in
+     * your history, counting toward your streak, that never happened. Three of
+     * them were in production.
+     *
+     * Discarded rather than refused because there is nothing to refuse: no sets
+     * means no data, so this loses none and spares the user an error about an
+     * empty form. `finishActiveSession` is the only path that files a strength
+     * session, so this is the one place the guard has to exist.
+     */
+    if (session.sets.length === 0) {
+      get().dismissActiveSession();
+      return;
+    }
+
     set({ isFinishingSession: true });
 
     try {
@@ -837,22 +874,42 @@ export const useStore = create<StoreState>((set, get) => ({
     await get().loadProfiles();
   },
 
-  addManualMeasurement: async (weightKg) => {
+  /**
+   * A weigh-in typed in by hand, optionally with what a scale reported.
+   *
+   * Weight alone stores every BIA field as 0, which is what the rest of the app
+   * reads as "not measured" — so a manual entry never invents a body fat figure
+   * it was not given. When those readings *are* supplied, the derived metrics
+   * come off `BiaCalculator` exactly as they do for a Health Connect import, so
+   * a chart cannot tell the two sources apart.
+   */
+  addManualMeasurement: async (weightKg, bia) => {
     const profile = get().activeProfile;
     if (!profile?.id) return;
     if (!Number.isFinite(weightKg) || weightKg < 15 || weightKg > 400) return;
 
-    const bmi = weightKg / Math.pow(profile.height / 100, 2);
+    const { height, gender } = profile;
     const age = getAge(profile.birthDate);
-    const bmr = profile.gender === 'male'
-      ? 66.47 + 13.75 * weightKg + 5.003 * profile.height - 6.755 * age
-      : 655.1 + 9.563 * weightKg + 1.85 * profile.height - 4.676 * age;
+
+    const reading = (v: number | undefined) => (Number.isFinite(v) && v! > 0 ? v! : 0);
+    const bodyFat = reading(bia?.bodyFat);
+    const muscleMass = reading(bia?.muscleMass);
+    const bodyWater = reading(bia?.bodyWater);
+    // Body fat is the gate the sync path uses too: without it there is no
+    // composition to derive anything from, only a weight.
+    const hasBia = bodyFat > 0;
 
     await measurementRepo.save({
-      profileId: profile.id, timestamp: new Date(), weight: weightKg,
-      impedance: 0, bmi: Number(bmi.toFixed(2)), bmr: Number(bmr.toFixed(2)),
-      bodyFat: 0, bodyWater: 0, boneMass: 0, muscleMass: 0,
-      visceralFat: 0, metabolicAge: 0, protein: 0, bodyType: 4,
+      profileId: profile.id,
+      timestamp: new Date(),
+      weight: weightKg,
+      impedance: hasBia ? NEUTRAL_IMPEDANCE : 0,
+      bmi: Number(BiaCalculator.getBMI(weightKg, height).toFixed(2)),
+      bmr: Number(BiaCalculator.getBMR(weightKg, height, age, gender).toFixed(2)),
+      bodyFat,
+      bodyWater,
+      muscleMass,
+      boneMass: hasBia ? BiaCalculator.getBoneMass(weightKg, height, age, gender, NEUTRAL_IMPEDANCE) : 0,
     });
     set({ measurements: await measurementRepo.getAll(profile.id) });
   },
@@ -1667,34 +1724,40 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
     await get().setActiveProfile(profile.id);
   },
 
+  /**
+   * Remove the seeded demo rows, and only those.
+   *
+   * This was a byte-for-byte copy of `clearDatabaseData`, so the button
+   * labelled "clear demo data" deleted the user's real training history
+   * instead — and never left the demo in a state seeding could recognise, so
+   * pressing Seed again stacked another copy. One profile reached ten
+   * duplicates of every demo weigh-in and 252 demo meals that way.
+   *
+   * Each row is now matched against the generator's own fingerprint
+   * (`isMock*` in `mockData.ts`). Messages and chat are left alone: the demo
+   * seeds none, so clearing them could only destroy a real conversation.
+   */
   clearMockData: async () => {
     const profile = get().activeProfile;
     if (!profile?.id) return;
 
-    const allMeas = await measurementRepo.getAll(profile.id);
-    for (const m of allMeas) {
-      if (m.id) await measurementRepo.delete(m.id);
+    for (const m of await measurementRepo.getAll(profile.id)) {
+      if (m.id && isMockMeasurement(m)) await measurementRepo.delete(m.id);
     }
 
-    const allFoods = await foodRepo.getAll(profile.id);
-    for (const f of allFoods) {
-      if (f.id) await foodRepo.delete(f.id);
+    for (const f of await foodRepo.getAll(profile.id)) {
+      if (f.id && isMockFoodLog(f)) await foodRepo.delete(f.id);
     }
 
-    const allWorkouts = await workoutRepo.getAll(profile.id);
-    for (const w of allWorkouts) {
-      if (w.id) {
+    for (const w of await workoutRepo.getAll(profile.id)) {
+      if (w.id && isMockWorkout(w)) {
+        // Sets are keyed by their log, so they would outlive it otherwise.
+        for (const s of await workoutSetRepo.getForWorkout(w.id)) {
+          if (s.id) await workoutSetRepo.delete(s.id);
+        }
         await workoutRepo.delete(w.id);
       }
     }
-
-    const pendingSets = await workoutSetRepo.getForWorkout('pending');
-    for (const ps of pendingSets) {
-      if (ps.id) await workoutSetRepo.delete(ps.id);
-    }
-
-    await messageRepo.clear(profile.id);
-    set({ activeWorkout: null, chatHistory: [] });
 
     await get().setActiveProfile(profile.id);
   },

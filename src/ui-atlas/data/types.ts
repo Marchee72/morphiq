@@ -3,12 +3,13 @@ import type {
 } from '../../core/entities/Buddy';
 import type { Exercise } from '../../core/entities/Exercise';
 import type { Message } from '../../core/entities/Message';
-import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
+import type { RoutineExerciseItem, RoutineTemplate } from '../../core/entities/RoutineTemplate';
 import type { BuddyDayVM, BuddyRowVM, PresenceRowVM } from '../derive/social';
 import type { ExerciseFilters, FacetCounts } from '../../data/exercises/ExerciseCatalog';
 import type { WeeklyStatsVM } from '../derive/history';
 import type { ExerciseSessionVM } from '../derive/exerciseHistory';
 import type { SessionDetailVM } from '../derive/sessionDetail';
+import type { ManualBia } from '../../presentation/state/store';
 import type {
   BodyVM, CatalogItemVM, HistoryEntryVM, MuscleLoadVM, NutritionVM, PrRecordVM,
   ProfileVM, ScreenId, SessionCursor, SessionExerciseVM, SessionTotalsVM, SessionVM,
@@ -182,12 +183,22 @@ export interface AppActions {
    * goes through here, which is what makes that guard universal.
    */
   startRoutine(routine: RoutineTemplate): void;
-  /** Folds a routine into the running session. Returns what changed. */
-  applyRoutine(routine: RoutineTemplate, mode: 'append' | 'replacePending'): { added: number; skipped: number };
+  /**
+   * Folds a routine into the running session. Returns what changed.
+   *
+   * Takes only the two fields the merge reads, rather than a whole
+   * `RoutineTemplate` — a saved routine still satisfies it, and so does a
+   * session being repeated, which has a title and exercises but no `profileId`
+   * or `createdAt` to invent.
+   */
+  applyRoutine(
+    routine: { title: string; exercises: RoutineExerciseItem[] },
+    mode: 'append' | 'replacePending',
+  ): { added: number; skipped: number };
   finishSession(): Promise<void>;
   discardSession(): void;
 
-  logWeight(kg: number): Promise<void>;
+  logWeight(kg: number, bia?: ManualBia): Promise<void>;
   toggleFavorite(exerciseId: string): Promise<void>;
   sendCoachMessage(text: string): Promise<void>;
 

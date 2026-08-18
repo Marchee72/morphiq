@@ -94,11 +94,7 @@ describe('Dexie Database Repositories', () => {
       bodyWater: 58,
       boneMass: 3.2,
       muscleMass: 55,
-      visceralFat: 4,
-      metabolicAge: 24,
-      protein: 19,
-      bodyType: 4,
-    });
+      });
 
     const mId2 = await measurementRepo.save({
       profileId: pId,
@@ -111,11 +107,7 @@ describe('Dexie Database Repositories', () => {
       bodyWater: 58.2,
       boneMass: 3.2,
       muscleMass: 55.1,
-      visceralFat: 4,
-      metabolicAge: 24,
-      protein: 19.1,
-      bodyType: 4,
-    });
+      });
 
     expect(mId1).toBeDefined();
     expect(mId2).toBeDefined();
@@ -228,11 +220,7 @@ describe('Dexie Database Repositories', () => {
       bodyWater: 56,
       boneMass: 3.4,
       muscleMass: 62,
-      visceralFat: 5,
-      metabolicAge: 20,
-      protein: 18.5,
-      bodyType: 4,
-    });
+      });
 
     await foodRepo.add({
       profileId: pId,

@@ -64,11 +64,7 @@ function measurement(daysAgo: number, weight: number): Measurement {
     bodyWater: 55,
     boneMass: 3.2,
     muscleMass: 62,
-    visceralFat: 8,
-    metabolicAge: 29,
-    protein: 17.5,
-    bodyType: 3,
-  };
+    };
 }
 
 function workout(id: string, daysAgo: number): WorkoutLog {
