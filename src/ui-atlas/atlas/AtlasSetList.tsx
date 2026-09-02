@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
+import { snapWeight } from '../derive/weightLadder';
 import type { SessionSetVM } from '../types';
 
 /**
@@ -61,7 +62,9 @@ export const AtlasSetList: React.FC<{
     const r = Number(reps.replace(',', '.'));
     if (!Number.isFinite(w) || !Number.isFinite(r)) return;
     // Typing numbers into a set is the act of recording it, so it counts as done.
-    onUpdate(i, { weightKg: Math.max(0, w), reps: Math.max(0, Math.round(r)), done: true });
+    // Snapped to the same ladder the dial uses: this row and the wheel edit the
+    // same set, and a weight only one of them could produce reads as a bug.
+    onUpdate(i, { weightKg: snapWeight(Math.max(0, w)), reps: Math.max(0, Math.round(r)), done: true });
   };
 
   return (

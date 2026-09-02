@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useStore } from '../../presentation/state/store';
 import { resolveMode, SURFACE } from '../../presentation/state/preferences';
 import { useAppData, useAppActions } from '../data/useAppData';
@@ -47,6 +47,31 @@ export const AppShell: React.FC = () => {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', SURFACE[resolved]);
   }, [resolved]);
+
+  /**
+   * Offers back a session the app died holding.
+   *
+   * Waits for `ready` because the store reads the stored session at creation,
+   * long before there is an active profile to match it against — asking first
+   * would mean asking about somebody else's workout on a shared device.
+   *
+   * The ref makes it a once-per-launch question. Without it, dismissing the
+   * sheet re-opens it on the next render, and there is no way past it.
+   */
+  const askedToResume = useRef(false);
+  useEffect(() => {
+    if (!ready || askedToResume.current) return;
+
+    const { pendingResume, activeProfile, activeSession } = useStore.getState();
+    // A live session already on screen outranks a stored one — this only ever
+    // happens if a workout was started before `ready` flipped, and the one in
+    // front of the user is the one they are doing.
+    if (!pendingResume || activeSession) return;
+    if (pendingResume.profileId !== activeProfile?.id) return;
+
+    askedToResume.current = true;
+    actions.openOverlay('resumeSession');
+  }, [ready, actions]);
 
   return (
     <div className="app at" data-mode={resolved}>

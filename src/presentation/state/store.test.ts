@@ -614,6 +614,92 @@ describe('active session — exercise list and sets stay in step', () => {
  * finish again, and pressing it again filed the workout a second time. Real
  * sessions in the database are recorded three times over.
  */
+describe('finishing an exercise short of its planned sets', () => {
+  const session = (over = {}) => ({
+    startTime: new Date(),
+    workoutType: 'Push A',
+    routineExercises: [
+      { id: 'e1', exerciseName: 'Bench Press', targetSets: 4 },
+      { id: 'e2', exerciseName: 'Barbell Row', targetSets: 4 },
+    ],
+    sets: [
+      { exerciseName: 'Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+      { exerciseName: 'Bench Press', setNumber: 2, weight: 80, reps: 7, isCompleted: true },
+      { exerciseName: 'Bench Press', setNumber: 3, weight: 0, reps: 0, isCompleted: false },
+      { exerciseName: 'Barbell Row', setNumber: 1, weight: 60, reps: 10, isCompleted: true },
+    ],
+    ...over,
+  });
+
+  beforeEach(() => useStore.setState({ activeSession: session() }));
+
+  it('lowers the plan to the sets actually completed', () => {
+    useStore.getState().finishActiveSessionExercise(0);
+
+    const active = useStore.getState().activeSession;
+    // 2 of 4 done, so the exercise now plans 2 — which is what makes
+    // `buildSessionExercises` (max(targetSets, logged)) call it complete.
+    expect(active?.routineExercises?.[0].targetSets).toBe(2);
+    // The other exercise is untouched.
+    expect(active?.routineExercises?.[1].targetSets).toBe(4);
+  });
+
+  it('keeps every completed set and drops only the unlogged ones', () => {
+    useStore.getState().finishActiveSessionExercise(0);
+
+    const bench = useStore.getState().activeSession!.sets
+      .filter(s => s.exerciseName === 'Bench Press');
+    expect(bench).toHaveLength(2);
+    expect(bench.map(s => s.reps)).toEqual([8, 7]);
+    // Set numbers stay contiguous, or the next write to this exercise lands
+    // in the gap the removed set left.
+    expect(bench.map(s => s.setNumber)).toEqual([1, 2]);
+  });
+
+  it('leaves the sets of other exercises alone', () => {
+    useStore.getState().finishActiveSessionExercise(0);
+
+    const rows = useStore.getState().activeSession!.sets
+      .filter(s => s.exerciseName === 'Barbell Row');
+    expect(rows).toHaveLength(1);
+  });
+
+  it('does nothing when no set was completed — that is removal, not finishing', () => {
+    useStore.setState({
+      activeSession: session({
+        sets: [{ exerciseName: 'Bench Press', setNumber: 1, weight: 0, reps: 0, isCompleted: false }],
+      }),
+    });
+    useStore.getState().finishActiveSessionExercise(0);
+
+    const active = useStore.getState().activeSession;
+    expect(active?.routineExercises?.[0].targetSets).toBe(4);
+    expect(active?.sets).toHaveLength(1);
+  });
+
+  it('materialises the list for a freestyle session that has no plan', () => {
+    useStore.setState({
+      activeSession: session({
+        routineExercises: undefined,
+        sets: [
+          { exerciseName: 'Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+          { exerciseName: 'Bench Press', setNumber: 2, weight: 0, reps: 0, isCompleted: false },
+        ],
+      }),
+    });
+    useStore.getState().finishActiveSessionExercise(0);
+
+    const active = useStore.getState().activeSession;
+    expect(active?.routineExercises?.[0]).toMatchObject({ exerciseName: 'Bench Press', targetSets: 1 });
+    expect(active?.sets).toHaveLength(1);
+  });
+
+  it('ignores an index that is not there', () => {
+    useStore.getState().finishActiveSessionExercise(9);
+    expect(useStore.getState().activeSession?.sets).toHaveLength(4);
+  });
+});
+
 describe('finishing the active session', () => {
   const profile = {
     id: 'p1',

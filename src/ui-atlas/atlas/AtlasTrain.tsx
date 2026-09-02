@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Check, Flag, Plus, Trash2, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
+import { weightLadder, WEIGHT_PRECISION } from '../derive/weightLadder';
 import { useStore } from '../../presentation/state/store';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { useLiveSession } from '../data/useLiveSession';
@@ -21,9 +22,9 @@ import { AtlasTrainStage } from './AtlasTrainStage';
 import { AtlasFinishSheet } from './AtlasFinishSheet';
 import { AtlasExerciseDetail } from './AtlasExerciseDetail';
 
-/** 1.25 kg is the smallest plate pair on most racks, so it is the honest step. */
-const WEIGHT_STEP_KG = 1.25;
 const MAX_WEIGHT_KG = 300;
+/** Built once: 1200-odd values, and rebuilding it per render churned the dial. */
+const WEIGHT_LADDER = weightLadder(MAX_WEIGHT_KG);
 const MAX_REPS = 50;
 
 /**
@@ -367,9 +368,14 @@ export const AtlasTrain: React.FC = () => {
               onChange={draft.setWeight}
               min={0}
               max={MAX_WEIGHT_KG}
-              step={WEIGHT_STEP_KG}
+              // Unused when `values` is given, but the prop is required and the
+              // whole-kilo rung is what the ladder is built around.
+              step={1}
+              values={WEIGHT_LADDER}
               suffix={t('unit.kg')}
-              formatValue={v => fmt.upTo(v)}
+              // Three decimals, not the default two: 80.125 renders as 80.13 at
+              // two and the dial would disagree with the value it holds.
+              formatValue={v => fmt.upTo(v, WEIGHT_PRECISION)}
             />
             <AtlasDial
               label={t('train.reps')}
@@ -398,6 +404,14 @@ export const AtlasTrain: React.FC = () => {
 
       <div className="at-pad at-setmeta">
         <span>{t('train.setsDone', { done, total: exercise.sets.length })}</span>
+        {/* Offered only with work behind you and work still planned: with
+            nothing done this is "remove the exercise", and with nothing left
+            the exercise has already finished itself. */}
+        {done > 0 && done < exercise.sets.length && (
+          <button onClick={live.finishExercise}>
+            <Check size={13} /> {t('train.finishExercise')}
+          </button>
+        )}
         {exercise.sets.length > 1 && (
           <button onClick={() => live.removeSet(live.setIdx)}>
             <Trash2 size={13} /> {t('train.removeSet')}

@@ -125,6 +125,8 @@ export interface SharedRoutine {
     exerciseName: string;
     targetSets: number;
     targetReps?: number;
+    /** A suggested load, which the receiver's own dial overrides on first use. */
+    targetWeight?: number;
     notes?: string;
   }[];
 }

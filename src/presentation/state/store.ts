@@ -43,6 +43,10 @@ import {
   PREF_KEYS, applySurface, initialLanguage, initialMode, writePref,
   type Lang,
 } from './preferences';
+import {
+  readStoredSession, writeStoredSession, clearStoredSession,
+  type StoredSession,
+} from './sessionPersistence';
 
 // Repository instances — switch between local IndexedDB and remote server via env vars
 const isServer = isServerMode;
@@ -88,6 +92,23 @@ export interface ActiveSessionExercise {
 }
 
 type DraftSet = Omit<WorkoutSet, 'profileId' | 'timestamp' | 'workoutLogId'>;
+
+/**
+ * A workout in progress.
+ *
+ * Named rather than inline because it now leaves the store: `sessionPersistence`
+ * writes it to localStorage on every change and reads it back at launch, so the
+ * shape has to be something both sides can name.
+ */
+export interface ActiveSession {
+  startTime: Date;
+  workoutType: string;
+  routineSource?: 'coach' | 'manual' | 'template';
+  routineExercises?: ActiveSessionExercise[];
+  sets: DraftSet[];
+  feelingTag?: 'feeling_100' | 'good' | 'sore' | 'pain' | 'low_energy';
+  bodyNotes?: string;
+}
 
 /** Sets an exercise starts with when added by hand. Trimming one is a tap; adding one is a tap. */
 export const DEFAULT_TARGET_SETS = 4;
@@ -137,6 +158,7 @@ function toActiveExercises(items: RoutineExerciseItem[]): ActiveSessionExercise[
     exerciseName: ex.exerciseName,
     targetSets: ex.targetSets || DEFAULT_TARGET_SETS,
     targetReps: ex.targetReps,
+    targetWeight: ex.targetWeight,
     notes: ex.notes,
   }));
 }
@@ -203,15 +225,7 @@ interface StoreState {
   buddiesFocus: BuddiesFocus | null;
   activeWorkout: WorkoutLog | null;
   isGymModeOpen: boolean;
-  activeSession: {
-    startTime: Date;
-    workoutType: string;
-    routineSource?: 'coach' | 'manual' | 'template';
-    routineExercises?: ActiveSessionExercise[];
-    sets: Omit<WorkoutSet, 'profileId' | 'timestamp' | 'workoutLogId'>[];
-    feelingTag?: 'feeling_100' | 'good' | 'sore' | 'pain' | 'low_energy';
-    bodyNotes?: string;
-  } | null;
+  activeSession: ActiveSession | null;
   /**
    * True from the moment finish is confirmed until the workout is written.
    *
@@ -219,6 +233,15 @@ interface StoreState {
    * stays on screen for all of it. See `finishActiveSession`.
    */
   isFinishingSession: boolean;
+
+  /**
+   * A session found in storage at launch, waiting on the user's answer.
+   *
+   * Deliberately *not* `activeSession`: a workout is never silently resumed.
+   * The sheet raised for this offers resume, finish or discard, and only then
+   * does it become the live session.
+   */
+  pendingResume: StoredSession | null;
 
   // Actions
   setActiveTab: (tab: AppScreenId) => void;
@@ -251,12 +274,27 @@ interface StoreState {
   addActiveSessionExercise: (exercise: { id?: string; name: string }) => void;
   removeActiveSessionExercise: (index: number) => void;
   updateActiveSessionSets: (sets: Omit<WorkoutSet, 'profileId' | 'timestamp' | 'workoutLogId'>[]) => void;
+  /**
+   * Ends an exercise at however many sets were actually done.
+   *
+   * The planned set count is a floor everywhere else — `buildSessionExercises`
+   * renders `max(targetSets, logged)` — so stopping at 2 of 4 left the exercise
+   * permanently unfinished and the "next exercise" button permanently hidden.
+   * This lowers the plan to meet the work instead of the other way round.
+   */
+  finishActiveSessionExercise: (index: number) => void;
   updateActiveSessionNote: (feelingTag?: 'feeling_100' | 'good' | 'sore' | 'pain' | 'low_energy', bodyNotes?: string) => void;
   linkBiserieExercises: (exId1: string, exId2: string) => void;
   unlinkBiserieExercise: (exId: string) => void;
   getExerciseStats: (exerciseName: string) => HistoricalExerciseStats | null;
   finishActiveSession: () => Promise<void>;
   dismissActiveSession: () => void;
+  /** Makes `pendingResume` the live session. */
+  resumePendingSession: () => void;
+  /** Files the found session without reopening it. */
+  finishPendingSession: () => Promise<void>;
+  /** Throws it away, storage included. */
+  discardPendingSession: () => void;
   loadSavedRoutines: () => Promise<void>;
   saveRoutineTemplate: (routine: Omit<RoutineTemplate, 'profileId' | 'createdAt'>) => Promise<string>;
   deleteRoutineTemplate: (id: string) => Promise<void>;
@@ -377,6 +415,9 @@ export const useStore = create<StoreState>((set, get) => ({
   isGymModeOpen: false,
   activeSession: null,
   isFinishingSession: false,
+  // Read synchronously at store creation so the first render already knows
+  // whether there is anything to ask about.
+  pendingResume: readStoredSession(),
 
   setDailySteps: (days) => set({ dailySteps: days }),
 
@@ -551,6 +592,41 @@ export const useStore = create<StoreState>((set, get) => ({
     if (session) {
       set({ activeSession: { ...session, sets } });
     }
+  },
+
+  finishActiveSessionExercise: (index) => {
+    const session = get().activeSession;
+    if (!session) return;
+
+    // A freestyle session carries no plan — materialise it the same way
+    // `mergeRoutineIntoActiveSession` does, or there is nothing to lower.
+    const current = session.routineExercises ?? exercisesFromSets(session.sets);
+    const target = current[index];
+    if (!target) return;
+
+    const key = normalizeName(target.exerciseName);
+    const mine = session.sets.filter(s => normalizeName(s.exerciseName) === key);
+    const done = mine.filter(s => s.isCompleted);
+
+    // Nothing done is not "finished early", it is "not started" — and dropping
+    // the exercise entirely is `removeActiveSessionExercise`, which says so.
+    if (done.length === 0) return;
+
+    // Renumber as they are kept, so the surviving sets stay contiguous. A gap
+    // here and the next write to this exercise lands in it.
+    const renumbered = done
+      .slice()
+      .sort((a, b) => a.setNumber - b.setNumber)
+      .map((s, i) => ({ ...s, setNumber: i + 1 }));
+
+    set({
+      activeSession: {
+        ...session,
+        sets: [...session.sets.filter(s => normalizeName(s.exerciseName) !== key), ...renumbered],
+        routineExercises: current.map((ex, i) =>
+          i === index ? { ...ex, targetSets: renumbered.length } : ex),
+      },
+    });
   },
 
   updateActiveSessionNote: (feelingTag, bodyNotes) => {
@@ -736,6 +812,36 @@ export const useStore = create<StoreState>((set, get) => ({
     set({ activeSession: null, isGymModeOpen: false });
   },
 
+  resumePendingSession: () => {
+    const pending = get().pendingResume;
+    if (!pending) return;
+    set({
+      activeSession: pending.session,
+      pendingResume: null,
+      isGymModeOpen: true,
+      activeTab: 'train',
+    });
+  },
+
+  /**
+   * Files the found session without reopening it.
+   *
+   * Loads it into `activeSession` first because `finishActiveSession` is the
+   * only path that writes a strength workout, and duplicating its logic here is
+   * exactly how the duplicate-workout bugs it documents got written.
+   */
+  finishPendingSession: async () => {
+    const pending = get().pendingResume;
+    if (!pending) return;
+    set({ activeSession: pending.session, pendingResume: null });
+    await get().finishActiveSession();
+  },
+
+  discardPendingSession: () => {
+    set({ pendingResume: null });
+    clearStoredSession();
+  },
+
 
   selectedDate: new Date(),
   apiKey: (import.meta.env?.VITE_DEEPSEEK_API_KEY as string) || '',
@@ -763,7 +869,10 @@ export const useStore = create<StoreState>((set, get) => ({
           await get().setActiveProfile(list[0].id!);
         }
       } else {
-        set({ activeProfile: null, measurements: [], foodLogs: [], workoutLogs: [], workoutHistory: [], chatHistory: [], favoriteExerciseIds: [], activeWorkoutSets: {}, exerciseStats: {} });
+        // The stored session goes with the profile it belonged to — signing out
+        // must not leave a workout waiting to be resumed under the next account.
+        clearStoredSession();
+        set({ activeProfile: null, pendingResume: null, measurements: [], foodLogs: [], workoutLogs: [], workoutHistory: [], chatHistory: [], favoriteExerciseIds: [], activeWorkoutSets: {}, exerciseStats: {} });
       }
     } catch (err) {
       // Settled even on failure. In server mode this is a network call, and an
@@ -1863,3 +1972,28 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
     await get().setActiveProfile(profile.id);
   },
 }));
+
+/**
+ * Mirrors the live session into storage, on every change.
+ *
+ * One subscription rather than a write at each call site: `activeSession` is
+ * mutated from a dozen actions, and the two that clear it — `finishActiveSession`
+ * and `dismissActiveSession` — are the ones a missed write would hurt most,
+ * leaving a finished workout on offer to be resumed and filed a second time.
+ * Subscribing catches all of them, including any added later.
+ *
+ * The profile is read at write time rather than captured: sessions outlive the
+ * render that started them, and a session stored against a stale profile id
+ * would never be offered back.
+ */
+useStore.subscribe((state, previous) => {
+  if (state.activeSession === previous.activeSession) return;
+
+  const session = state.activeSession;
+  const profileId = state.activeProfile?.id;
+  if (!session || !profileId) {
+    clearStoredSession();
+    return;
+  }
+  writeStoredSession(profileId, session);
+});

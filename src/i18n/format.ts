@@ -119,7 +119,10 @@ export function makeFormatters(lang: Lang): Formatters {
       if (Math.abs(days) < 31) return relative.format(Math.round(days / 7), 'week');
       return dayMonth.format(date);
     },
-    kgReps: (weightKg, reps) => `${num(weightKg, weightKg % 1 === 0 ? 0 : 1)} kg × ${num(reps)}`,
+    // As many decimals as the weight needs, up to 3. A fixed 1 turned the
+    // dial's 80.125 into '80.1 kg', so the set list disagreed with the set.
+    kgReps: (weightKg, reps) =>
+      `${new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: 3 }).format(weightKg)} kg × ${num(reps)}`,
     km: value => `${num(value, 2)} km`,
     // Both guard against a zero on either side: a record with no distance or no
     // duration divides to Infinity, which renders as '∞ /km'.

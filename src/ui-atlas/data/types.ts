@@ -146,7 +146,7 @@ export interface SocialState {
 export type OverlayId =
   | 'settings' | 'logWeight' | 'addFood' | 'exercisePicker'
   | 'dayNote' | 'sessionEditor' | 'quickAdd' | 'history'
-  | 'startSession' | 'routineMerge';
+  | 'startSession' | 'routineMerge' | 'resumeSession';
 
 /**
  * What an overlay is being opened *for*.

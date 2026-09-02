@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { Message } from '../../core/entities/Message';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
 import { parseRoutineFromMessage } from '../../data/ai/GeminiCoach';
@@ -11,6 +11,14 @@ export interface CoachTurn {
   at: Date;
   /** Present when the assistant attached a routine to this message. */
   routine: RoutineTemplate | null;
+  /**
+   * Whether `key` is the message's own id rather than its position.
+   *
+   * Anything that remembers a decision about this message — dismissing its
+   * routine card — has to key off something that survives the thread growing,
+   * and the index fallback does not.
+   */
+  hasId: boolean;
 }
 
 /**
@@ -33,16 +41,55 @@ export function useCoachThread(messages: Message[]): CoachTurn[] {
       text,
       at: new Date(message.timestamp),
       routine,
+      hasId: message.id != null,
     };
   }), [messages]);
 }
 
-/** The most recent routine the coach proposed, which both screens surface as a card. */
-export function latestRoutine(turns: CoachTurn[]): RoutineTemplate | null {
-  for (let i = turns.length - 1; i >= 0; i--) {
-    if (turns[i].routine) return turns[i].routine;
+/**
+ * Routine cards the user has waved away.
+ *
+ * Kept out of the database on purpose. Dismissing is about this screen being
+ * tidy, not about the coach never having said it — the message text stays, and
+ * nothing is deleted from anyone's history. localStorage is therefore the right
+ * home: losing the set costs a re-dismiss, and that is all.
+ */
+const DISMISSED_KEY = 'morphiq_coach_dismissed';
+
+function readDismissed(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter(id => typeof id === 'string') : []);
+  } catch {
+    return new Set();
   }
-  return null;
+}
+
+export function dismissRoutine(messageId: string): Set<string> {
+  const next = readDismissed();
+  next.add(messageId);
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify([...next]));
+  } catch {
+    // The card still goes away for this render; only its memory is lost.
+  }
+  return next;
+}
+
+/**
+ * The dismissed set, and a dismisser that keeps it in step.
+ *
+ * State rather than a bare read so dismissing re-renders the thread — the whole
+ * point of the button is that the card leaves immediately.
+ */
+export function useDismissedRoutines(): [Set<string>, (messageId: string) => void] {
+  const [dismissed, setDismissed] = useState(readDismissed);
+  const dismiss = useCallback((messageId: string) => {
+    setDismissed(dismissRoutine(messageId));
+  }, []);
+  return [dismissed, dismiss];
 }
 
 /**

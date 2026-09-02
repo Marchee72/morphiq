@@ -14,6 +14,7 @@ export interface SessionExerciseInput {
   exerciseName: string;
   targetSets: number;
   targetReps?: number;
+  targetWeight?: number;
   notes?: string;
   biserieGroupId?: string;
 }
@@ -92,7 +93,11 @@ export function buildSessionExercises(
     const count = Math.max(entry.targetSets || 0, logged.length);
     const sets: SessionSetVM[] = Array.from({ length: count }, (_, i) => {
       const actual = logged[i];
-      const weightKg = actual?.weight ?? 0;
+      // The routine's suggested load, until a real one is logged over it —
+      // mirroring how reps have always read `targetReps`. This is the whole of
+      // "suggestion the lifter can override": the dial opens on it, and turning
+      // the dial replaces it.
+      const weightKg = actual?.weight ?? entry.targetWeight ?? 0;
       const reps = actual?.reps ?? entry.targetReps ?? 0;
       const done = Boolean(actual?.isCompleted);
 

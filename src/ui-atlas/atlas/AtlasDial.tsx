@@ -34,17 +34,22 @@ export interface AtlasDialProps {
   min: number;
   max: number;
   step: number;
+  /**
+   * The exact values to offer, when an even `step` cannot describe them.
+   *
+   * Weight uses this: its allowed decimals (.125/.5/.75) sit at uneven
+   * intervals. Left out, the ladder is derived from min/max/step as before,
+   * which is what reps still does.
+   */
+  values?: number[];
   /** Decimals to show. Weight uses 1 (so 32.5 reads correctly), reps 0. */
   decimals?: number;
   suffix?: string;
   formatValue?: (value: number) => string;
 }
 
-const round = (value: number, step: number, min: number) =>
-  min + Math.round((value - min) / step) * step;
-
 export const AtlasDial: React.FC<AtlasDialProps> = ({
-  label, value, onChange, min, max, step, decimals = 0, suffix, formatValue,
+  label, value, onChange, min, max, step, values: ladderProp, decimals = 0, suffix, formatValue,
 }) => {
   const { t } = useT();
   const listRef = useRef<HTMLDivElement>(null);
@@ -54,24 +59,64 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
   const settling = useRef(false);
   const commitTimer = useRef<number | undefined>(undefined);
 
-  const index = Math.round((value - min) / step);
-  const total = Math.floor((max - min) / step) + 1;
+  /**
+   * Every value the dial can hold, in order.
+   *
+   * The component works in *indices* into this list rather than in multiples of
+   * `step`, so an uneven ladder costs it nothing. An evenly stepped dial simply
+   * gets its ladder generated here instead of implied.
+   */
+  const ladder = useMemo(
+    () => ladderProp ?? Array.from(
+      { length: Math.floor((max - min) / step) + 1 },
+      (_, i) => min + i * step,
+    ),
+    [ladderProp, min, max, step],
+  );
+
+  // Nearest rather than exact: a value can arrive from a logged set, a routine's
+  // suggestion or an older build, and none of those are obliged to sit on the
+  // ladder. Landing on the closest rung beats falling back to index 0.
+  const index = useMemo(() => {
+    let best = 0;
+    let bestDistance = Infinity;
+    for (let i = 0; i < ladder.length; i++) {
+      const distance = Math.abs(ladder[i] - value);
+      if (distance < bestDistance) { best = i; bestDistance = distance; }
+    }
+    return best;
+  }, [ladder, value]);
+
+  const total = ladder.length;
 
   const values = useMemo(() => {
     const from = Math.max(0, index - WINDOW);
     const to = Math.min(total - 1, index + WINDOW);
-    return Array.from({ length: to - from + 1 }, (_, i) => min + (from + i) * step);
-  }, [index, total, min, step]);
+    return ladder.slice(from, to + 1);
+  }, [ladder, index, total]);
 
   const show = useCallback(
     (v: number) => (formatValue ? formatValue(v) : v.toFixed(decimals)),
     [formatValue, decimals],
   );
 
-  const clampToRange = useCallback(
-    (v: number) => round(Math.min(max, Math.max(min, v)), step, min),
-    [max, min, step],
+  /** The value at an index, held inside the ladder. */
+  const at = useCallback(
+    (i: number) => ladder[Math.min(ladder.length - 1, Math.max(0, i))],
+    [ladder],
   );
+
+  /** Whatever was typed, moved to the nearest rung the dial actually has. */
+  const clampToRange = useCallback((v: number) => {
+    const bounded = Math.min(max, Math.max(min, v));
+    let best = ladder[0];
+    let bestDistance = Infinity;
+    for (const candidate of ladder) {
+      const distance = Math.abs(candidate - bounded);
+      if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+    }
+    return best;
+  }, [ladder, max, min]);
 
   // Keep the wheel centred on the value, including when it changes from outside
   // (moving to another set re-seeds it).
@@ -120,18 +165,18 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
   };
 
   const nudge = (direction: 1 | -1) => {
-    const next = round(value + direction * step, step, min);
-    if (next >= min && next <= max) onChange(next);
+    const next = index + direction;
+    if (next >= 0 && next < ladder.length) onChange(ladder[next]);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const jump = (delta: number) => { e.preventDefault(); onChange(clampToRange(value + delta)); };
+    const jump = (steps: number) => { e.preventDefault(); onChange(at(index + steps)); };
     if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); nudge(1); }
     if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); nudge(-1); }
-    if (e.key === 'PageUp') jump(step * 10);
-    if (e.key === 'PageDown') jump(-step * 10);
-    if (e.key === 'Home') { e.preventDefault(); onChange(min); }
-    if (e.key === 'End') { e.preventDefault(); onChange(max); }
+    if (e.key === 'PageUp') jump(10);
+    if (e.key === 'PageDown') jump(-10);
+    if (e.key === 'Home') { e.preventDefault(); onChange(at(0)); }
+    if (e.key === 'End') { e.preventDefault(); onChange(at(ladder.length - 1)); }
   };
 
   return (

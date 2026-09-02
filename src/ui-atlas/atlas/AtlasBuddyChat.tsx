@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ClipboardList, Send, Users } from 'lucide-react';
 import { useT } from '../../i18n';
+import { RoutineCopyButton } from '../components/RoutineCopyButton';
 import { useStore } from '../../presentation/state/store';
 import { useSocial } from '../data/useSocial';
 import { useAppData } from '../data/useAppData';
@@ -309,14 +310,21 @@ const RoutineBubble: React.FC<{
         )}
       </div>
 
-      {routine && !message.mine && (
-        saved
-          ? <span className="at-buddy-invitestate">{t('buddy.routineSaved')}</span>
-          : (
-            <button className="at-buddy-invitejoin" onClick={() => void save()}>
-              {t('buddy.routineSave')}
-            </button>
-          )
+      {routine && (
+        <div className="at-buddy-routineacts">
+          {/* Offered on your own shares too: getting a routine out as text is
+              useful whichever end of the conversation you are on. */}
+          <RoutineCopyButton routine={routine} className="at-buddy-invitejoin" />
+          {!message.mine && (
+            saved
+              ? <span className="at-buddy-invitestate">{t('buddy.routineSaved')}</span>
+              : (
+                <button className="at-buddy-invitejoin" onClick={() => void save()}>
+                  {t('buddy.routineSave')}
+                </button>
+              )
+          )}
+        </div>
       )}
       {failed && <span className="at-buddy-error">{t('buddy.routineFailed')}</span>}
     </div>

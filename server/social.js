@@ -51,6 +51,8 @@ const MAX_PAYLOAD_BYTES = 32_768;
 /** More than any real routine, and far less than a payload worth storing. */
 const MAX_SHARED_EXERCISES = 40;
 const MAX_SHARED_TEXT = 200;
+/** Past this a 'suggestion' is a typo or a joke, and it lands in someone else's data. */
+const MAX_SHARED_WEIGHT_KG = 1000;
 
 /**
  * How long a session stays live without a heartbeat.
@@ -201,6 +203,19 @@ function positiveInt(value, fallback) {
 }
 
 /**
+ * A positive weight, kept fractional.
+ *
+ * `positiveInt` would floor 62.5 to 62, and half-kilo and micro-plate loads are
+ * exactly the ones worth sending. Capped because this ends up in somebody
+ * else's database, and rounded to the three decimals the dial can represent.
+ */
+function positiveWeight(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0 || n > MAX_SHARED_WEIGHT_KG) return undefined;
+  return Number(n.toFixed(3));
+}
+
+/**
  * Rebuilds a shared routine field by field on the way in.
  *
  * A routine is the one thing one account sends another that the other account
@@ -232,6 +247,9 @@ function toSharedRoutine(raw) {
         exerciseName,
         targetSets: positiveInt(item.targetSets, 3),
         targetReps: item.targetReps != null ? positiveInt(item.targetReps, 10) : undefined,
+        // A suggestion, and optional: absent means the routine had no opinion,
+        // which is different from suggesting zero.
+        targetWeight: item.targetWeight != null ? positiveWeight(item.targetWeight) : undefined,
         notes: item.notes != null ? clip(item.notes, 500) : undefined,
       }];
     });

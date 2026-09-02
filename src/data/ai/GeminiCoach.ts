@@ -29,6 +29,9 @@ export function parseRoutineFromMessage(content: string): RoutineTemplate | null
           exerciseName: String(ex.exerciseName || ex.name || 'Ejercicio'),
           targetSets: Number(ex.targetSets || ex.sets || 3),
           targetReps: ex.targetReps != null ? Number(ex.targetReps) : undefined,
+          // Left undefined rather than defaulted: no suggestion is a real
+          // answer, and a fabricated load is worse than an empty dial.
+          targetWeight: ex.targetWeight != null ? Number(ex.targetWeight) : undefined,
           notes: ex.notes ? String(ex.notes) : undefined,
         })),
         createdAt: data.createdAt ? new Date(data.createdAt as string) : new Date(),
@@ -433,11 +436,12 @@ ${profile.availableEquipment && profile.availableEquipment.length > 0
   "description": "Breve descripción",
   "targetMuscles": ["Chest", "Triceps"],
   "exercises": [
-    { "exerciseId": "0025", "exerciseName": "barbell bench press", "targetSets": 4, "targetReps": 10, "notes": "Sobrecarga progresiva" }
+    { "exerciseId": "0025", "exerciseName": "barbell bench press", "targetSets": 4, "targetReps": 10, "targetWeight": 60, "notes": "Sobrecarga progresiva" }
   ]
 }
 \`\`\`
-7. Do NOT add disclaimers, boilerplate summaries, or repeated sign-offs at the end.
+7. \`targetWeight\` is optional and in kg. Include it only when the user's own logged history supports a number; omit the field entirely rather than guessing. It is a starting suggestion the user overrides on the dial.
+8. Do NOT add disclaimers, boilerplate summaries, or repeated sign-offs at the end.
 `;
 
 

@@ -258,6 +258,15 @@ export const en = {
   'gym.workouts': 'Sessions',
   'gym.minutes': 'Minutes',
 
+  // -- Picking up an interrupted session --------------------------
+  'resume.title': 'You were mid-workout',
+  'resume.subtitle': 'This session was still running when the app closed',
+  'resume.meta': '{sets} sets logged over {duration}',
+  'resume.stopped': 'Last touched {when}',
+  'resume.resume': 'Resume',
+  'resume.finish': 'Finish now',
+  'resume.discard': 'Discard it',
+
   // -- Starting a session ----------------------------------------
   'start.title': 'What are we starting?',
   'start.subtitle': 'Pick a routine, or go without one',
@@ -309,6 +318,9 @@ export const en = {
   'coach.emptySub': 'The coach reads your sessions, weigh-ins and meals. Ask it anything.',
   'coach.startRoutine': 'Start routine',
   'coach.saveRoutine': 'Save',
+  'coach.dismissRoutine': 'Dismiss this routine',
+  'coach.setsOnly': '{n} sets',
+  'routine.copy': 'Copy as text',
   'coach.routineMeta': '{sets} sets, about {min} minutes',
   'coach.prompt.week': 'How was my week?',
   'coach.prompt.routine': 'Build me a push routine',
@@ -342,6 +354,7 @@ export const en = {
   'train.allDoneSub': 'Add another exercise, or finish the session.',
   'train.setsDone': '{done} of {total} done',
   'train.removeSet': 'Remove set',
+  'train.finishExercise': 'Finish exercise',
   'train.volumeSoFar': '{volume} kg moved',
   'picker.swapSubtitle': 'Pick what replaces it',
 

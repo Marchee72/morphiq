@@ -52,6 +52,8 @@ export interface LiveSession {
   updateSet(setIdx: number, patch: { weightKg?: number; reps?: number; done?: boolean }): void;
   addSet(): void;
   removeSet(setIdx: number): void;
+  /** Ends the current exercise at the sets already logged, dropping the rest. */
+  finishExercise(): void;
 
   goTo(exerciseIdx: number, setIdx: number): void;
   goToExercise(exerciseIdx: number): void;
@@ -258,6 +260,7 @@ export function useLiveSession(
     updateSet,
     addSet,
     removeSet,
+    finishExercise: () => useStore.getState().finishActiveSessionExercise(cursor.exerciseIdx),
     goTo: (exerciseIdx, setIdx) => onCursorChange?.({ exerciseIdx, setIdx }),
     goToExercise: exerciseIdx => onCursorChange?.({
       exerciseIdx,

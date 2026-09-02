@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowRight, Dumbbell, Play } from 'lucide-react';
 import { useT } from '../../i18n';
+import { RoutineCopyButton } from '../components/RoutineCopyButton';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { AtlasStates } from './AtlasStates';
 import { AtlasSessionDetail } from './AtlasSessionDetail';
@@ -63,18 +64,25 @@ export const AtlasGymHub: React.FC = () => {
         <div className="at-pad">
           <div className="at-card" style={{ padding: '8px 20px' }}>
             {training.routines.map((routine, i) => (
-              <button
+              /* A row of two buttons rather than one button containing another,
+                 which is invalid and which swallowed the inner click. */
+              <div
                 key={routine.id ?? routine.title}
                 className="at-routine-item"
-                style={{ borderTop: i === 0 ? 'none' : undefined, width: '100%' }}
-                onClick={() => actions.startRoutine(routine)}
+                style={{ borderTop: i === 0 ? 'none' : undefined }}
               >
-                <span>
-                  {routine.title}
-                  <small>{tp('unit.sets', routine.exercises.reduce((n, e) => n + e.targetSets, 0))}</small>
-                </span>
-                <b><Play size={15} /></b>
-              </button>
+                <button
+                  className="at-routine-open"
+                  onClick={() => actions.startRoutine(routine)}
+                >
+                  <span>
+                    {routine.title}
+                    <small>{tp('unit.sets', routine.exercises.reduce((n, e) => n + e.targetSets, 0))}</small>
+                  </span>
+                  <b><Play size={15} /></b>
+                </button>
+                <RoutineCopyButton routine={routine} className="at-routine-copy" />
+              </div>
             ))}
           </div>
         </div>

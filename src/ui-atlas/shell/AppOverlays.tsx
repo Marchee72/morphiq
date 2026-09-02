@@ -12,6 +12,7 @@ import { AtlasHistory } from '../atlas/AtlasHistory';
 import { AtlasSessionDetail } from '../atlas/AtlasSessionDetail';
 import { AtlasStartSheet } from '../atlas/AtlasStartSheet';
 import { AtlasRoutineMergeSheet } from '../atlas/AtlasRoutineMergeSheet';
+import { AtlasResumeSheet } from '../atlas/AtlasResumeSheet';
 import type { Exercise } from '../../core/entities/Exercise';
 import type { FeelingId } from '../types';
 
@@ -83,6 +84,8 @@ export const AppOverlays: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       />
 
       <AtlasStartSheet open={overlay === 'startSession'} onClose={onClose} />
+
+      <AtlasResumeSheet open={overlay === 'resumeSession'} onClose={onClose} />
 
       <AtlasRoutineMergeSheet
         open={overlay === 'routineMerge'}

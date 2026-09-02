@@ -43,7 +43,13 @@ class ActiveWorkoutService : Service() {
                 updateNotification(title, startTimeMs, setsCount)
             }
         }
-        return START_STICKY
+        // NOT sticky. A sticky restart redelivers a null intent, so the `when`
+        // above matches nothing and `startForeground` is never called — and
+        // Android 14 kills the process for that with
+        // ForegroundServiceDidNotStartInTimeException. The session itself now
+        // survives in storage, and the resume sheet is the deliberate way back
+        // into it, so there is nothing for a restarted service to recover.
+        return START_NOT_STICKY
     }
 
     private fun createNotificationChannel() {

@@ -256,6 +256,15 @@ export const es: Translations = {
   'gym.workouts': 'Sesiones',
   'gym.minutes': 'Minutos',
 
+  // -- Retomar una sesion interrumpida ----------------------------
+  'resume.title': 'Estabas entrenando',
+  'resume.subtitle': 'Esta sesion seguia abierta cuando se cerro la app',
+  'resume.meta': '{sets} series en {duration}',
+  'resume.stopped': 'Ultimo cambio {when}',
+  'resume.resume': 'Retomar',
+  'resume.finish': 'Terminar ya',
+  'resume.discard': 'Descartar',
+
   // -- Empezar una sesion ----------------------------------------
   'start.title': 'Con que arrancamos?',
   'start.subtitle': 'Elige una rutina, o ve sin ninguna',
@@ -307,6 +316,9 @@ export const es: Translations = {
   'coach.emptySub': 'El coach lee tus sesiones, mediciones y comidas. Preguntale lo que sea.',
   'coach.startRoutine': 'Iniciar rutina',
   'coach.saveRoutine': 'Guardar',
+  'coach.dismissRoutine': 'Descartar esta rutina',
+  'coach.setsOnly': '{n} series',
+  'routine.copy': 'Copiar como texto',
   'coach.routineMeta': '{sets} series, unos {min} minutos',
   'coach.prompt.week': 'Como fue mi semana?',
   'coach.prompt.routine': 'Arma una rutina de empuje',
@@ -340,6 +352,7 @@ export const es: Translations = {
   'train.allDoneSub': 'Anade otro ejercicio, o termina la sesion.',
   'train.setsDone': '{done} de {total} hechas',
   'train.removeSet': 'Quitar serie',
+  'train.finishExercise': 'Terminar ejercicio',
   'train.volumeSoFar': '{volume} kg movidos',
   'picker.swapSubtitle': 'Elige por cual lo cambias',
 

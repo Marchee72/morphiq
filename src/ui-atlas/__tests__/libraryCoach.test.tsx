@@ -78,7 +78,12 @@ describe('Library', () => {
 });
 
 describe('Coach', () => {
-  beforeEach(() => useStore.setState(initialState, true));
+  beforeEach(() => {
+    useStore.setState(initialState, true);
+    // Dismissed routine cards persist to localStorage by design, so without
+    // this a dismissal in one test hides the card in the next.
+    localStorage.clear();
+  });
 
   it('invites a first question when the thread is empty', () => {
     renderScreen('coach');
@@ -115,6 +120,72 @@ describe('Coach', () => {
     expect(text()).not.toContain('targetSets');
     expect(text()).toContain('Push A');
     expect(screen.getAllByRole('button', { name: /start routine/i }).length).toBeGreaterThan(0);
+  });
+
+  /** A coach reply carrying a routine block, as the thread stores it. */
+  const withRoutine = (id: string, title: string, exercises: unknown[]) => ({
+    id, profileId: 'p1', timestamp: new Date(), sender: 'assistant' as const,
+    content: ['Here you go.', '```json:routine', JSON.stringify({ title, exercises }), '```'].join(String.fromCharCode(10)),
+  });
+
+  it('renders every routine, not only the most recent one', () => {
+    renderScreen('coach', {
+      overrides: {
+        chatHistory: [
+          withRoutine('1', 'Push A', [{ exerciseName: 'Bench Press', targetSets: 4, targetReps: 8 }]),
+          { id: '2', profileId: 'p1', timestamp: new Date(), sender: 'user', content: 'And for pull?' },
+          withRoutine('3', 'Pull B', [{ exerciseName: 'Barbell Row', targetSets: 4, targetReps: 10 }]),
+        ],
+      },
+    });
+    // The old screen hoisted a single card out of the thread and showed only
+    // the newest routine; the earlier one was silently dropped.
+    expect(text()).toContain('Push A');
+    expect(text()).toContain('Pull B');
+  });
+
+  it('keeps each routine card with the message that proposed it', () => {
+    const { container } = renderScreen('coach', {
+      overrides: {
+        chatHistory: [
+          withRoutine('1', 'Push A', [{ exerciseName: 'Bench Press', targetSets: 4 }]),
+          { id: '2', profileId: 'p1', timestamp: new Date(), sender: 'user', content: 'Thanks!' },
+        ],
+      },
+    });
+    const nodes = [...container.querySelectorAll('.at-bubble, .at-routine')];
+    const card = nodes.findIndex(n => n.classList.contains('at-routine'));
+    const lastBubble = nodes.length - 1;
+    // The card sits before the later user message, not after the whole thread.
+    expect(card).toBeGreaterThanOrEqual(0);
+    expect(card).toBeLessThan(lastBubble);
+  });
+
+  it('hides a dismissed routine card but keeps the coach text', () => {
+    renderScreen('coach', {
+      overrides: {
+        chatHistory: [withRoutine('1', 'Push A', [{ exerciseName: 'Bench Press', targetSets: 4 }])],
+      },
+    });
+    expect(text()).toContain('Push A');
+
+    fireEvent.click(screen.getByRole('button', { name: /dismiss this routine/i }));
+
+    expect(text()).not.toContain('Push A');
+    // The reply itself is untouched — dismissing tidies the screen, it does
+    // not edit the conversation.
+    expect(text()).toContain('Here you go.');
+  });
+
+  it('shows sets alone when the routine prescribed no reps', () => {
+    renderScreen('coach', {
+      overrides: {
+        chatHistory: [withRoutine('1', 'Legs', [{ exerciseName: 'Squat', targetSets: 5 }])],
+      },
+    });
+    // It used to print a fabricated '5 × 10', which read as the coach's number.
+    expect(text()).toContain('5 sets');
+    expect(text()).not.toContain('5 × 10');
   });
 
   it('offers the suggested prompts', () => {
