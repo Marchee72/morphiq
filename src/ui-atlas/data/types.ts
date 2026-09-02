@@ -9,6 +9,7 @@ import type { ExerciseFilters, FacetCounts } from '../../data/exercises/Exercise
 import type { WeeklyStatsVM } from '../derive/history';
 import type { ExerciseSessionVM } from '../derive/exerciseHistory';
 import type { ExerciseStatsVM, StatWindow } from '../derive/exerciseStats';
+import type { WellnessTodayVM, WellnessTrendVM } from '../derive/wellness';
 import type { SessionDetailVM } from '../derive/sessionDetail';
 import type { ManualBia } from '../../presentation/state/store';
 import type {
@@ -56,6 +57,13 @@ export interface AppData {
   /** Steps from the phone's health source. Empty on the web, which has none. */
   steps: StepsVM;
   catalog: CatalogSlice;
+  /**
+   * How the day is going, and how it has been going.
+   *
+   * A field rather than a function: unlike exercise stats there is exactly one
+   * of it, and Today reads it on every render.
+   */
+  wellness: { today: WellnessTodayVM; trend: WellnessTrendVM };
   coach: { thread: Message[]; isLoading: boolean };
   /**
    * Past sessions for one exercise, newest first. A function rather than a field
@@ -153,7 +161,10 @@ export interface SocialState {
 export type OverlayId =
   | 'settings' | 'logWeight' | 'addFood' | 'exercisePicker'
   | 'dayNote' | 'sessionEditor' | 'quickAdd' | 'history'
-  | 'startSession' | 'routineMerge' | 'resumeSession';
+  | 'startSession' | 'routineMerge' | 'resumeSession'
+  // Reached from Today's rail and from the day sheet, so it earns a slot in the
+  // shell rather than sitting on one screen's local state.
+  | 'wellness';
 
 /**
  * What an overlay is being opened *for*.

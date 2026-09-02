@@ -73,4 +73,22 @@ export interface IRoutineTemplateRepository {
   delete(id: string): Promise<void>;
 }
 
+import type { WellnessLog } from '../entities/WellnessLog';
+
+export interface IWellnessLogRepository {
+  /**
+   * Writes the day, replacing whatever was there.
+   *
+   * An upsert rather than an add: the day is the identity, so answering it
+   * twice is a correction, not a second entry. Enforced in the repository
+   * rather than left to callers — one duplicate row and every read has to pick
+   * a winner.
+   */
+  save(log: WellnessLog): Promise<string>;
+  getForDay(profileId: string, day: string): Promise<WellnessLog | undefined>;
+  /** Days from `sinceDay` (inclusive) to now, oldest first. */
+  getRange(profileId: string, sinceDay: string): Promise<WellnessLog[]>;
+  delete(id: string): Promise<void>;
+}
+
 

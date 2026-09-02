@@ -1,10 +1,11 @@
-import type { IHealthProvider } from '../../core/interfaces/IHealthProvider';
+import type { IHealthProvider, WellnessSignals } from '../../core/interfaces/IHealthProvider';
 import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { Measurement } from '../../core/entities/Measurement';
 import type { UserProfile } from '../../core/entities/UserProfile';
 import type { Workout, HeartRateSample } from 'capacitor-health';
 import { getAge } from '../../core/entities/UserProfile';
 import { BodyComposition } from './BodyCompositionPlugin';
+import { Wellness, SLEEP_READ_PERMISSIONS, type DailyBpm, type DailyRmssd } from './WellnessPlugin';
 import { BiaCalculator, NEUTRAL_IMPEDANCE } from '../calculation/BiaCalculator';
 import { Capacitor } from '@capacitor/core';
 
@@ -57,6 +58,12 @@ export class CapacitorHealthProvider implements IHealthProvider {
     return BODY_READ_PERMISSIONS.some(p => status?.permissions?.[p] === true);
   }
 
+  /** Either read is enough to be worth calling the wellness import at all. */
+  private async hasWellnessAccess(): Promise<boolean> {
+    const status = await settleWithin(Wellness.checkPermissions(), PERMISSION_DIALOG_TIMEOUT_MS);
+    return SLEEP_READ_PERMISSIONS.some(p => status?.permissions?.[p] === true);
+  }
+
   async requestPermissions(): Promise<boolean> {
     if (!this.isAvailable()) return false;
     try {
@@ -83,6 +90,28 @@ export class CapacitorHealthProvider implements IHealthProvider {
         }
       }
 
+      /**
+       * Sleep and heart signals, asked for after body composition and behind
+       * their own `hasWellnessAccess` check for the same reason: Health Connect
+       * only lets an app ask a couple of times before sending the user to its
+       * settings, so a dialog for something already granted is a wasted one.
+       *
+       * Never fatal. The questionnaire's four scales are answered by hand and
+       * cannot come from here at all, so refusing this leaves it fully usable.
+       */
+      let wellnessGranted = false;
+      if (Capacitor.isNativePlatform()) {
+        try {
+          if (!(await this.hasWellnessAccess())) {
+            await new Promise(resolve => setTimeout(resolve, 800));
+            await settleWithin(Wellness.requestPermissions(), PERMISSION_DIALOG_TIMEOUT_MS);
+          }
+          wellnessGranted = await this.hasWellnessAccess();
+        } catch (e) {
+          console.warn('MorphIQ: Wellness permissions request warning:', e);
+        }
+      }
+
       const permissionsMap: Record<string, boolean> = {};
       if (Array.isArray(result?.permissions)) {
         result.permissions.forEach(p => {
@@ -105,7 +134,7 @@ export class CapacitorHealthProvider implements IHealthProvider {
        * returns an empty list when it is missing, so a false negative here is
        * the only way to lose data that Health Connect was willing to give.
        */
-      return bodyGranted || Object.values(permissionsMap).some(Boolean);
+      return bodyGranted || wellnessGranted || Object.values(permissionsMap).some(Boolean);
     } catch (e) {
       console.error('Failed to request health permissions:', e);
       return false;
@@ -196,6 +225,77 @@ export class CapacitorHealthProvider implements IHealthProvider {
         .sort((a, b) => a.date.localeCompare(b.date));
     } catch (e) {
       console.error('Failed to query steps from Capacitor:', e);
+      return [];
+    }
+  }
+
+  /**
+   * Sleep and heart signals, folded into one row per day.
+   *
+   * Nap-and-night days do happen, so sessions are summed per day rather than
+   * the last one winning. Resting heart rate and HRV are averaged when a day
+   * carries several readings — a watch can write more than one.
+   *
+   * Failures are swallowed to an empty list, like the other imports here: the
+   * questionnaire is answerable by hand and must not be blocked by a device
+   * that has nothing to contribute.
+   */
+  async importWellnessSignals(since: Date): Promise<WellnessSignals[]> {
+    if (!Capacitor.isNativePlatform()) return [];
+    try {
+      const { available } = await Wellness.isAvailable();
+      if (!available) return [];
+
+      const futureEnd = new Date();
+      futureEnd.setDate(futureEnd.getDate() + 1);
+      const range = { startDate: since.toISOString(), endDate: futureEnd.toISOString() };
+
+      const byDay = new Map<string, WellnessSignals>();
+      const dayOf = (day: string): WellnessSignals => {
+        const existing = byDay.get(day);
+        if (existing) return existing;
+        const created: WellnessSignals = { day };
+        byDay.set(day, created);
+        return created;
+      };
+
+      const { sessions } = await Wellness.querySleep(range);
+      for (const session of sessions) {
+        if (!(session.totalMinutes > 0)) continue;
+        const entry = dayOf(session.day);
+        entry.sleepMinutes = (entry.sleepMinutes ?? 0) + session.totalMinutes;
+        entry.sleepDeepMinutes = (entry.sleepDeepMinutes ?? 0) + session.deepMinutes;
+        entry.sleepRemMinutes = (entry.sleepRemMinutes ?? 0) + session.remMinutes;
+      }
+
+      // Its own try/catch: a device that reports sleep but refuses heart-rate
+      // reads should still contribute the sleep.
+      try {
+        const { restingHeartRate, hrv } = await Wellness.queryHeartSignals(range);
+        const average = (
+          rows: { day: string }[],
+          read: (row: never) => number,
+          write: (entry: WellnessSignals, value: number) => void,
+        ) => {
+          const sums = new Map<string, { total: number; count: number }>();
+          for (const row of rows) {
+            const value = read(row as never);
+            if (!Number.isFinite(value) || value <= 0) continue;
+            const acc = sums.get(row.day) ?? { total: 0, count: 0 };
+            sums.set(row.day, { total: acc.total + value, count: acc.count + 1 });
+          }
+          for (const [day, acc] of sums) write(dayOf(day), Math.round(acc.total / acc.count));
+        };
+
+        average(restingHeartRate, (r: DailyBpm) => r.bpm, (entry, value) => { entry.restingHr = value; });
+        average(hrv, (r: DailyRmssd) => r.rmssd, (entry, value) => { entry.hrvMs = value; });
+      } catch (e) {
+        console.warn('MorphIQ: heart signals unavailable:', e);
+      }
+
+      return [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
+    } catch (e) {
+      console.error('Failed to import wellness signals from Health Connect:', e);
       return [];
     }
   }

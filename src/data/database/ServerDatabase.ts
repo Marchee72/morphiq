@@ -10,6 +10,7 @@ import { api } from './apiClient';
 // import it from here, and the move should not be their problem.
 export { UnauthorizedError } from './apiClient';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
+import type { WellnessLog } from '../../core/entities/WellnessLog';
 import type {
   IUserProfileRepository,
   IMeasurementRepository,
@@ -19,6 +20,7 @@ import type {
   IWorkoutSetRepository,
   IFavoriteExerciseRepository,
   IRoutineTemplateRepository,
+  IWellnessLogRepository,
 } from '../../core/interfaces/IDatabase';
 
 // Helpers to cast date strings from JSON responses back to Date objects
@@ -330,6 +332,54 @@ export class ServerRoutineTemplateRepository implements IRoutineTemplateReposito
 
   async delete(id: string): Promise<void> {
     await api(`/api/routines/${id}`, { method: 'DELETE' });
+  }
+}
+
+// ─── Wellness ─────────────────────────────────────────────────────────────────
+function parseWellnessLog(raw: Record<string, unknown>): WellnessLog {
+  const n = (v: unknown) => (v != null ? Number(v) : undefined);
+  return {
+    ...raw,
+    id: String(raw.id),
+    timestamp: new Date(raw.timestamp as string),
+    energy: n(raw.energy),
+    soreness: n(raw.soreness),
+    stress: n(raw.stress),
+    mood: n(raw.mood),
+    sleepMinutes: n(raw.sleepMinutes),
+    sleepDeepMinutes: n(raw.sleepDeepMinutes),
+    sleepRemMinutes: n(raw.sleepRemMinutes),
+    restingHr: n(raw.restingHr),
+    hrvMs: n(raw.hrvMs),
+  } as WellnessLog;
+}
+
+export class ServerWellnessLogRepository implements IWellnessLogRepository {
+  /** PUT on the day, because the day is the identity — see the interface. */
+  async save(log: WellnessLog): Promise<string> {
+    const result = await api<{ id: string }>(
+      `/api/profiles/${log.profileId}/wellness/${log.day}`,
+      { method: 'PUT', body: JSON.stringify(log) },
+    );
+    return result.id;
+  }
+
+  async getForDay(profileId: string, day: string): Promise<WellnessLog | undefined> {
+    const rows = await api<Record<string, unknown>[]>(
+      `/api/profiles/${profileId}/wellness?since=${encodeURIComponent(day)}&until=${encodeURIComponent(day)}`,
+    );
+    return rows.length > 0 ? parseWellnessLog(rows[0]) : undefined;
+  }
+
+  async getRange(profileId: string, sinceDay: string): Promise<WellnessLog[]> {
+    const rows = await api<Record<string, unknown>[]>(
+      `/api/profiles/${profileId}/wellness?since=${encodeURIComponent(sinceDay)}`,
+    );
+    return rows.map(parseWellnessLog);
+  }
+
+  async delete(id: string): Promise<void> {
+    await api(`/api/wellness/${id}`, { method: 'DELETE' });
   }
 }
 

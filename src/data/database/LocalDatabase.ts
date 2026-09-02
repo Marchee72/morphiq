@@ -8,6 +8,7 @@ import type { Message } from '../../core/entities/Message';
 import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import type { FavoriteExercise } from '../../core/entities/FavoriteExercise';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
+import type { WellnessLog } from '../../core/entities/WellnessLog';
 import type {
   IUserProfileRepository,
   IMeasurementRepository,
@@ -17,6 +18,7 @@ import type {
   IWorkoutSetRepository,
   IFavoriteExerciseRepository,
   IRoutineTemplateRepository,
+  IWellnessLogRepository,
 } from '../../core/interfaces/IDatabase';
 
 
@@ -29,6 +31,7 @@ export class DexieDatabase extends Dexie {
   workoutSets!: Table<WorkoutSet, number>;
   favoriteExercises!: Table<FavoriteExercise, number>;
   routineTemplates!: Table<RoutineTemplate, number>;
+  wellnessLogs!: Table<WellnessLog, number>;
 
   constructor() {
     super('MorphIQDatabase');
@@ -86,6 +89,21 @@ export class DexieDatabase extends Dexie {
       userExercises: null,
       favoriteExercises: '++id, profileId, exerciseId, addedAt',
       routineTemplates: '++id, profileId, title, createdAt',
+    });
+    // `[profileId+day]` is the compound index the upsert reads: one row per
+    // profile per day is the whole shape of the table, and finding the existing
+    // row by scanning would get slower with every day the app is used.
+    this.version(7).stores({
+      userProfiles: '++id, name, gender, birthDate, height, createdAt',
+      measurements: '++id, profileId, timestamp, weight, impedance',
+      foodLogs: '++id, profileId, timestamp, mealType',
+      workoutLogs: '++id, profileId, timestamp, type',
+      messages: '++id, profileId, timestamp, sender',
+      workoutSets: '++id, workoutLogId, profileId, exerciseName, exerciseId, timestamp',
+      userExercises: null,
+      favoriteExercises: '++id, profileId, exerciseId, addedAt',
+      routineTemplates: '++id, profileId, title, createdAt',
+      wellnessLogs: '++id, profileId, day, [profileId+day]',
     });
   }
 }
@@ -368,6 +386,56 @@ export class RoutineTemplateRepository implements IRoutineTemplateRepository {
 
   async delete(id: string): Promise<void> {
     await db.routineTemplates.delete(Number(id));
+  }
+}
+
+export class WellnessLogRepository implements IWellnessLogRepository {
+  /**
+   * Upsert on `[profileId+day]`.
+   *
+   * The row is merged rather than replaced, because two different writers reach
+   * it: the sheet, which knows the four answers, and the Health Connect import,
+   * which knows sleep and resting heart rate. Replacing would mean whichever ran
+   * last wiped the other's fields.
+   */
+  async save(log: WellnessLog): Promise<string> {
+    const existing = await db.wellnessLogs
+      .where('[profileId+day]')
+      .equals([log.profileId, log.day])
+      .first();
+
+    if (existing?.id !== undefined) {
+      const { id: _incoming, ...incoming } = log;
+      await db.wellnessLogs.update(existing.id as unknown as number, incoming);
+      return existing.id.toString();
+    }
+
+    const id = await db.wellnessLogs.add({ ...log, timestamp: log.timestamp || new Date() });
+    return id.toString();
+  }
+
+  async getForDay(profileId: string, day: string): Promise<WellnessLog | undefined> {
+    const record = await db.wellnessLogs
+      .where('[profileId+day]')
+      .equals([profileId, day])
+      .first();
+    return record && { ...record, id: record.id?.toString() };
+  }
+
+  async getRange(profileId: string, sinceDay: string): Promise<WellnessLog[]> {
+    const records = await db.wellnessLogs
+      .where('profileId')
+      .equals(profileId)
+      .toArray();
+    // `day` is zero-padded precisely so this comparison is a string compare.
+    return records
+      .filter(r => r.day >= sinceDay)
+      .sort((a, b) => a.day.localeCompare(b.day))
+      .map(r => ({ ...r, id: r.id?.toString() }));
+  }
+
+  async delete(id: string): Promise<void> {
+    await db.wellnessLogs.delete(Number(id));
   }
 }
 

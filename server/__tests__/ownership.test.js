@@ -170,6 +170,38 @@ describe('guardRow', () => {
   });
 });
 
+/**
+ * Wellness sits under the blanket `guardProfile` mounted on
+ * `/api/profiles/:profileId`, and its DELETE addresses a row by id. Neither
+ * route names a profile in its body, so `guardBodyProfile` never sees them --
+ * these are the two guards that actually stand in front of a wellness day.
+ */
+describe('wellness routes', () => {
+  it("refuses reading another user's wellness days", async () => {
+    const pool = fakePool([OWNS_1_AND_2]);
+    const req = reqFor({ id: 7 }, { params: { profileId: '9' } });
+    expect((await run(guardProfile(pool), req)).status).toBe(403);
+  });
+
+  it('lets a user write their own day', async () => {
+    const pool = fakePool([OWNS_1_AND_2]);
+    const req = reqFor({ id: 7 }, { params: { profileId: '2', day: '2026-06-27' } });
+    expect((await run(guardProfile(pool), req)).passed).toBe(true);
+  });
+
+  it("refuses deleting a wellness row on someone else's profile", async () => {
+    const pool = fakePool([OWNS_1_AND_2, ['FROM wellness_logs WHERE id', [{ profileId: '9' }]]]);
+    const req = reqFor({ id: 7 }, { params: { id: '12' } });
+    expect((await run(guardRow(pool, 'wellness_logs'), req)).status).toBe(403);
+  });
+
+  it('allows deleting your own', async () => {
+    const pool = fakePool([OWNS_1_AND_2, ['FROM wellness_logs WHERE id', [{ profileId: '1' }]]]);
+    const req = reqFor({ id: 7 }, { params: { id: '12' } });
+    expect((await run(guardRow(pool, 'wellness_logs'), req)).passed).toBe(true);
+  });
+});
+
 describe('guardWorkoutSets', () => {
   it("refuses to read the sets of somebody else's session", async () => {
     const pool = fakePool([

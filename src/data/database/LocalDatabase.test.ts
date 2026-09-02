@@ -8,6 +8,7 @@ import {
   MessageRepository,
   WorkoutSetRepository,
   FavoriteExerciseRepository,
+  WellnessLogRepository,
 } from './LocalDatabase';
 
 describe('Dexie Database Repositories', () => {
@@ -353,5 +354,46 @@ describe('Dexie Database Repositories', () => {
 
     expect((await workoutRepo.getAll(pId)).length).toBe(0);
     expect((await workoutSetRepo.getForWorkout(wId)).length).toBe(0);
+  });
+  describe('wellness logs', () => {
+    const wellnessRepo = new WellnessLogRepository();
+
+    it('treats the day as the identity, so answering twice corrects', async () => {
+      await wellnessRepo.save({ profileId: 'p1', day: '2026-06-27', timestamp: new Date(), energy: 2 });
+      await wellnessRepo.save({ profileId: 'p1', day: '2026-06-27', timestamp: new Date(), energy: 5 });
+
+      const rows = await db.wellnessLogs.toArray();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].energy).toBe(5);
+    });
+
+    it('merges rather than replaces, so two writers do not blank each other', async () => {
+      // The sheet knows the four answers; the health import knows sleep. A
+      // replace would mean whichever ran second wiped the other's fields.
+      await wellnessRepo.save({ profileId: 'p1', day: '2026-06-27', timestamp: new Date(), energy: 4 });
+      await wellnessRepo.save({ profileId: 'p1', day: '2026-06-27', timestamp: new Date(), sleepMinutes: 450 });
+
+      const stored = await wellnessRepo.getForDay('p1', '2026-06-27');
+      expect(stored?.energy).toBe(4);
+      expect(stored?.sleepMinutes).toBe(450);
+    });
+
+    it('keeps one row per profile per day, not one per day', async () => {
+      await wellnessRepo.save({ profileId: 'p1', day: '2026-06-27', timestamp: new Date(), energy: 1 });
+      await wellnessRepo.save({ profileId: 'p2', day: '2026-06-27', timestamp: new Date(), energy: 5 });
+
+      expect((await wellnessRepo.getForDay('p1', '2026-06-27'))?.energy).toBe(1);
+      expect((await wellnessRepo.getForDay('p2', '2026-06-27'))?.energy).toBe(5);
+    });
+
+    it('reads a range as a string comparison, oldest first', async () => {
+      // `day` is zero-padded precisely so this works without parsing dates.
+      for (const day of ['2026-06-09', '2026-06-27', '2026-07-03']) {
+        await wellnessRepo.save({ profileId: 'p1', day, timestamp: new Date(), energy: 3 });
+      }
+
+      const range = await wellnessRepo.getRange('p1', '2026-06-27');
+      expect(range.map(r => r.day)).toEqual(['2026-06-27', '2026-07-03']);
+    });
   });
 });

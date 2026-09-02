@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useStore } from '../../presentation/state/store';
-import { useAppUi, useAppActions } from '../data/useAppData';
+import { useAppUi, useAppActions, useAppData } from '../data/useAppData';
 import { AtlasSettings } from '../atlas/AtlasSettings';
 import { AtlasAddFoodSheet } from '../atlas/AtlasAddFoodSheet';
 import { AtlasLogWeightSheet } from '../atlas/AtlasLogWeightSheet';
 import { AtlasDayNoteSheet } from '../atlas/AtlasDayNoteSheet';
+import { AtlasWellnessSheet } from '../atlas/AtlasWellnessSheet';
 import { AtlasExercisePicker } from '../atlas/AtlasExercisePicker';
 import { AtlasExerciseDetail } from '../atlas/AtlasExerciseDetail';
 import { AtlasSessionSummary } from '../atlas/AtlasSessionSummary';
@@ -29,6 +30,8 @@ export const AppOverlays: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const addActiveSessionExercise = useStore(s => s.addActiveSessionExercise);
   const swapActiveSessionExercise = useStore(s => s.swapActiveSessionExercise);
   const updateActiveSessionNote = useStore(s => s.updateActiveSessionNote);
+  const saveWellnessDay = useStore(s => s.saveWellnessDay);
+  const { wellness } = useAppData();
 
   const [detail, setDetail] = useState<Exercise | null>(null);
   // Local rather than an overlay id of its own: the session sheet opens *over*
@@ -81,6 +84,13 @@ export const AppOverlays: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         initialFeeling={activeSession?.feelingTag as FeelingId | undefined}
         initialNotes={activeSession?.bodyNotes}
         onSave={(feeling, notes) => { updateActiveSessionNote(feeling, notes); onClose(); }}
+      />
+
+      <AtlasWellnessSheet
+        open={overlay === 'wellness'}
+        onClose={onClose}
+        log={wellness.today.log}
+        onSave={patch => { void saveWellnessDay(wellness.today.day, patch); }}
       />
 
       <AtlasStartSheet open={overlay === 'startSession'} onClose={onClose} />

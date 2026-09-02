@@ -2520,6 +2520,52 @@ button.at-routine-item { cursor: pointer; }
   color: var(--muted);
 }
 
+/* ─── Wellness ──────────────────────────────────────────────────────────── */
+
+/* The 1-5 segments are bare numbers; these say which end is which. Without
+   them a 2 for soreness is genuinely ambiguous. */
+.at-scale-ends {
+  display: flex;
+  justify-content: space-between;
+  margin: -6px 2px 12px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.at-wellness-read {
+  display: flex;
+  gap: 8px;
+}
+
+.at-wellness-read > div {
+  flex: 1;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--at-tonal);
+}
+
+.at-wellness-read small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.at-wellness-read b {
+  display: block;
+  padding-top: 2px;
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.at-wellness-read span {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
 /* ---------- exercise detail: previous sessions ---------- */
 
 .at-past { display: flex; flex-direction: column; gap: 8px; }

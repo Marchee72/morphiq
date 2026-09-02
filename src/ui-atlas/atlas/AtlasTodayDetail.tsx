@@ -5,6 +5,7 @@ import { useAppData, useAppActions } from '../data/useAppData';
 import { metricByKey } from '../derive/bodyMetrics';
 import { dayKey } from '../derive/buckets';
 import type { MuscleGroupId } from '../types';
+import { AtlasMetricChart } from './AtlasMetricChart';
 import { AtlasSheet } from './AtlasSheet';
 import { AtlasSessionRow } from './AtlasSessionRow';
 
@@ -25,7 +26,8 @@ export type TodayDetail =
   | { kind: 'volume' }
   | { kind: 'steps' }
   | { kind: 'day'; date: Date }
-  | { kind: 'muscle'; group: MuscleGroupId };
+  | { kind: 'muscle'; group: MuscleGroupId }
+  | { kind: 'wellness' };
 
 export const AtlasTodayDetail: React.FC<{
   detail: TodayDetail | null;
@@ -34,7 +36,7 @@ export const AtlasTodayDetail: React.FC<{
   onOpenSession: (workoutLogId: string) => void;
 }> = ({ detail, onClose, onOpenSession }) => {
   const { t, tp, fmt } = useT();
-  const { body, nutrition, session, sessionExercises, steps, training } = useAppData();
+  const { body, nutrition, session, sessionExercises, steps, training, wellness } = useAppData();
   const actions = useAppActions();
 
   if (!detail) return null;
@@ -222,6 +224,70 @@ export const AtlasTodayDetail: React.FC<{
           <p className="at-summary-empty">{t('today.stepsNoSourceSub')}</p>
         )}
       </>,
+    );
+  }
+
+  if (detail.kind === 'wellness') {
+    const { today, trend } = wellness;
+    return sheet(
+      t('wellness.title'),
+      today.answered ? t('wellness.readiness') : t('wellness.ask'),
+      <>
+        <div className="at-summary-stats">
+          <div>
+            {/* An unanswered day has no readiness. A zero would read as
+                "unfit to train", which is the opposite of "not asked". */}
+            <b>{today.readiness === null ? '—' : today.readiness}</b>
+            <small>{t('wellness.readiness')}</small>
+          </div>
+          <div>
+            <b>{today.log?.sleepMinutes ? fmt.duration(today.log.sleepMinutes * 60) : '—'}</b>
+            <small>{t('wellness.sleep')}</small>
+          </div>
+          <div>
+            <b>{today.log?.restingHr ? fmt.n(today.log.restingHr) : '—'}</b>
+            <small>{t('wellness.restingHr')}</small>
+          </div>
+        </div>
+
+        {/* Against your own recent average, not a population table: 58 bpm
+            means nothing alone and a lot if you normally sit at 52. */}
+        {today.restingHrDelta !== null && (
+          <p className="at-metric-source">
+            {t('wellness.hrVsBaseline', { delta: fmt.signed(today.restingHrDelta, 1) })}
+          </p>
+        )}
+
+        {trend.readinessSeries ? (
+          <div className="at-card" style={{ padding: '18px 16px 12px' }}>
+            <AtlasMetricChart
+              series={trend.readinessSeries}
+              decimals={0}
+              height={120}
+              now={now}
+              weeks={trend.weeks}
+            />
+          </div>
+        ) : (
+          <p className="at-summary-empty">{t('wellness.noHistory')}</p>
+        )}
+
+        <div className="at-statrows">
+          {trend.itemSeries.map(item => {
+            const latest = item.series?.at(-1);
+            return (
+              <div key={item.key} className="at-statrow">
+                <span>{t(item.labelKey)}</span>
+                <b>{latest == null ? '—' : fmt.upTo(latest, 1)}</b>
+                <small>{t('wellness.outOfFive')}</small>
+              </div>
+            );
+          })}
+        </div>
+      </>,
+      <button className="at-btn" onClick={() => { onClose(); actions.openOverlay('wellness'); }}>
+        {today.answered ? t('wellness.edit') : t('wellness.answer')}
+      </button>,
     );
   }
 

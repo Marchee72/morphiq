@@ -9,6 +9,7 @@ import type { UserProfile } from '../core/entities/UserProfile';
 import { useStore } from '../presentation/state/store';
 import { AppDataProvider } from '../ui-atlas/data/AppDataProvider';
 import { AppActionsProvider } from '../ui-atlas/data/AppActionsProvider';
+import { useAppActions } from '../ui-atlas/data/useAppData';
 import { SocialProvider } from '../ui-atlas/data/SocialProvider';
 import { AppOverlays } from '../ui-atlas/shell/AppOverlays';
 import { AtlasToday } from '../ui-atlas/atlas/AtlasToday';
@@ -18,6 +19,22 @@ import { AtlasBody } from '../ui-atlas/atlas/AtlasBody';
 import { AtlasCoach } from '../ui-atlas/atlas/AtlasCoach';
 import { AtlasBuddies } from '../ui-atlas/atlas/AtlasBuddies';
 import type { ScreenId } from '../ui-atlas/types';
+
+/**
+ * The overlays, wired to dismiss the way the real shell wires them.
+ *
+ * `AppShell` passes `actions.closeOverlay`; this used to pass a no-op with a
+ * comment saying the provider owned dismissal — which it does, and it was never
+ * told. Nothing could be closed under test, so every "open it, dismiss it,
+ * reopen it" flow silently exercised a sheet that had never gone away.
+ *
+ * A component rather than an inline prop because `useAppActions` has to be
+ * called beneath `AppActionsProvider`, not beside it.
+ */
+const Overlays: React.FC = () => {
+  const actions = useAppActions();
+  return <AppOverlays onClose={actions.closeOverlay} />;
+};
 
 const SCREENS: Record<ScreenId, React.FC> = {
   today: AtlasToday,
@@ -205,7 +222,7 @@ export function renderScreen(
             <Screen />
             {/* Overlays are part of the shell, and flows like "add an exercise"
                 cross that boundary — a screen alone cannot be exercised. */}
-            <AppOverlays onClose={() => { /* the provider owns dismissal */ }} />
+            <Overlays />
           </div>
         </SocialProvider>
       </AppActionsProvider>

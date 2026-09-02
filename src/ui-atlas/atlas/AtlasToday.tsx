@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
-  ArrowRight, Bike, Check, Dumbbell, Footprints, Heart, Scale, Sparkles, Trophy, UtensilsCrossed,
+  ArrowRight, Bike, Check, Dumbbell, Footprints, Heart, HeartPulse, Scale, Sparkles, Trophy,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
@@ -43,7 +44,7 @@ const MomentBar: React.FC<{ value: number; target: number }> = ({ value, target 
 
 export const AtlasToday: React.FC = () => {
   const {
-    profile, body, session, sessionExercises, sessionTotals, nutrition, training, steps,
+    profile, body, session, sessionExercises, sessionTotals, nutrition, training, steps, wellness,
   } = useAppData();
   const actions = useAppActions();
   const { t, tp, fmt } = useT();
@@ -107,6 +108,9 @@ export const AtlasToday: React.FC = () => {
    * screen. Each entry is pushed only when it has something to say, so the rail
    * is exactly as long as the day has been.
    *
+   * The wellness chip is the one exception, and it is not really one: it is a
+   * question rather than a reading, so it is never waiting on data. See below.
+   *
    * Order is by immediacy: what you did, then what your body did without you,
    * then what you logged.
    */
@@ -137,6 +141,40 @@ export const AtlasToday: React.FC = () => {
       onClick: () => setSessionId(entry.id),
     });
   }
+
+  /**
+   * Readiness, or the invitation to say how the day is going.
+   *
+   * The only entry in the rail that is pushed unconditionally, and deliberately
+   * so: every other chip is a reading that either exists or does not, while this
+   * one is a question. An unanswered day is not "no data" — it is the one thing
+   * on this screen you can still do something about, and hiding it until it is
+   * answered means it never gets answered.
+   */
+  moments.push(wellness.today.readiness !== null
+    ? {
+        key: 'wellness',
+        icon: <HeartPulse size={17} />,
+        value: String(wellness.today.readiness),
+        unit: '/100',
+        label: (
+          <>
+            {t('wellness.readiness')}
+            {wellness.today.log?.sleepMinutes
+              ? ` · ${t('wellness.sleep')} ${fmt.duration(wellness.today.log.sleepMinutes * 60)}`
+              : ''}
+          </>
+        ),
+        onClick: () => actions.openOverlay('wellness'),
+      }
+    : {
+        key: 'wellness',
+        icon: <HeartPulse size={17} />,
+        value: '?',
+        label: t('wellness.ask'),
+        onClick: () => actions.openOverlay('wellness'),
+        ariaLabel: t('wellness.ask'),
+      });
 
   if (body.hasData && weight?.value != null) {
     moments.push({

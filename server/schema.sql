@@ -135,4 +135,26 @@ CREATE TABLE IF NOT EXISTS routine_templates (
   "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- How the day is going. The day is the identity, not the row: the UNIQUE
+-- constraint is what makes the upsert an upsert, and answering a day twice a
+-- correction rather than a second entry.
+CREATE TABLE IF NOT EXISTS wellness_logs (
+  id SERIAL PRIMARY KEY,
+  "profileId" TEXT NOT NULL,
+  day TEXT NOT NULL,
+  timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  energy INT,
+  soreness INT,
+  stress INT,
+  mood INT,
+  "sleepMinutes" NUMERIC,
+  "sleepDeepMinutes" NUMERIC,
+  "sleepRemMinutes" NUMERIC,
+  "restingHr" NUMERIC,
+  "hrvMs" NUMERIC,
+  "sleepSource" TEXT,
+  notes TEXT,
+  UNIQUE ("profileId", day)
+);
+
 

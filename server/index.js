@@ -704,6 +704,86 @@ app.delete('/api/routines/:id', guardRow(pool, 'routine_templates'), async (req,
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Wellness ─────────────────────────────────────────────────────────────────
+const wellnessNum = (r) => ({
+  ...r,
+  id: r.id.toString(),
+  sleepMinutes: num(r.sleepMinutes),
+  sleepDeepMinutes: num(r.sleepDeepMinutes),
+  sleepRemMinutes: num(r.sleepRemMinutes),
+  restingHr: num(r.restingHr),
+  hrvMs: num(r.hrvMs),
+});
+
+app.get('/api/profiles/:profileId/wellness', async (req, res) => {
+  const { since, until } = req.query;
+  try {
+    // `day` is a zero-padded TEXT date, so the range is a string comparison —
+    // the same property the Dexie side relies on.
+    const { rows } = await pool.query(
+      `SELECT * FROM wellness_logs
+       WHERE "profileId" = $1
+         AND ($2::text IS NULL OR day >= $2)
+         AND ($3::text IS NULL OR day <= $3)
+       ORDER BY day ASC`,
+      [req.params.profileId, since || null, until || null]
+    );
+    res.json(rows.map(wellnessNum));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * Upsert the day.
+ *
+ * `COALESCE(EXCLUDED.x, wellness_logs.x)` rather than a plain overwrite: the
+ * sheet writes the four answers and the Health Connect import writes sleep and
+ * resting heart rate, and whichever ran second would otherwise blank the
+ * other's columns.
+ */
+// No `ownBody` here: both routes sit under the blanket `guardProfile` mounted on
+// `/api/profiles/:profileId`, and the handler writes the path's profile rather
+// than the body's, so there is nothing left for a body guard to catch.
+app.put('/api/profiles/:profileId/wellness/:day', async (req, res) => {
+  const w = req.body;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO wellness_logs
+         ("profileId", day, timestamp, energy, soreness, stress, mood,
+          "sleepMinutes", "sleepDeepMinutes", "sleepRemMinutes", "restingHr", "hrvMs",
+          "sleepSource", notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       ON CONFLICT ("profileId", day) DO UPDATE SET
+         timestamp = EXCLUDED.timestamp,
+         energy = COALESCE(EXCLUDED.energy, wellness_logs.energy),
+         soreness = COALESCE(EXCLUDED.soreness, wellness_logs.soreness),
+         stress = COALESCE(EXCLUDED.stress, wellness_logs.stress),
+         mood = COALESCE(EXCLUDED.mood, wellness_logs.mood),
+         "sleepMinutes" = COALESCE(EXCLUDED."sleepMinutes", wellness_logs."sleepMinutes"),
+         "sleepDeepMinutes" = COALESCE(EXCLUDED."sleepDeepMinutes", wellness_logs."sleepDeepMinutes"),
+         "sleepRemMinutes" = COALESCE(EXCLUDED."sleepRemMinutes", wellness_logs."sleepRemMinutes"),
+         "restingHr" = COALESCE(EXCLUDED."restingHr", wellness_logs."restingHr"),
+         "hrvMs" = COALESCE(EXCLUDED."hrvMs", wellness_logs."hrvMs"),
+         "sleepSource" = COALESCE(EXCLUDED."sleepSource", wellness_logs."sleepSource"),
+         notes = COALESCE(EXCLUDED.notes, wellness_logs.notes)
+       RETURNING *`,
+      [
+        req.params.profileId, req.params.day, w.timestamp || new Date(),
+        w.energy, w.soreness, w.stress, w.mood,
+        w.sleepMinutes, w.sleepDeepMinutes, w.sleepRemMinutes, w.restingHr, w.hrvMs,
+        w.sleepSource, w.notes,
+      ]
+    );
+    res.json(wellnessNum(rows[0]));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/wellness/:id', guardRow(pool, 'wellness_logs'), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM wellness_logs WHERE id = $1', [req.params.id]);
+    res.status(204).end();
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 
 // ─── Error Handling Middleware ────────────────────────────────────────────────
 app.use((err, req, res, next) => {

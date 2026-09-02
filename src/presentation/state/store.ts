@@ -16,6 +16,7 @@ import {
   WorkoutSetRepository,
   FavoriteExerciseRepository,
   RoutineTemplateRepository,
+  WellnessLogRepository,
 } from '../../data/database/LocalDatabase';
 import {
   ServerUserProfileRepository,
@@ -26,9 +27,20 @@ import {
   ServerWorkoutSetRepository,
   ServerFavoriteExerciseRepository,
   ServerRoutineTemplateRepository,
+  ServerWellnessLogRepository,
 } from '../../data/database/ServerDatabase';
 import { isServerMode } from '../../data/database/mode';
 import type { RoutineTemplate, RoutineExerciseItem } from '../../core/entities/RoutineTemplate';
+import { wellnessDayKey, type WellnessLog } from '../../core/entities/WellnessLog';
+import type { WellnessSignals } from '../../core/interfaces/IHealthProvider';
+
+/**
+ * How far back wellness is kept in memory and imported for.
+ *
+ * Matches the twelve weeks every other trend in the app is drawn over, so the
+ * readiness chart and the body charts cover the same window.
+ */
+export const WELLNESS_WINDOW_DAYS = 12 * 7;
 import { normalizeName } from '../../ui-atlas/derive/records';
 import { DeepSeekCoach, chatCompletion, buildProviderFromEnv } from '../../data/ai/GeminiCoach';
 import type { AgentContext } from '../../core/interfaces/IAgent';
@@ -58,6 +70,7 @@ const messageRepo = isServer ? new ServerMessageRepository() : new MessageReposi
 const workoutSetRepo = isServer ? new ServerWorkoutSetRepository() : new WorkoutSetRepository();
 const favoriteRepo = isServer ? new ServerFavoriteExerciseRepository() : new FavoriteExerciseRepository();
 const routineTemplateRepo = isServer ? new ServerRoutineTemplateRepository() : new RoutineTemplateRepository();
+const wellnessRepo = isServer ? new ServerWellnessLogRepository() : new WellnessLogRepository();
 
 
 // AI Coach adapter
@@ -211,6 +224,8 @@ interface StoreState {
   chatHistory: Message[];
   favoriteExerciseIds: string[];
   savedRoutines: RoutineTemplate[];
+  /** The last `WELLNESS_WINDOW_DAYS` of answered days, oldest first. */
+  wellnessLogs: WellnessLog[];
   activeWorkoutSets: Record<string, WorkoutSet[]>;
   exerciseStats: Record<string, { maxWeight: number; avgWeight: number; avgReps: number } | null>;
 
@@ -299,6 +314,11 @@ interface StoreState {
   loadSavedRoutines: () => Promise<void>;
   saveRoutineTemplate: (routine: Omit<RoutineTemplate, 'profileId' | 'createdAt'>) => Promise<string>;
   deleteRoutineTemplate: (id: string) => Promise<void>;
+  loadWellnessLogs: () => Promise<void>;
+  /** Answers (or corrects) one day. Merged into whatever that day already holds. */
+  saveWellnessDay: (day: string, patch: Partial<WellnessLog>) => Promise<void>;
+  /** Folds Health Connect's sleep and heart signals into the days they belong to. */
+  importWellnessSignals: (signals: WellnessSignals[]) => Promise<void>;
   loadProfiles: () => Promise<void>;
   setActiveProfile: (id: string) => Promise<void>;
   createProfile: (profile: Omit<UserProfile, 'createdAt'>) => Promise<string>;
@@ -402,6 +422,7 @@ export const useStore = create<StoreState>((set, get) => ({
   chatHistory: [],
   favoriteExerciseIds: [],
   savedRoutines: [],
+  wellnessLogs: [],
   activeWorkoutSets: {},
   allSets: [],
   dailySteps: [],
@@ -586,6 +607,75 @@ export const useStore = create<StoreState>((set, get) => ({
   deleteRoutineTemplate: async (id) => {
     await routineTemplateRepo.delete(id);
     await get().loadSavedRoutines();
+  },
+
+  loadWellnessLogs: async () => {
+    const profile = get().activeProfile;
+    if (!profile?.id) {
+      set({ wellnessLogs: [] });
+      return;
+    }
+    const since = new Date(Date.now() - WELLNESS_WINDOW_DAYS * 86_400_000);
+    set({ wellnessLogs: await wellnessRepo.getRange(profile.id, wellnessDayKey(since)) });
+  },
+
+  /**
+   * Writes one day, merged over what is already stored for it.
+   *
+   * Merged rather than replaced because two writers reach the same row from
+   * different directions — the sheet knows the four answers, the health import
+   * knows sleep and resting heart rate — and a replace would mean the second one
+   * to run blanked the first's fields.
+   */
+  saveWellnessDay: async (day, patch) => {
+    const profile = get().activeProfile;
+    if (!profile?.id) throw new Error('No active profile');
+
+    const existing = await wellnessRepo.getForDay(profile.id, day);
+    await wellnessRepo.save({
+      ...existing,
+      ...patch,
+      id: existing?.id,
+      profileId: profile.id,
+      day,
+      timestamp: new Date(),
+    });
+    await get().loadWellnessLogs();
+  },
+
+  /**
+   * Pulls sleep and heart signals in and folds them into their days.
+   *
+   * Idempotent, like the other health imports: a day already carrying the same
+   * numbers is skipped rather than rewritten, so the resume listener firing
+   * every time the app comes forward costs nothing. Self-reported answers are
+   * never touched — this only ever writes the fields Health Connect owns.
+   */
+  importWellnessSignals: async (signals) => {
+    const profile = get().activeProfile;
+    if (!profile?.id || signals.length === 0) return;
+
+    let wrote = false;
+    for (const signal of signals) {
+      const existing = await wellnessRepo.getForDay(profile.id, signal.day);
+      const unchanged = existing
+        && existing.sleepMinutes === signal.sleepMinutes
+        && existing.restingHr === signal.restingHr
+        && existing.hrvMs === signal.hrvMs;
+      if (unchanged) continue;
+
+      await wellnessRepo.save({
+        ...existing,
+        ...signal,
+        id: existing?.id,
+        profileId: profile.id,
+        timestamp: existing?.timestamp ?? new Date(),
+        sleepSource: 'health-connect',
+      });
+      wrote = true;
+    }
+
+    if (wrote) await get().loadWellnessLogs();
   },
 
   updateActiveSessionSets: (sets) => {

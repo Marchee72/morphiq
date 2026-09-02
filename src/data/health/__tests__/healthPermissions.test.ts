@@ -26,6 +26,20 @@ vi.mock('../BodyCompositionPlugin', () => ({
   BodyComposition: { checkPermissions, requestPermissions },
 }));
 
+/**
+ * Mocked for the same reason `BodyComposition` is: the real module calls
+ * `registerPlugin` at import time, which the trimmed `@capacitor/core` mock
+ * above does not provide. Denied by default — these cases are about the other
+ * two gates, and a wellness grant would mask them.
+ */
+vi.mock('../WellnessPlugin', () => ({
+  Wellness: {
+    checkPermissions: vi.fn().mockResolvedValue({ permissions: {} }),
+    requestPermissions: vi.fn().mockResolvedValue({ permissions: {} }),
+  },
+  SLEEP_READ_PERMISSIONS: ['android.permission.health.READ_SLEEP'],
+}));
+
 const { CapacitorHealthProvider } = await import('../CapacitorHealthProvider');
 
 const READ_WEIGHT = 'android.permission.health.READ_WEIGHT';

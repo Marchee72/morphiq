@@ -5,6 +5,7 @@ import { handleGlobalBack } from './presentation/state/backHandler';
 import { OnboardingScreen } from './features/onboarding/OnboardingScreen';
 import { CapacitorHealthProvider } from './data/health/CapacitorHealthProvider';
 import { WebHealthProvider } from './data/health/WebHealthProvider';
+import type { IHealthProvider } from './core/interfaces/IHealthProvider';
 import { probeGate, type GateStatus } from './data/auth/authGate';
 import { onSessionCleared } from './data/auth/session';
 import { FloatingWorkoutBar } from './features/gym/FloatingWorkoutBar';
@@ -127,7 +128,11 @@ function App() {
 
     const provider = new CapacitorHealthProvider();
     const fallback = new WebHealthProvider();
-    const healthProvider = provider.isAvailable() ? provider : fallback;
+    // Typed as the interface, not as the union of the two classes: every optional
+    // method below is guarded, and inferring the union means the web provider's
+    // missing methods are compile errors rather than the runtime absences the
+    // guards already handle.
+    const healthProvider: IHealthProvider = provider.isAvailable() ? provider : fallback;
 
     let cancelled = false;
     let permitted = false;
@@ -192,6 +197,25 @@ function App() {
       } catch (err) { console.warn('Workout sync failed', err); }
     };
 
+    /**
+     * Sleep and heart signals, folded into the wellness day they belong to.
+     *
+     * Same window as the body charts, and idempotent for the same reason the
+     * others are: a day whose numbers have not changed is skipped rather than
+     * rewritten. It never touches the four self-reported scales — Health Connect
+     * has no record type for stress, mood or soreness, so those only ever come
+     * from the questionnaire.
+     */
+    const readWellness = async () => {
+      if (!permitted || !healthProvider.importWellnessSignals) return;
+      try {
+        const since = new Date();
+        since.setDate(since.getDate() - HEALTH_IMPORT_DAYS);
+        const signals = await healthProvider.importWellnessSignals(since);
+        if (!cancelled) await useStore.getState().importWellnessSignals(signals);
+      } catch (err) { console.warn('Wellness sync failed', err); }
+    };
+
     const autoSync = async () => {
       try {
         permitted = await healthProvider.requestPermissions();
@@ -199,6 +223,7 @@ function App() {
           await readBodyComposition();
           await readWorkouts();
           await readSteps();
+          await readWellness();
         }
       } catch (err) { console.error('Health sync error:', err); }
     };
@@ -213,6 +238,7 @@ function App() {
       void readSteps();
       void readBodyComposition();
       void readWorkouts();
+      void readWellness();
     });
     return () => {
       cancelled = true;

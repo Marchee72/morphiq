@@ -145,11 +145,18 @@ describe('Today — the rail shows only what has data', () => {
     expect(shown).not.toMatch(/0[.,]0 t\b/);
   });
 
-  it('hides the whole rail on a day with nothing in it at all', async () => {
+  it('carries only the wellness question on a day with nothing in it', async () => {
     render();
-    // No run, no food, no weight: the heading would otherwise sit above nothing.
+    // The rail used to disappear entirely here, because every chip was a reading
+    // and a heading above nothing is worse than no heading. It now keeps exactly
+    // one: the question, which is not a reading and cannot be waiting on data —
+    // a day nobody has answered is precisely the day worth asking about, and a
+    // chip that appears only once you have answered would never be tapped.
     await waitFor(() => expect(card()).toBeTruthy());
-    expect(rail()).toBeNull();
-    expect(text()).not.toMatch(/Your day|Tu día/);
+    const chips = rail()?.querySelectorAll('.at-moment') ?? [];
+    expect(chips).toHaveLength(1);
+    expect(rail()?.textContent).toMatch(/how are you today|cómo estás hoy/i);
+    // Still no dashes or bare zeros: nothing else crept in with it.
+    expect(rail()?.textContent).not.toMatch(/—/);
   });
 });

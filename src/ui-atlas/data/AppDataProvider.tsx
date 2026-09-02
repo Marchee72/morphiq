@@ -19,6 +19,7 @@ import { buildExerciseHistory } from '../derive/exerciseHistory';
 import { buildExerciseStats, type StatWindow } from '../derive/exerciseStats';
 import { buildSessionDetail } from '../derive/sessionDetail';
 import { buildSteps } from '../derive/steps';
+import { buildWellnessToday, buildWellnessTrend } from '../derive/wellness';
 import { buildTodayTraining } from '../derive/todayTraining';
 
 /**
@@ -47,6 +48,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
   const dailySteps = useStore(s => s.dailySteps);
   const activeSession = useStore(s => s.activeSession);
   const savedRoutines = useStore(s => s.savedRoutines);
+  const wellnessLogs = useStore(s => s.wellnessLogs);
   const favoriteExerciseIds = useStore(s => s.favoriteExerciseIds);
   const lang = useStore(s => s.language);
   const chatHistory = useStore(s => s.chatHistory);
@@ -86,6 +88,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     store.loadWorkoutHistory(HISTORY_DAYS).catch(guard('workout history'));
     store.loadAllSets().catch(guard('all sets'));
     store.loadSavedRoutines().catch(guard('routines'));
+    store.loadWellnessLogs().catch(guard('wellness'));
     store.loadFavorites().catch(guard('favorites'));
 
     // A year of logs (without their sets — `loadWorkoutRange` skips those) is
@@ -225,6 +228,11 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     routines: savedRoutines,
   }), [history, setsForDerivation, muscleLoad, logsForHistory, setsByLog, activeProfile?.weeklyWorkoutGoalDays, savedRoutines, at]);
 
+  const wellness = useMemo(() => ({
+    today: buildWellnessToday(wellnessLogs, at),
+    trend: buildWellnessTrend(wellnessLogs, at),
+  }), [wellnessLogs, at]);
+
   const steps = useMemo(() => buildSteps(dailySteps, at), [dailySteps, at]);
 
   const nutrition = useMemo(
@@ -305,12 +313,13 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     training,
     nutrition,
     steps,
+    wellness,
     catalog: catalogSlice,
     coach: { thread: chatHistory, isLoading: isAiLoading },
     exerciseHistory,
     exerciseStats,
     sessionDetail,
-  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, steps, catalogSlice, chatHistory, isAiLoading, exerciseHistory, exerciseStats, sessionDetail]);
+  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, steps, wellness, catalogSlice, chatHistory, isAiLoading, exerciseHistory, exerciseStats, sessionDetail]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 };
