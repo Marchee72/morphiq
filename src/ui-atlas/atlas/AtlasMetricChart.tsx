@@ -23,7 +23,15 @@ export const AtlasMetricChart: React.FC<{
   decimals?: number;
   height?: number;
   now?: Date;
-}> = ({ series, decimals = 1, height = 90, now = new Date() }) => {
+  /**
+   * Weeks the series spans, for the month labels along the bottom.
+   *
+   * Body metrics are always drawn over `SERIES_WEEKS`, which is why this was a
+   * constant. Exercise stats let you pick the window, and a six-month series
+   * labelled as twelve weeks puts every month name in the wrong place.
+   */
+  weeks?: number;
+}> = ({ series, decimals = 1, height = 90, now = new Date(), weeks = SERIES_WEEKS }) => {
   // `useId` rather than a literal: the showcase's `id="atFill"` was
   // document-global and collided the moment two charts rendered at once.
   const fillId = useId();
@@ -65,7 +73,7 @@ export const AtlasMetricChart: React.FC<{
 
       <div className="at-chart-axis">
         {/* Real month labels across the window, not the showcase's fixed May/June/July. */}
-        {[SERIES_WEEKS - 1, Math.floor((SERIES_WEEKS - 1) / 2), 0].map(weeksAgo => (
+        {[weeks - 1, Math.floor((weeks - 1) / 2), 0].map(weeksAgo => (
           <span key={weeksAgo}>
             {fmt.monthShort(new Date(now.getTime() - weeksAgo * 7 * 86_400_000))}
           </span>

@@ -16,6 +16,7 @@ import { buildHistory, buildWeeklyStats, buildWeeklyVolume } from '../derive/his
 import { buildSessionExercises, buildSessionTotals, findCursor } from '../derive/session';
 import { toCatalogItem } from '../derive/catalog';
 import { buildExerciseHistory } from '../derive/exerciseHistory';
+import { buildExerciseStats, type StatWindow } from '../derive/exerciseStats';
 import { buildSessionDetail } from '../derive/sessionDetail';
 import { buildSteps } from '../derive/steps';
 import { buildTodayTraining } from '../derive/todayTraining';
@@ -278,6 +279,12 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     [setsForDerivation],
   );
 
+  const exerciseStats = useCallback(
+    (exerciseName: string, window: StatWindow) =>
+      buildExerciseStats(setsForDerivation, exerciseName, window, at),
+    [setsForDerivation, at],
+  );
+
   const sessionDetail = useCallback(
     (workoutLogId: string) => {
       const log = logsForHistory.find(entry => entry.id === workoutLogId);
@@ -301,8 +308,9 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     catalog: catalogSlice,
     coach: { thread: chatHistory, isLoading: isAiLoading },
     exerciseHistory,
+    exerciseStats,
     sessionDetail,
-  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, steps, catalogSlice, chatHistory, isAiLoading, exerciseHistory, sessionDetail]);
+  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, steps, catalogSlice, chatHistory, isAiLoading, exerciseHistory, exerciseStats, sessionDetail]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 };

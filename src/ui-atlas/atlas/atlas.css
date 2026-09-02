@@ -2483,6 +2483,43 @@ button.at-routine-item { cursor: pointer; }
   color: var(--muted);
 }
 
+/* ─── Exercise statistics ───────────────────────────────────────────────── */
+
+.at-statrows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.at-statrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 11px 14px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1.5px solid var(--hair);
+  font-size: 12.5px;
+}
+
+/* The label takes the slack so the value and its unit stay together on the
+   right, however long the exercise or range name is. */
+.at-statrow > span {
+  flex: 1;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.at-statrow b {
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.at-statrow small {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
 /* ---------- exercise detail: previous sessions ---------- */
 
 .at-past { display: flex; flex-direction: column; gap: 8px; }

@@ -1,11 +1,13 @@
-import React from 'react';
-import { Heart, Plus, Trophy } from 'lucide-react';
+import React, { useState } from 'react';
+import { BarChart3, Heart, Plus, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useStore } from '../../presentation/state/store';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { mediaUrl } from '../derive/catalog';
 import { normalizeName } from '../derive/records';
 import { EXERCISE_EQUIPMENT_LABELS, MUSCLE_NAME_LABELS } from '../../data/exercises/exerciseLabels';
+import { AtlasExerciseStats } from './AtlasExerciseStats';
+import { AtlasMetricChart } from './AtlasMetricChart';
 import { AtlasSheet } from './AtlasSheet';
 import type { Exercise } from '../../core/entities/Exercise';
 
@@ -22,10 +24,11 @@ export const AtlasExerciseDetail: React.FC<{
   onClose: () => void;
 }> = ({ exercise, onClose }) => {
   const { t, tp, fmt, lang } = useT();
-  const { catalog, session, exerciseHistory } = useAppData();
+  const { catalog, session, exerciseHistory, exerciseStats } = useAppData();
   const actions = useAppActions();
   const favouriteIds = useStore(s => s.favoriteExerciseIds);
   const addExercise = useStore(s => s.addActiveSessionExercise);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   if (!exercise) return null;
 
@@ -33,6 +36,9 @@ export const AtlasExerciseDetail: React.FC<{
   const isFavourite = favouriteIds.includes(exercise.id);
   const secondary = exercise.secondaryMuscles.filter(Boolean);
   const past = exerciseHistory(exercise.name);
+  // Keyed on the catalogue's canonical English name, the way every set is
+  // written — `nameEs` is a label, never a join key.
+  const stats = exerciseStats(exercise.name, '8w');
   const now = new Date();
   const displayName = lang === 'es' ? exercise.nameEs : exercise.name;
   const equipmentLabel = EXERCISE_EQUIPMENT_LABELS[exercise.equipment];
@@ -42,6 +48,7 @@ export const AtlasExerciseDetail: React.FC<{
     : exercise.instructionSteps;
 
   return (
+    <>
     <AtlasSheet
       open
       onClose={onClose}
@@ -88,6 +95,39 @@ export const AtlasExerciseDetail: React.FC<{
           <b>{targetLabel ? t(targetLabel) : exercise.target}</b>
         </div>
       </div>
+
+      {/* How the lift has moved over the last twelve weeks. Every number behind
+          this chart was already derivable and had nowhere to go, which left the
+          sheet able to say your best ever and nothing about the direction of
+          travel — the thing you actually train on. */}
+      {stats && stats.e1rmSeries && (
+        <div>
+          <div className="at-field-label">{t('stats.e1rmTrend')}</div>
+          <div className="at-card" style={{ padding: '18px 16px 12px' }}>
+            <AtlasMetricChart series={stats.e1rmSeries} decimals={1} now={now} weeks={stats.weeks} />
+          </div>
+          <div className="at-summary-stats" data-cols="3">
+            <div>
+              <b>{stats.sessions}</b>
+              <small>{t('stats.sessions')}</small>
+            </div>
+            <div>
+              <b>{fmt.n(stats.totalVolumeKg)}<i>{t('unit.kg')}</i></b>
+              <small>{t('stats.totalVolume')}</small>
+            </div>
+            <div>
+              <b>{stats.avgRpe === null ? '—' : fmt.upTo(stats.avgRpe, 1)}</b>
+              <small>{t('train.rpeAvg')}</small>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {stats && (
+        <button className="at-btn" data-ghost="true" onClick={() => setStatsOpen(true)}>
+          <BarChart3 size={15} /> {t('detail.viewStats')}
+        </button>
+      )}
 
       {/* Every session you have done this lift, newest first. The aggregate
           above says how strong you got; this says how you got there — whether
@@ -147,5 +187,17 @@ export const AtlasExerciseDetail: React.FC<{
         <p className="at-detail-credit">{exercise.attribution}</p>
       )}
     </AtlasSheet>
+
+    {/* A sibling, not a child. A sheet nested inside `at-sheet-body` renders its
+        own full-screen scrim inside a scrolling box and comes out clipped to the
+        sheet that opened it. The back stack is LIFO, so this one closes first. */}
+    {statsOpen && (
+      <AtlasExerciseStats
+        exerciseName={exercise.name}
+        displayName={displayName}
+        onClose={() => setStatsOpen(false)}
+      />
+    )}
+    </>
   );
 };

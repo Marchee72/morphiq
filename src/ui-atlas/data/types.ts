@@ -8,6 +8,7 @@ import type { BuddyDayVM, BuddyRowVM, PresenceRowVM } from '../derive/social';
 import type { ExerciseFilters, FacetCounts } from '../../data/exercises/ExerciseCatalog';
 import type { WeeklyStatsVM } from '../derive/history';
 import type { ExerciseSessionVM } from '../derive/exerciseHistory';
+import type { ExerciseStatsVM, StatWindow } from '../derive/exerciseStats';
 import type { SessionDetailVM } from '../derive/sessionDetail';
 import type { ManualBia } from '../../presentation/state/store';
 import type {
@@ -62,6 +63,12 @@ export interface AppData {
    * all 1,324 up front would be absurd.
    */
   exerciseHistory(exerciseName: string): ExerciseSessionVM[];
+  /**
+   * The same history measured rather than listed — trend, volume, rep-range
+   * bests. On demand for the same reason `exerciseHistory` is, and takes the
+   * window because the caller owns which one is selected.
+   */
+  exerciseStats(exerciseName: string, window: StatWindow): ExerciseStatsVM | null;
   /**
    * One past session opened up — every exercise and every set. Null when the id
    * falls outside the loaded window. A function for the same reason
