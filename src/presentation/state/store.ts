@@ -282,7 +282,8 @@ interface StoreState {
    * permanently unfinished and the "next exercise" button permanently hidden.
    * This lowers the plan to meet the work instead of the other way round.
    */
-  finishActiveSessionExercise: (index: number) => void;
+  finishActiveSessionExercise: (index: number, rpe?: number) => void;
+  setActiveSessionExerciseRpe: (exerciseName: string, rpe: number) => void;
   updateActiveSessionNote: (feelingTag?: 'feeling_100' | 'good' | 'sore' | 'pain' | 'low_energy', bodyNotes?: string) => void;
   linkBiserieExercises: (exId1: string, exId2: string) => void;
   unlinkBiserieExercise: (exId: string) => void;
@@ -594,7 +595,14 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
-  finishActiveSessionExercise: (index) => {
+  /**
+   * `rpe` is the Borg 6-20 rating for the exercise as a whole, stamped onto
+   * every set that survives. It rides along with the close rather than being a
+   * second action because the two are one decision — the question is asked, then
+   * the exercise ends — and splitting them would leave a window where the
+   * exercise is closed and the answer is still in a component's state.
+   */
+  finishActiveSessionExercise: (index, rpe) => {
     const session = get().activeSession;
     if (!session) return;
 
@@ -613,11 +621,13 @@ export const useStore = create<StoreState>((set, get) => ({
     if (done.length === 0) return;
 
     // Renumber as they are kept, so the surviving sets stay contiguous. A gap
-    // here and the next write to this exercise lands in it.
+    // here and the next write to this exercise lands in it. The rating goes on
+    // in the same pass, over the sets that are actually kept — putting it on
+    // `mine` would rate sets that are about to be dropped.
     const renumbered = done
       .slice()
       .sort((a, b) => a.setNumber - b.setNumber)
-      .map((s, i) => ({ ...s, setNumber: i + 1 }));
+      .map((s, i) => ({ ...s, setNumber: i + 1, ...(rpe !== undefined && { rpe }) }));
 
     set({
       activeSession: {
@@ -625,6 +635,31 @@ export const useStore = create<StoreState>((set, get) => ({
         sets: [...session.sets.filter(s => normalizeName(s.exerciseName) !== key), ...renumbered],
         routineExercises: current.map((ex, i) =>
           i === index ? { ...ex, targetSets: renumbered.length } : ex),
+      },
+    });
+  },
+
+  /**
+   * Rates an exercise without ending it.
+   *
+   * The finish sheet needs this for the exercise you were still on when you
+   * decided to stop — closing it there would renumber and drop its planned sets
+   * as a side effect of answering a question, which is not what was asked.
+   *
+   * Keyed by name rather than index because the caller is a list of exercises
+   * still missing a rating, not a cursor into the session.
+   */
+  setActiveSessionExerciseRpe: (exerciseName, rpe) => {
+    const session = get().activeSession;
+    if (!session) return;
+
+    const key = normalizeName(exerciseName);
+    set({
+      activeSession: {
+        ...session,
+        sets: session.sets.map(s => (
+          normalizeName(s.exerciseName) === key && s.isCompleted ? { ...s, rpe } : s
+        )),
       },
     });
   },
@@ -792,6 +827,7 @@ export const useStore = create<StoreState>((set, get) => ({
         notes: setItem.notes,
         biserieGroupId: setItem.biserieGroupId,
         isCompleted: setItem.isCompleted,
+        rpe: setItem.rpe,
         profileId: profile.id!,
         timestamp: writtenAt,
       })));

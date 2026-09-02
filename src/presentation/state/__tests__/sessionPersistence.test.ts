@@ -35,6 +35,20 @@ describe('sessionPersistence', () => {
     expect(readStoredSession()).toBeNull();
   });
 
+  it('keeps the Borg rating across a restart', () => {
+    // The rating is asked once and stamped onto the exercise's sets. Losing it
+    // to a killed WebView would mean being asked again for work already rated —
+    // it survives because the whole set object is written, not a field list.
+    writeStoredSession('p1', session({
+      sets: [
+        { exerciseName: 'Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true, rpe: 15 },
+        { exerciseName: 'Bench Press', setNumber: 2, weight: 80, reps: 8, isCompleted: true, rpe: 15 },
+      ],
+    }));
+
+    expect(readStoredSession()?.session.sets.map(s => s.rpe)).toEqual([15, 15]);
+  });
+
   it('drops a session with no sets — there is nothing to resume', () => {
     writeStoredSession('p1', session({ sets: [] }));
     expect(readStoredSession()).toBeNull();

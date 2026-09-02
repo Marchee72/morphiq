@@ -517,10 +517,12 @@ app.delete('/api/profiles/:id/messages', async (req, res) => {
 app.post('/api/workout-sets', ownBody, async (req, res) => {
   const s = req.body;
   try {
+    // "exerciseId" has had a column since the catalogue landed and was never
+    // listed here, so every set written in server mode lost its catalogue link.
     const { rows } = await pool.query(
-      `INSERT INTO workout_sets ("workoutLogId", "profileId", "exerciseName", "setNumber", reps, weight, timestamp, notes, "distanceKm", "duration", "speed")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [s.workoutLogId, s.profileId, s.exerciseName, s.setNumber, s.reps, s.weight, s.timestamp || new Date(), s.notes, s.distanceKm, s.duration, s.speed]
+      `INSERT INTO workout_sets ("workoutLogId", "profileId", "exerciseName", "exerciseId", "setNumber", reps, weight, timestamp, notes, "distanceKm", "duration", "speed", rpe)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [s.workoutLogId, s.profileId, s.exerciseName, s.exerciseId, s.setNumber, s.reps, s.weight, s.timestamp || new Date(), s.notes, s.distanceKm, s.duration, s.speed, s.rpe]
     );
     const r = rows[0];
     res.status(201).json({
@@ -530,7 +532,8 @@ app.post('/api/workout-sets', ownBody, async (req, res) => {
       weight: num(r.weight),
       distanceKm: num(r.distanceKm),
       duration: num(r.duration),
-      speed: num(r.speed)
+      speed: num(r.speed),
+      rpe: num(r.rpe)
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

@@ -55,6 +55,7 @@ function parseWorkoutSet(raw: Record<string, unknown>): WorkoutSet {
     distanceKm: raw.distanceKm != null ? Number(raw.distanceKm) : undefined,
     duration: raw.duration != null ? Number(raw.duration) : undefined,
     speed: raw.speed != null ? Number(raw.speed) : undefined,
+    rpe: raw.rpe != null ? Number(raw.rpe) : undefined,
   } as WorkoutSet;
 }
 

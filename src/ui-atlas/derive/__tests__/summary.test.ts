@@ -29,7 +29,9 @@ function exercise(
 
 const session: SessionVM = { title: 'Push A', startedAt: STARTED };
 
-const totals: SessionTotalsVM = { volumeKg: 2000, setsDone: 4, setsPlanned: 6, prs: 1 };
+const totals: SessionTotalsVM = {
+  volumeKg: 2000, setsDone: 4, setsPlanned: 6, prs: 1, avgRpe: null, maxRpe: null,
+};
 
 describe('buildSessionSummary', () => {
   it('measures the session from its own start and end, not the clock', () => {

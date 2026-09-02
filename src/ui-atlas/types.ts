@@ -111,6 +111,14 @@ export interface SessionExerciseVM {
   note?: string;
   /** Null until this exercise has been logged at least once with a scoreable set. */
   best: ExerciseBestVM | null;
+  /**
+   * Perceived exertion for the whole exercise, Borg 6-20. Undefined until asked.
+   *
+   * On the exercise rather than on `SessionSetVM` because that is the grain the
+   * question is asked at — a single set has no answer of its own to show, and
+   * putting the field there would invite a per-set UI that does not exist.
+   */
+  rpe?: number;
 }
 
 export interface SessionVM {
@@ -126,6 +134,9 @@ export interface SessionTotalsVM {
   setsDone: number;
   setsPlanned: number;
   prs: number;
+  /** Borg 6-20 across the rated exercises. Null when nothing was rated. */
+  avgRpe: number | null;
+  maxRpe: number | null;
 }
 
 export interface SessionCursor {

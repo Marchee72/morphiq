@@ -119,6 +119,10 @@ CREATE TABLE IF NOT EXISTS exercise_favorites (
 
 ALTER TABLE workout_sets ADD COLUMN IF NOT EXISTS "exerciseId" TEXT;
 
+-- Perceived exertion, Borg 6-20. Asked once per exercise, stored on each of its
+-- completed sets — there is no row between a session and its sets to hold it.
+ALTER TABLE workout_sets ADD COLUMN IF NOT EXISTS rpe NUMERIC;
+
 DROP TABLE IF EXISTS user_exercises;
 
 CREATE TABLE IF NOT EXISTS routine_templates (

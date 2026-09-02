@@ -142,7 +142,12 @@ export interface SessionFixture {
   workoutType?: string;
   startedAt?: Date;
   exercises?: { id: string; exerciseId?: string; exerciseName: string; targetSets: number; targetReps?: number }[];
-  sets?: { exerciseName: string; setNumber: number; weight?: number; reps?: number; isCompleted?: boolean }[];
+  sets?: {
+    exerciseName: string; setNumber: number;
+    weight?: number; reps?: number; isCompleted?: boolean;
+    /** Borg 6-20, for fixtures that start from an already-rated exercise. */
+    rpe?: number;
+  }[];
 }
 
 export interface RenderSkinOptions {

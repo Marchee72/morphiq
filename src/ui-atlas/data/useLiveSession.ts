@@ -52,8 +52,15 @@ export interface LiveSession {
   updateSet(setIdx: number, patch: { weightKg?: number; reps?: number; done?: boolean }): void;
   addSet(): void;
   removeSet(setIdx: number): void;
-  /** Ends the current exercise at the sets already logged, dropping the rest. */
-  finishExercise(): void;
+  /**
+   * Ends the current exercise at the sets already logged, dropping the rest.
+   *
+   * `rpe` is the Borg 6-20 rating for the exercise, asked as it closes. Omitted
+   * when the lifter skipped the question — the exercise still ends.
+   */
+  finishExercise(rpe?: number): void;
+  /** Rates an exercise that is still open. See `setActiveSessionExerciseRpe`. */
+  rateExercise(exerciseName: string, rpe: number): void;
 
   goTo(exerciseIdx: number, setIdx: number): void;
   goToExercise(exerciseIdx: number): void;
@@ -260,7 +267,9 @@ export function useLiveSession(
     updateSet,
     addSet,
     removeSet,
-    finishExercise: () => useStore.getState().finishActiveSessionExercise(cursor.exerciseIdx),
+    finishExercise: rpe => useStore.getState().finishActiveSessionExercise(cursor.exerciseIdx, rpe),
+    rateExercise: (exerciseName, rpe) =>
+      useStore.getState().setActiveSessionExerciseRpe(exerciseName, rpe),
     goTo: (exerciseIdx, setIdx) => onCursorChange?.({ exerciseIdx, setIdx }),
     goToExercise: exerciseIdx => onCursorChange?.({
       exerciseIdx,

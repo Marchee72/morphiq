@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
+import { borgLabelKey } from '../derive/borg';
 import { snapWeight } from '../derive/weightLadder';
 import type { SessionSetVM } from '../types';
 
@@ -26,7 +27,14 @@ export const AtlasSetList: React.FC<{
   editing: number | null;
   onEditing: (setIdx: number | null) => void;
   onUpdate: (setIdx: number, patch: { weightKg?: number; reps?: number; done?: boolean }) => void;
-}> = ({ sets, currentIdx, editing, onEditing, onUpdate }) => {
+  /**
+   * The exercise's Borg rating, shown as a footer rather than a column.
+   *
+   * It is one answer for the whole exercise, so repeating it down every row
+   * would read as four separate ratings that happen to agree.
+   */
+  rpe?: number;
+}> = ({ sets, currentIdx, editing, onEditing, onUpdate, rpe }) => {
   const { t, fmt } = useT();
   const [weight, setWeight] = useState('');
   const [reps, setReps] = useState('');
@@ -130,6 +138,12 @@ export const AtlasSetList: React.FC<{
           </div>
         );
       })}
+
+      {rpe !== undefined && (
+        <div className="at-setlist-foot">
+          {t('train.exerciseRpe')} <b>{rpe}</b> · {t(borgLabelKey(rpe))}
+        </div>
+      )}
     </div>
   );
 };

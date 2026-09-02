@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { AlertTriangle, Check } from 'lucide-react';
 import { useT } from '../../i18n';
 import { FEELING_OPTIONS } from '../../features/gym/feelingOptions';
-import type { FeelingId, SessionTotalsVM } from '../types';
+import { trainingLoad } from '../derive/borg';
+import type { FeelingId, SessionExerciseVM, SessionTotalsVM } from '../types';
+import { AtlasBorgScale } from './AtlasBorgScale';
 import { AtlasSheet } from './AtlasSheet';
 
 /**
@@ -27,7 +29,13 @@ export const AtlasFinishSheet: React.FC<{
   /** A write is already in flight, so confirming again would file the session twice. */
   busy?: boolean;
   onConfirm: (feeling: FeelingId | undefined) => void;
-}> = ({ open, onClose, totals, elapsedSec, initialFeeling, busy = false, onConfirm }) => {
+  /** The session's exercises, to find the ones that were never rated. */
+  exercises?: SessionExerciseVM[];
+  onRate?: (exerciseName: string, rpe: number) => void;
+}> = ({
+  open, onClose, totals, elapsedSec, initialFeeling, busy = false, onConfirm,
+  exercises = [], onRate,
+}) => {
   const { t, tp, fmt } = useT();
   const [feeling, setFeeling] = useState<FeelingId | undefined>(initialFeeling);
 
@@ -40,6 +48,18 @@ export const AtlasFinishSheet: React.FC<{
   }
 
   const unlogged = Math.max(0, totals.setsPlanned - totals.setsDone);
+  const load = trainingLoad(totals.avgRpe, Math.round(elapsedSec / 60));
+
+  /**
+   * Exercises with work behind them and no rating.
+   *
+   * Almost always just the one you were on when you decided to stop: an exercise
+   * you finished was rated as it finished. Without this the last exercise of
+   * every session goes unrated, which is the one whose effort you remember best.
+   */
+  const unrated = onRate
+    ? exercises.filter(ex => ex.rpe === undefined && ex.sets.some(s => s.done))
+    : [];
 
   return (
     <AtlasSheet
@@ -68,6 +88,34 @@ export const AtlasFinishSheet: React.FC<{
           <span>{tp('train.finishConfirmUnlogged', unlogged)}</span>
         </div>
       )}
+
+      {/* Only when something was actually rated. An em-dash here would be
+          answering a question nobody was asked. */}
+      {totals.avgRpe !== null && (
+        <div className="at-rpe-summary">
+          <div>
+            <small>{t('train.rpeAvg')}</small>
+            <b>{fmt.upTo(totals.avgRpe, 1)}</b>
+          </div>
+          <div>
+            <small>{t('train.rpeMax')}</small>
+            <b>{totals.maxRpe}</b>
+          </div>
+          {load !== null && (
+            <div>
+              <small>{t('train.sessionLoad')}</small>
+              <b>{fmt.n(load)}</b>
+            </div>
+          )}
+        </div>
+      )}
+
+      {unrated.map(exercise => (
+        <div key={exercise.key} className="at-field">
+          <div className="at-field-label">{t('train.rpePending', { name: exercise.name })}</div>
+          <AtlasBorgScale onChange={rpe => onRate?.(exercise.name, rpe)} />
+        </div>
+      ))}
 
       <div className="at-field">
         <div className="at-field-label">{t('train.howDoYouFeel')}</div>

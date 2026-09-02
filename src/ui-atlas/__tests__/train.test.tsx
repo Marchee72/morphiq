@@ -262,6 +262,176 @@ function swipe(dx: number, dy = 0) {
   fireEvent.pointerUp(stage, { pointerId: 1, clientX: 200 + dx, clientY: 300 + dy });
 }
 
+describe('Train — perceived exertion', () => {
+  beforeEach(() => {
+    useStore.setState(initialState, true);
+    useSessionSummary.setState({ summary: null });
+  });
+
+  const setsOf = (name: string) =>
+    (useStore.getState().activeSession?.sets ?? []).filter(s => s.exerciseName === name);
+
+  /** Two exercises, the first one part-done — the shape "finish exercise" needs. */
+  const partway = {
+    exercises: [
+      { id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 3 },
+      { id: 'e2', exerciseName: 'Barbell Squat', targetSets: 3 },
+    ],
+    sets: [
+      { exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+      { exerciseName: 'Barbell Bench Press', setNumber: 2, weight: 80, reps: 8, isCompleted: true },
+      { exerciseName: 'Barbell Squat', setNumber: 1, weight: 100, reps: 5, isCompleted: true },
+    ],
+  };
+
+  it('asks how hard it was instead of ending the exercise outright', async () => {
+    renderScreen('train', { data: 'rich', session: partway });
+
+    fireEvent.click(await screen.findByRole('button', { name: /finish exercise/i }));
+    await waitFor(() => expect(text()).toMatch(/how hard was that/i));
+    // The exercise is still open: the question and the ending are one decision.
+    expect(setsOf('Barbell Bench Press')).toHaveLength(2);
+  });
+
+  it('writes the rating to every set of that exercise and no other', async () => {
+    renderScreen('train', { data: 'rich', session: partway });
+
+    fireEvent.click(await screen.findByRole('button', { name: /finish exercise/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /15/ }));
+
+    await waitFor(() => {
+      expect(setsOf('Barbell Bench Press').map(s => s.rpe)).toEqual([15, 15]);
+    });
+    // The rating belongs to the exercise that was rated, not to the session.
+    expect(setsOf('Barbell Squat').every(s => s.rpe === undefined)).toBe(true);
+  });
+
+  it('still renumbers the surviving sets when a rating is given', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 4 }],
+        sets: [
+          { exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+          { exerciseName: 'Barbell Bench Press', setNumber: 2, weight: 80, reps: 8, isCompleted: false },
+          { exerciseName: 'Barbell Bench Press', setNumber: 3, weight: 80, reps: 6, isCompleted: true },
+        ],
+      },
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /finish exercise/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /17/ }));
+
+    await waitFor(() => {
+      const kept = setsOf('Barbell Bench Press');
+      // The unlogged set 2 is dropped and set 3 becomes set 2 — a gap here and
+      // the next write to this exercise lands in it.
+      expect(kept.map(s => s.setNumber)).toEqual([1, 2]);
+      expect(kept.map(s => s.reps)).toEqual([8, 6]);
+      expect(kept.map(s => s.rpe)).toEqual([17, 17]);
+    });
+  });
+
+  it('ends the exercise anyway when the question is skipped', async () => {
+    renderScreen('train', { data: 'rich', session: partway });
+
+    fireEvent.click(await screen.findByRole('button', { name: /finish exercise/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^skip$/i }));
+
+    await waitFor(() => {
+      const kept = setsOf('Barbell Bench Press');
+      expect(kept).toHaveLength(2);
+      expect(kept.every(s => s.rpe === undefined)).toBe(true);
+    });
+  });
+
+  it('asks on the exercise that completed itself, which is how most of them end', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 1 }],
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    // Nobody presses "finish exercise" here — the last set finished it.
+    await waitFor(() => expect(text()).toMatch(/how hard was that/i));
+    fireEvent.click(await screen.findByRole('button', { name: /19/ }));
+    await waitFor(() => expect(setsOf('Barbell Bench Press')[0].rpe).toBe(19));
+  });
+
+  it('offers the exercise you were still on when finishing the session', async () => {
+    renderScreen('train', { data: 'rich', session: partway });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /edit session/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /finish session/i }));
+
+    // Neither exercise was ever closed, so both are still unrated and both are
+    // offered — the last one especially, whose effort is freshest.
+    await waitFor(() => expect(text()).toMatch(/how hard was Barbell Bench Press/i));
+    expect(text()).toMatch(/how hard was Barbell Squat/i);
+  });
+
+  it('reports the session average once something has been rated', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 1 }],
+        sets: [{
+          exerciseName: 'Barbell Bench Press', setNumber: 1,
+          weight: 80, reps: 8, isCompleted: true, rpe: 15,
+        }],
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /finish session/i }));
+    await waitFor(() => expect(text()).toMatch(/avg effort/i));
+    // Already rated, so it is not asked again.
+    expect(text()).not.toMatch(/how hard was Barbell Bench Press/i);
+  });
+
+  it('says nothing about effort when nothing was rated', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 1 }],
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /finish session/i }));
+    await waitFor(() => expect(text()).toMatch(/finish this session/i));
+    // An em-dash here would be answering a question nobody was asked.
+    expect(text()).not.toMatch(/avg effort/i);
+  });
+
+  it('carries the rating through to the saved sets', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 1 }],
+        sets: [{
+          exerciseName: 'Barbell Bench Press', setNumber: 1,
+          weight: 80, reps: 8, isCompleted: true, rpe: 13,
+        }],
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /finish session/i }));
+    await waitFor(() => expect(text()).toMatch(/finish this session/i));
+    fireEvent.click(screen.getByRole('button', { name: /finish and save/i }));
+
+    // `finishActiveSession` enumerates the columns it writes by hand, so a new
+    // field reaches the database only if it was added to that list.
+    await waitFor(async () => {
+      const written = await db.workoutSets.toArray();
+      expect(written).toHaveLength(1);
+      expect(written[0].rpe).toBe(13);
+    });
+    await waitFor(() => expect(useStore.getState().activeSession).toBeNull());
+  });
+});
+
 describe('Train — moving between exercises', () => {
   beforeEach(() => {
     useStore.setState(initialState, true);

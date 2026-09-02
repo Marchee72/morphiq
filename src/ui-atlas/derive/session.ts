@@ -3,6 +3,7 @@ import type { WorkoutSet } from '../../core/entities/WorkoutSet';
 import type {
   ExerciseBestVM, SessionCursor, SessionExerciseVM, SessionSetVM, SessionTotalsVM,
 } from '../types';
+import { exerciseRpe, sessionRpeFromExercises } from './borg';
 import { e1rm, isPrEligible, normalizeName, type ExerciseUsageMap } from './records';
 
 /** Sets as they exist mid-session, before a workout log has been written. */
@@ -125,6 +126,10 @@ export function buildSessionExercises(
       sets,
       note: entry.notes,
       best: bestFor(usage, key),
+      // Read off the logged rows, which all carry the same answer, rather than
+      // off the padded `sets` above — those include planned sets that were never
+      // performed and so were never rated.
+      rpe: exerciseRpe(logged) ?? undefined,
     };
   });
 }
@@ -145,7 +150,8 @@ export function buildSessionTotals(exercises: SessionExerciseVM[]): SessionTotal
     }
   }
 
-  return { volumeKg: Math.round(volumeKg), setsDone, setsPlanned, prs };
+  const { avg, max } = sessionRpeFromExercises(exercises);
+  return { volumeKg: Math.round(volumeKg), setsDone, setsPlanned, prs, avgRpe: avg, maxRpe: max };
 }
 
 /**

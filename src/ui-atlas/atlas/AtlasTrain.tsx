@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Check, Flag, Plus, Trash2, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
+import { borgLabelKey } from '../derive/borg';
 import { weightLadder, WEIGHT_PRECISION } from '../derive/weightLadder';
 import { useStore } from '../../presentation/state/store';
 import { useAppData, useAppActions } from '../data/useAppData';
@@ -14,6 +15,7 @@ import type { Exercise } from '../../core/entities/Exercise';
 import { AtlasGymHub } from './AtlasGymHub';
 import { AtlasSessionEditor } from './AtlasSessionEditor';
 import { AtlasSessionStart } from './AtlasSessionStart';
+import { AtlasBorgScale } from './AtlasBorgScale';
 import { AtlasDial } from './AtlasDial';
 import { AtlasSetList } from './AtlasSetList';
 import { AtlasSharedStrip } from './AtlasSharedStrip';
@@ -90,11 +92,19 @@ export const AtlasTrain: React.FC = () => {
    */
   const [viewSet, setViewSet] = useState<number | null>(null);
 
+  /**
+   * Whether "finish exercise" is waiting on a Borg rating before it ends the
+   * exercise. The question and the ending are one decision, so the button opens
+   * this rather than closing the exercise and asking afterwards.
+   */
+  const [rating, setRating] = useState(false);
+
   const [editRowFor, setEditRowFor] = useState(live.cursor.exerciseIdx);
   if (editRowFor !== live.cursor.exerciseIdx) {
     setEditRowFor(live.cursor.exerciseIdx);
     setEditRow(null);
     setViewSet(null);
+    setRating(false);
   }
 
   if (!session) return <AtlasGymHub />;
@@ -179,6 +189,8 @@ export const AtlasTrain: React.FC = () => {
           : 0}
         initialFeeling={session.feelingTag as FeelingId | undefined}
         onConfirm={finish}
+        exercises={sessionExercises}
+        onRate={live.rateExercise}
       />
       <AtlasExerciseDetail exercise={detail} onClose={() => setDetail(null)} />
     </>
@@ -346,6 +358,22 @@ export const AtlasTrain: React.FC = () => {
             <span className="at-done-mark"><Check size={20} strokeWidth={3} /></span>
             <h4 className="at-serif">{t('train.exerciseDone')}</h4>
             <p>{t('train.exerciseDoneSub', { n: exercise.sets.length })}</p>
+
+            {/* Most exercises end by logging the last set, not by pressing
+                "finish exercise" — so asking only from that button would leave
+                nearly everything unrated. This is the moment the answer is
+                freshest, and it costs one tap. */}
+            {exercise.rpe === undefined ? (
+              <div className="at-rpe-ask">
+                <div className="at-field-label">{t('train.rpeAsk')}</div>
+                <AtlasBorgScale onChange={rpe => live.rateExercise(exercise.name, rpe)} />
+              </div>
+            ) : (
+              <p className="at-rpe-said">
+                {t('train.rpe')} {exercise.rpe} · {t(borgLabelKey(exercise.rpe))}
+              </p>
+            )}
+
             {/* Only offered when the sticky bar is not already showing the way
                 on — two buttons for the same decision is worse than one. */}
             {!nextExercise && !sessionComplete && (
@@ -399,25 +427,50 @@ export const AtlasTrain: React.FC = () => {
           editing={editRow}
           onEditing={setEditRow}
           onUpdate={live.updateSet}
+          rpe={exercise.rpe}
         />
       </div>
 
-      <div className="at-pad at-setmeta">
-        <span>{t('train.setsDone', { done, total: exercise.sets.length })}</span>
-        {/* Offered only with work behind you and work still planned: with
-            nothing done this is "remove the exercise", and with nothing left
-            the exercise has already finished itself. */}
-        {done > 0 && done < exercise.sets.length && (
-          <button onClick={live.finishExercise}>
-            <Check size={13} /> {t('train.finishExercise')}
-          </button>
-        )}
-        {exercise.sets.length > 1 && (
-          <button onClick={() => live.removeSet(live.setIdx)}>
-            <Trash2 size={13} /> {t('train.removeSet')}
-          </button>
-        )}
-      </div>
+      {/* Ending an exercise early and saying what it cost are one decision, so
+          the button opens the question instead of closing the exercise and
+          leaving the answer to be chased down later. Skipping is explicit —
+          the exercise ends either way. */}
+      {rating ? (
+        <div className="at-pad" style={{ paddingTop: 14 }}>
+          <div className="at-card at-rpe-ask">
+            <div className="at-field-label">{t('train.rpeAsk')}</div>
+            <AtlasBorgScale
+              value={exercise.rpe}
+              onChange={rpe => { setRating(false); live.finishExercise(rpe); }}
+            />
+            <button
+              className="at-btn"
+              data-ghost="true"
+              style={{ width: '100%', justifyContent: 'center' }}
+              onClick={() => { setRating(false); live.finishExercise(); }}
+            >
+              {t('train.rpeSkip')}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="at-pad at-setmeta">
+          <span>{t('train.setsDone', { done, total: exercise.sets.length })}</span>
+          {/* Offered only with work behind you and work still planned: with
+              nothing done this is "remove the exercise", and with nothing left
+              the exercise has already finished itself. */}
+          {done > 0 && done < exercise.sets.length && (
+            <button onClick={() => setRating(true)}>
+              <Check size={13} /> {t('train.finishExercise')}
+            </button>
+          )}
+          {exercise.sets.length > 1 && (
+            <button onClick={() => live.removeSet(live.setIdx)}>
+              <Trash2 size={13} /> {t('train.removeSet')}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Swiping past the last exercise reaches the picker too, but a gesture is
           not an affordance — this is the one that can be seen. */}
