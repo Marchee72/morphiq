@@ -28,9 +28,18 @@ if (!process.env.JAVA_HOME) {
   }
 }
 
+// Release, not debug. The debug keystore lives in ~/.android and is regenerated
+// per machine, so a build from a different PC — or from this one after the key
+// was replaced — cannot update an install signed by the old one. Android refuses
+// on the signature alone and the only way out is uninstalling, which costs the
+// session and the granted permissions. `morphiq-release-key.jks` is in the repo,
+// so it stays the same key forever and updates keep landing on top.
+//
+// Its SHA-1 must be registered on the Android OAuth client or Google Sign-In
+// refuses the app: 3F:46:C4:DB:CA:EC:96:2B:93:07:F2:B1:84:45:A8:F2:9B:F5:9C:8B
 console.log('⚙️ Building Android APK via Gradle...');
 const androidDir = path.resolve(process.cwd(), 'android');
-const gradlewCmd = process.platform === 'win32' ? '.\\gradlew.bat assembleDebug' : './gradlew assembleDebug';
+const gradlewCmd = process.platform === 'win32' ? '.\\gradlew.bat assembleRelease' : './gradlew assembleRelease';
 execSync(gradlewCmd, { cwd: androidDir, stdio: 'inherit', env: { ...process.env, JAVA_HOME: process.env.JAVA_HOME } });
 
 console.log('📲 Checking connected Android phone via ADB...');
@@ -39,16 +48,29 @@ const adbPath = process.env.LOCALAPPDATA
   : 'adb';
 
 const devicesOutput = execSync(`"${adbPath}" devices`, { encoding: 'utf-8' });
+// Only devices whose state is exactly `device`. A phone that has not had the
+// USB debugging prompt accepted reports `unauthorized`, which is a line in this
+// list but not something `adb install` can talk to — counting it sent the build
+// to an install that always fails while skipping the MTP fallback below, which
+// is the one path that would still have worked.
 const connectedDevices = devicesOutput
   .split('\n')
   .map((line) => line.trim())
-  .filter((line) => line && !line.startsWith('List of devices') && !line.startsWith('*'));
+  .filter((line) => /\tdevice$/.test(line));
+
+const unusable = devicesOutput
+  .split('\n')
+  .map((line) => line.trim())
+  .filter((line) => /\t(unauthorized|offline)$/.test(line));
+for (const line of unusable) {
+  console.log(`⚠️ Ignoring ${line} — unlock the phone and accept "Allow USB debugging".`);
+}
 
 if (connectedDevices.length === 0) {
   console.log('\n⚠️ No active ADB device connection detected.');
   console.log('📲 Attempting direct file copy to phone via MTP (Windows File Transfer)...');
   
-  const apkPath = path.resolve(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+  const apkPath = path.resolve(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
   
   try {
     const psCommand = `
@@ -66,7 +88,7 @@ if (connectedDevices.length === 0) {
     const result = execSync(`powershell -Command "${psCommand.replace(/\n/g, ' ')}"`, { encoding: 'utf-8' });
     if (result.includes('COPIED_SUCCESS')) {
       console.log('\n🎉 ¡APK copiada directamente a la carpeta Downloads de tu celular!');
-      console.log('👉 Abrí "Mis Archivos" ➔ "Descargas" en tu S24 Ultra y tocá "app-debug.apk" para instalarla.');
+      console.log('👉 Abrí "Mis Archivos" ➔ "Descargas" en tu S24 Ultra y tocá "app-release.apk" para instalarla.');
       process.exit(0);
     }
   } catch (err) {
@@ -79,7 +101,7 @@ if (connectedDevices.length === 0) {
   process.exit(1);
 }
 
-const apkPath = path.resolve(androidDir, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+const apkPath = path.resolve(androidDir, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
 console.log(`📲 Installing ${apkPath} to connected device...`);
 execSync(`"${adbPath}" install -r "${apkPath}"`, { stdio: 'inherit' });
 
