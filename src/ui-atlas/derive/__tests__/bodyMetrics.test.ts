@@ -3,7 +3,7 @@ import type { Measurement } from '../../../core/entities/Measurement';
 import type { UserProfile } from '../../../core/entities/UserProfile';
 import { MS_PER_DAY } from '../buckets';
 import type { MetricKey } from '../../types';
-import { buildBody, buildMetricPoint, buildSeries, HEALTH_IMPORT_DAYS, isImproving, isMeasured, METRIC_SPECS, metricByKey, SERIES_WEEKS, valueNear } from '../bodyMetrics';
+import { buildBody, buildMetricPoint, buildSeries, HEALTH_IMPORT_DAYS, isImproving, isMeasured, METRIC_SPECS, metricByKey, metricSpecs, SERIES_WEEKS, valueNear } from '../bodyMetrics';
 
 const NOW = new Date(2026, 6, 27, 12);
 
@@ -31,8 +31,33 @@ describe('METRIC_SPECS', () => {
       // Visceral fat, metabolic age and protein used to sit in this list.
       // Health Connect has no record for any of them, so nothing measured them
       // — they were scale formulas over height/weight/age/sex. See `Measurement`.
-      'weight', 'bodyFat', 'muscleMass', 'muscleMassPct', 'bmi', 'bodyWater', 'bmr',
+      'weight', 'bodyFat', 'muscleMass', 'muscleMassPct', 'ffmi', 'bmi', 'bodyWater', 'bmr',
     ]);
+  });
+
+  it('reads FFMI off weight, body fat and the profile height', () => {
+    // 80 kg at 20 % fat is 64 kg lean; 1.78 m squared is 3.1684 m².
+    const read = metricSpecs(178).find(s => s.key === 'ffmi')!.read;
+    expect(read(measurement(0, { weight: 80, bodyFat: 20 }))).toBeCloseTo(20.2, 1);
+  });
+
+  it('reports FFMI as absent without a height, rather than dividing by zero', () => {
+    // A profile can have no height, and `METRIC_SPECS` is built without one.
+    expect(readerFor('ffmi')(measurement(0))).toBe(0);
+    expect(metricSpecs(0).find(s => s.key === 'ffmi')!.read(measurement(0))).toBe(0);
+  });
+
+  it('reports FFMI as absent on a manual weigh-in, which records no body fat', () => {
+    // `addManualMeasurement` zeroes every BIA field. Lean mass would then be the
+    // whole weight, and the reading would claim a body-fat measurement nobody took.
+    const read = metricSpecs(178).find(s => s.key === 'ffmi')!.read;
+    expect(read(measurement(0, { weight: 80, bodyFat: 0 }))).toBe(0);
+    expect(read(measurement(0, { weight: 0, bodyFat: 20 }))).toBe(0);
+  });
+
+  it('does not present FFMI as something the scale measured', () => {
+    // It is arithmetic over two readings, like BMI — see `isMeasured`.
+    expect(isMeasured('ffmi')).toBe(false);
   });
 
   it('reads muscle mass percent off weight and muscle mass', () => {

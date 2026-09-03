@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData } from '../data/useAppData';
 import { heatColor, heatLevel } from '../derive/heatColor';
@@ -9,22 +8,29 @@ import { AtlasSegment } from './AtlasField';
 import type { MuscleGroupId } from '../types';
 
 /**
- * The combined card that replaces the old X/16 muscle-load block on Today.
+ * Muscle balance — the figure, and the numbers behind its colours.
  *
- * Left: a body heat map (front/back segment) with each region colored by weekly
- * set volume. Right: the last session summary and a goal/streak nudge. Tapping
- * a region opens the detail sheet — the parent owns that state.
+ * The card used to be a body map beside two blocks that repeated the rest of the
+ * screen: the last session, which "Today's training" states above and the recent
+ * list states below, and the weekly goal with its streak, which the week card
+ * now owns outright. Three copies of the same two facts, and the one thing only
+ * this card could say — how the week is distributed across the body — was left
+ * entirely to colour, on a figure 96px tall.
+ *
+ * So the right-hand column is now the heat map read as numbers: every group,
+ * heaviest first, each bar the same length-and-colour the figure is painted
+ * with. The nudge stays as the takeaway, because "which of these do I train
+ * next" is the question the distribution exists to answer.
  */
 export const AtlasHeatMap: React.FC<{
   onPickRegion: (group: MuscleGroupId) => void;
 }> = ({ onPickRegion }) => {
-  const { t, tp, fmt } = useT();
+  const { t, tp } = useT();
   const { training } = useAppData();
   const now = new Date();
 
   const [side, setSide] = useState<Side>('front');
 
-  const previous = training.today.previous;
   const streak = training.streak;
   const trainedToday = training.today.sessions.length > 0;
 
@@ -82,62 +88,65 @@ export const AtlasHeatMap: React.FC<{
     }
   };
 
+  /**
+   * Heaviest group first, so the imbalance is the first thing read rather than
+   * something to be found by comparing six colours. Sorted off a copy — `rows`
+   * is in fixed order precisely so the figure never reflows.
+   */
+  const ranked = [...training.muscleLoad.rows].sort((a, b) => b.sets - a.sets);
+
   return (
     <div className="at-card at-heatmap-card">
+      <div className="at-heatmap-head">
+        <h4 className="at-serif">{t('today.balance')}</h4>
+        <div className="at-heatmap-side">
+          <AtlasSegment
+            value={side}
+            onChange={setSide}
+            options={[
+              { value: 'front', label: t('today.front') },
+              { value: 'back', label: t('today.back') },
+            ]}
+          />
+        </div>
+      </div>
+
       <div className="at-heatmap">
-        {/* Body heat map */}
         <div className="at-heatmap-figure">
-          <div className="at-heatmap-label">{t('today.bodyHeat')}</div>
           <BodyMap side={side} active={null} onPick={onPickRegion} fill={heatFill} />
           <div className="at-heatmap-legend" />
           <div className="at-heatmap-legend-labels">
             <span>{t('today.heatRested')}</span>
             <span>{t('today.heatTrained')}</span>
           </div>
-          <div className="at-heatmap-side">
-            <AtlasSegment
-              value={side}
-              onChange={setSide}
-              options={[
-                { value: 'front', label: t('today.front') },
-                { value: 'back', label: t('today.back') },
-              ]}
-            />
-          </div>
         </div>
 
-        {/* Last session + Today */}
-        <div className="at-heatmap-info">
-          <div className="at-heatmap-label">{t('today.lastSession')}</div>
-          {previous ? (
-            <>
-              <h4>{previous.title}</h4>
-              <div className="at-heatmap-exercises">
-                {previous.exercises.join(' · ')}
-              </div>
-              <div className="at-heatmap-stats">
-                <span><b>{tp('unit.sets', previous.sets)}</b></span>
-                <span><b>{fmt.n(previous.volumeKg / 1000, 1)} {t('unit.tonnes')}</b></span>
-                <span><b>{previous.durationMin} min</b></span>
-                {previous.prs > 0 && (
-                  <span><b style={{ color: 'var(--clay)' }}><Trophy size={11} /> {previous.prs}</b></span>
-                )}
-              </div>
-            </>
-          ) : (
-            <h4>{t('today.neverTrained')}</h4>
-          )}
-
-          <div className="at-heatmap-today">
-            <div className="at-heatmap-label">{t('today.todayLabel')}</div>
-            <div className="at-heatmap-today-goal">
-              {t('today.weeklyGoal', { done: streak.weekDone, goal: streak.weekGoal })}
-              {streak.current > 0 && ` · ${t('today.streak', { n: streak.current })}`}
-            </div>
-            <div className="at-heatmap-today-nudge">{nudgeText()}</div>
-          </div>
+        <div className="at-heatmap-rows">
+          <div className="at-heatmap-label">{t('today.muscleLoad')}</div>
+          {ranked.map(row => {
+            // One scale for the whole card: the bar's length and its colour are
+            // the same number the figure is painted with, so a limb and its row
+            // can never disagree about how hard the week hit it.
+            const level = heatLevel(row.sets);
+            return (
+              <button
+                key={row.group}
+                className="at-heatgroup"
+                onClick={() => onPickRegion(row.group)}
+                aria-label={`${t(row.labelKey)} · ${tp('unit.sets', row.sets)}`}
+              >
+                <span>{t(row.labelKey)}</span>
+                <i aria-hidden="true">
+                  <u style={{ width: `${Math.max(level * 100, row.sets > 0 ? 5 : 0)}%`, background: heatColor(level) }} />
+                </i>
+                <b>{row.sets}</b>
+              </button>
+            );
+          })}
         </div>
       </div>
+
+      <p className="at-heatmap-nudge">{nudgeText()}</p>
     </div>
   );
 };

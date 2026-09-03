@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  ArrowRight, Bike, Check, Dumbbell, Footprints, Heart, HeartPulse, Scale, Sparkles, Trophy,
-  UtensilsCrossed,
+  ArrowRight, Bike, Check, Dumbbell, Flame, Footprints, Heart, HeartPulse, Scale, Sparkles,
+  Trophy, UtensilsCrossed,
 } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
@@ -81,6 +81,16 @@ export const AtlasToday: React.FC = () => {
    * the live session. With nothing running the week is the honest number.
    */
   const volumeKg = session ? sessionTotals.volumeKg : training.weeklyStats.volumeKg;
+
+  /**
+   * The week against its goal. Clamped at 100% so a fifth session on a goal of
+   * four fills the bar rather than overflowing the card — the count above it
+   * still says five.
+   */
+  const sessionsToGo = Math.max(0, training.streak.weekGoal - training.streak.weekDone);
+  const weekPct = training.streak.weekGoal > 0
+    ? Math.min(100, (training.streak.weekDone / training.streak.weekGoal) * 100)
+    : 0;
 
   /**
    * The fold-level answer: what today has been, or — when it has been nothing
@@ -446,32 +456,98 @@ export const AtlasToday: React.FC = () => {
       </>
       )}
 
+      {/* No link beside the heading any more. It used to carry "2/4 · 3-day
+          streak" — the only place either number appeared — and clicking it went
+          to Train, which is neither what the label said nor where the goal
+          lives. Both numbers are in the card now, where the days they describe
+          are. */}
       <div className="at-rail-head">
         <h3>{t('today.thisWeek')}</h3>
-        <button onClick={() => actions.navigate('train')}>
-          {t('today.weeklyGoal', { done: training.streak.weekDone, goal: training.streak.weekGoal })}
-          {training.streak.current > 0 && ` · ${t('today.streak', { n: training.streak.current })}`}
-        </button>
       </div>
       <div className="at-pad" style={{ paddingBottom: 22 }}>
-        <div className="at-card">
+        <div className="at-card at-weekcard">
+          {/* The week used to be seven rings and nothing else: no goal, no
+              streak, no totals — the heading's "2/4" was doing all the work from
+              outside the card, where nothing connected it to the dots below.
+              Everything the week amounts to now lives on the one surface. */}
+          <div className="at-weekcard-head">
+            <div className="at-weekcard-count">
+              <b>{training.streak.weekDone}</b>
+              <span>/{training.streak.weekGoal}</span>
+            </div>
+            <div className="at-weekcard-goal">
+              <small>{t('today.weekSessions')}</small>
+              <p>
+                {sessionsToGo > 0
+                  ? tp('today.weekToGo', sessionsToGo)
+                  : t('today.weekGoalMet')}
+              </p>
+            </div>
+            {/* Earned, so it is stated rather than tucked into the heading link
+                where it read as part of the goal it is not. */}
+            {training.streak.current > 0 && (
+              <span className="at-weekcard-streak">
+                <Flame size={13} /> {training.streak.current}
+              </span>
+            )}
+          </div>
+
+          <div
+            className="at-weekcard-track"
+            role="progressbar"
+            aria-valuenow={training.streak.weekDone}
+            aria-valuemin={0}
+            aria-valuemax={training.streak.weekGoal}
+            aria-label={t('today.weeklyGoal', {
+              done: training.streak.weekDone,
+              goal: training.streak.weekGoal,
+            })}
+          >
+            <i style={{ width: `${weekPct}%` }} />
+          </div>
+
           <div className="at-week">
             {training.streak.week.map(day => (
               // A day is a tap target now: the ring says whether you trained,
-              // the sheet says what you did.
+              // the sheet says what you did. The date sits inside the ring on
+              // the days you did not — a row of empty circles told you which
+              // weekday it was and never which date.
               <button
                 key={day.date.toISOString()}
                 className="at-day"
                 onClick={() => setDetail({ kind: 'day', date: day.date })}
                 aria-label={t('today.openDay', { date: fmt.shortDate(day.date) })}
               >
+                <span className="at-day-name">
+                  {fmt.weekdayShort(day.date).charAt(0).toUpperCase()}
+                </span>
                 <div className="at-day-ring" data-done={day.done} data-today={day.isToday}>
-                  {day.done ? <Check size={14} strokeWidth={3} /> : ''}
+                  {day.done ? <Check size={14} strokeWidth={3} /> : day.date.getDate()}
                 </div>
-                <span>{fmt.weekdayShort(day.date).charAt(0).toUpperCase()}</span>
               </button>
             ))}
           </div>
+
+          {/* What the week actually weighed. Suppressed rather than shown as
+              three zeroes on a week that has not started. */}
+          {training.weeklyStats.workouts > 0 ? (
+            <div className="at-weekcard-stats">
+              <div>
+                <b>{fmt.n(training.weeklyStats.volumeKg / 1000, 1)}<i>{t('unit.tonnes')}</i></b>
+                <small>{t('today.volume')}</small>
+              </div>
+              <div>
+                <b>{training.weeklyStats.minutes}<i>min</i></b>
+                <small>{t('summary.duration')}</small>
+              </div>
+              <div>
+                <b>{training.weeklyStats.workouts}</b>
+                <small>{t('gym.workouts')}</small>
+              </div>
+            </div>
+          ) : (
+            <p className="at-weekcard-empty">{t('today.weekNothing')}</p>
+          )}
         </div>
       </div>
 

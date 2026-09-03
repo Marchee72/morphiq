@@ -40,23 +40,65 @@ const field = (f: keyof Measurement): MetricRead => m => {
   return typeof v === 'number' && Number.isFinite(v) ? v : NaN;
 };
 
-/** Fixed order: the Body screen renders these top to bottom exactly as listed. */
-export const METRIC_SPECS: readonly MetricSpec[] = [
-  { key: 'weight', read: field('weight'), labelKey: 'body.metric.weight', unitKey: 'unit.kg', decimals: 1, lowerIsBetter: 'goal' },
-  { key: 'bodyFat', read: field('bodyFat'), labelKey: 'body.metric.bodyFat', unitKey: 'unit.pct', decimals: 1, lowerIsBetter: true },
-  { key: 'muscleMass', read: field('muscleMass'), labelKey: 'body.metric.muscleMass', unitKey: 'unit.kg', decimals: 1, lowerIsBetter: false },
-  {
-    key: 'muscleMassPct',
-    // Zero when either operand is missing, because zero is what the rest of this
-    // file reads as "no reading". Returning a ratio off a manual weigh-in — which
-    // stores every BIA field as 0 — would plot a 0 % that was never measured.
-    read: m => (m.muscleMass > 0 && m.weight > 0 ? (m.muscleMass / m.weight) * 100 : 0),
-    labelKey: 'body.metric.muscleMassPct', unitKey: 'unit.pct', decimals: 1, lowerIsBetter: false,
-  },
-  { key: 'bmi', read: field('bmi'), labelKey: 'body.metric.bmi', unitKey: 'unit.kgm2', decimals: 1, lowerIsBetter: 'goal' },
-  { key: 'bodyWater', read: field('bodyWater'), labelKey: 'body.metric.bodyWater', unitKey: 'unit.pct', decimals: 1, lowerIsBetter: false },
-  { key: 'bmr', read: field('bmr'), labelKey: 'body.metric.bmr', unitKey: 'unit.kcal', decimals: 0, lowerIsBetter: false },
-] as const;
+/**
+ * Fat-free mass index: lean kilos carried per square metre of height.
+ *
+ * The one figure here that says how much muscle you carry *for your frame*.
+ * Weight cannot — a heavier reading is muscle or fat with equal ease — and body
+ * fat % cannot either, since it falls just as readily by losing lean mass as by
+ * losing fat. FFMI moves only when the lean side does, which is the thing
+ * training is for. Roughly 18–20 untrained, 22–23 well trained, ~25 the
+ * commonly cited natural ceiling.
+ *
+ * Fat-free mass is `weight − fat`, deliberately, rather than the `muscleMass`
+ * field: that field has bone subtracted out of it by a formula (`BiaCalculator`)
+ * whose bone term is itself a straight line in lean mass, so building on it
+ * would make this a second view of that line instead of a measurement. The
+ * standard definition of FFM includes bone, and it is the one the published
+ * reference ranges are built on.
+ *
+ * Height comes from the profile, so it is a closure rather than a plain field
+ * reader — see `metricSpecs`.
+ */
+const ffmiRead = (heightCm?: number): MetricRead => m => {
+  // Zero is what the rest of this file reads as "no reading". A manual weigh-in
+  // stores every BIA field as 0, and a profile can have no height at all; either
+  // way there is no FFMI to plot, and a 0 is not a small one.
+  if (!heightCm || heightCm <= 0) return 0;
+  if (!(m.weight > 0) || !(m.bodyFat > 0)) return 0;
+  const heightM = heightCm / 100;
+  return (m.weight * (1 - m.bodyFat / 100)) / (heightM * heightM);
+};
+
+/**
+ * Fixed order: the Body screen renders these top to bottom exactly as listed.
+ *
+ * A function because FFMI needs the profile's height, which is not on a
+ * reading. `METRIC_SPECS` below is this list without one — every spec but FFMI
+ * ignores the argument, and FFMI reads as "not recorded", which is exactly what
+ * a profile with no height has.
+ */
+export function metricSpecs(heightCm?: number): readonly MetricSpec[] {
+  return [
+    { key: 'weight', read: field('weight'), labelKey: 'body.metric.weight', unitKey: 'unit.kg', decimals: 1, lowerIsBetter: 'goal' },
+    { key: 'bodyFat', read: field('bodyFat'), labelKey: 'body.metric.bodyFat', unitKey: 'unit.pct', decimals: 1, lowerIsBetter: true },
+    { key: 'muscleMass', read: field('muscleMass'), labelKey: 'body.metric.muscleMass', unitKey: 'unit.kg', decimals: 1, lowerIsBetter: false },
+    {
+      key: 'muscleMassPct',
+      // Zero when either operand is missing, because zero is what the rest of this
+      // file reads as "no reading". Returning a ratio off a manual weigh-in — which
+      // stores every BIA field as 0 — would plot a 0 % that was never measured.
+      read: m => (m.muscleMass > 0 && m.weight > 0 ? (m.muscleMass / m.weight) * 100 : 0),
+      labelKey: 'body.metric.muscleMassPct', unitKey: 'unit.pct', decimals: 1, lowerIsBetter: false,
+    },
+    { key: 'ffmi', read: ffmiRead(heightCm), labelKey: 'body.metric.ffmi', unitKey: 'unit.kgm2', decimals: 1, lowerIsBetter: false },
+    { key: 'bmi', read: field('bmi'), labelKey: 'body.metric.bmi', unitKey: 'unit.kgm2', decimals: 1, lowerIsBetter: 'goal' },
+    { key: 'bodyWater', read: field('bodyWater'), labelKey: 'body.metric.bodyWater', unitKey: 'unit.pct', decimals: 1, lowerIsBetter: false },
+    { key: 'bmr', read: field('bmr'), labelKey: 'body.metric.bmr', unitKey: 'unit.kcal', decimals: 0, lowerIsBetter: false },
+  ];
+}
+
+export const METRIC_SPECS: readonly MetricSpec[] = metricSpecs();
 
 /**
  * Which metrics a scale actually measures.
@@ -177,7 +219,7 @@ export function buildBody(
   const latest = sorted.at(-1) ?? null;
 
   return {
-    metrics: METRIC_SPECS.map(spec => buildMetricPoint(sorted, spec, profile, now)),
+    metrics: metricSpecs(profile?.height).map(spec => buildMetricPoint(sorted, spec, profile, now)),
     latestAt: latest ? new Date(latest.timestamp) : null,
     readingCount: sorted.length,
     hasData: sorted.length > 0,

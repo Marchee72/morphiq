@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Flag, Plus, Trash2, Trophy } from 'lucide-react';
+import { Check, Flag, Gauge, Plus, Trash2, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
 import { borgLabelKey } from '../derive/borg';
 import { weightLadder, WEIGHT_PRECISION } from '../derive/weightLadder';
@@ -15,7 +15,7 @@ import type { Exercise } from '../../core/entities/Exercise';
 import { AtlasGymHub } from './AtlasGymHub';
 import { AtlasSessionEditor } from './AtlasSessionEditor';
 import { AtlasSessionStart } from './AtlasSessionStart';
-import { AtlasBorgScale } from './AtlasBorgScale';
+import { AtlasRpeSheet } from './AtlasRpeSheet';
 import { AtlasDial } from './AtlasDial';
 import { AtlasSetList } from './AtlasSetList';
 import { AtlasSharedStrip } from './AtlasSharedStrip';
@@ -93,18 +93,31 @@ export const AtlasTrain: React.FC = () => {
   const [viewSet, setViewSet] = useState<number | null>(null);
 
   /**
-   * Whether "finish exercise" is waiting on a Borg rating before it ends the
-   * exercise. The question and the ending are one decision, so the button opens
-   * this rather than closing the exercise and asking afterwards.
+   * Why the exertion sheet is up, or null when it is not.
+   *
+   * `finish` is "finish exercise" waiting on an answer before it ends the
+   * exercise — the question and the ending are one decision, so the button opens
+   * this rather than closing the exercise and asking afterwards. `rate` is the
+   * far more common path: the last set finished the exercise by itself, and the
+   * sheet comes up on its own while the answer is still fresh.
    */
-  const [rating, setRating] = useState(false);
+  const [ask, setAsk] = useState<'finish' | 'rate' | null>(null);
+
+  /**
+   * Exercises the question has already been put for in this session.
+   *
+   * Without it, dismissing the sheet would raise it again on the very next
+   * render, and swiping back to a finished exercise would ask a second time
+   * about something already answered — or already declined.
+   */
+  const [asked, setAsked] = useState<readonly string[]>([]);
 
   const [editRowFor, setEditRowFor] = useState(live.cursor.exerciseIdx);
   if (editRowFor !== live.cursor.exerciseIdx) {
     setEditRowFor(live.cursor.exerciseIdx);
     setEditRow(null);
     setViewSet(null);
-    setRating(false);
+    setAsk(null);
   }
 
   if (!session) return <AtlasGymHub />;
@@ -211,6 +224,18 @@ export const AtlasTrain: React.FC = () => {
   const exerciseComplete = done === exercise.sets.length && exercise.sets.length > 0;
 
   /**
+   * Most exercises end by logging the last set, not by pressing "finish
+   * exercise" — so asking only from that button would leave nearly everything
+   * unrated. Raised here, during render, rather than from an effect: the sheet
+   * belongs to the same paint as the completion card behind it, and an effect
+   * would show the card unasked for a frame first.
+   */
+  if (exerciseComplete && exercise.rpe === undefined && ask === null && !asked.includes(exercise.name)) {
+    setAsked([...asked, exercise.name]);
+    setAsk('rate');
+  }
+
+  /**
    * The earliest set still to log. Sets happen in order, so it is also the only
    * one the wheels may be moved onto — see the pills below.
    */
@@ -218,6 +243,12 @@ export const AtlasTrain: React.FC = () => {
   /** The logged set being read back, if any. Never one you can type into here. */
   const viewing = viewSet != null ? exercise.sets[viewSet] : undefined;
   const sessionComplete = sessionTotals.setsPlanned > 0 && sessionTotals.setsDone === sessionTotals.setsPlanned;
+  /**
+   * Work behind you and work still planned — see the button in the action bar.
+   * Excluded while a logged set is being read back, where the bar's one job is
+   * getting you out of that view.
+   */
+  const canFinishExercise = done > 0 && done < exercise.sets.length && viewing === undefined;
   const exerciseVolume = exercise.sets.reduce((sum, s) => (s.done ? sum + s.weightKg * s.reps : sum), 0);
 
   /**
@@ -359,15 +390,18 @@ export const AtlasTrain: React.FC = () => {
             <h4 className="at-serif">{t('train.exerciseDone')}</h4>
             <p>{t('train.exerciseDoneSub', { n: exercise.sets.length })}</p>
 
-            {/* Most exercises end by logging the last set, not by pressing
-                "finish exercise" — so asking only from that button would leave
-                nearly everything unrated. This is the moment the answer is
-                freshest, and it costs one tap. */}
+            {/* The sheet raises itself the moment the exercise completes, so
+                what belongs here is the answer — or, if the sheet was waved
+                away, the way back to it. Two chances at a question that costs
+                one tap, and no third. */}
             {exercise.rpe === undefined ? (
-              <div className="at-rpe-ask">
-                <div className="at-field-label">{t('train.rpeAsk')}</div>
-                <AtlasBorgScale onChange={rpe => live.rateExercise(exercise.name, rpe)} />
-              </div>
+              <button
+                className="at-btn at-rpe-reopen"
+                data-ghost="true"
+                onClick={() => setAsk('rate')}
+              >
+                <Gauge size={15} /> {t('train.rpeRate')}
+              </button>
             ) : (
               <p className="at-rpe-said">
                 {t('train.rpe')} {exercise.rpe} · {t(borgLabelKey(exercise.rpe))}
@@ -431,46 +465,17 @@ export const AtlasTrain: React.FC = () => {
         />
       </div>
 
-      {/* Ending an exercise early and saying what it cost are one decision, so
-          the button opens the question instead of closing the exercise and
-          leaving the answer to be chased down later. Skipping is explicit —
-          the exercise ends either way. */}
-      {rating ? (
-        <div className="at-pad" style={{ paddingTop: 14 }}>
-          <div className="at-card at-rpe-ask">
-            <div className="at-field-label">{t('train.rpeAsk')}</div>
-            <AtlasBorgScale
-              value={exercise.rpe}
-              onChange={rpe => { setRating(false); live.finishExercise(rpe); }}
-            />
-            <button
-              className="at-btn"
-              data-ghost="true"
-              style={{ width: '100%', justifyContent: 'center' }}
-              onClick={() => { setRating(false); live.finishExercise(); }}
-            >
-              {t('train.rpeSkip')}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="at-pad at-setmeta">
-          <span>{t('train.setsDone', { done, total: exercise.sets.length })}</span>
-          {/* Offered only with work behind you and work still planned: with
-              nothing done this is "remove the exercise", and with nothing left
-              the exercise has already finished itself. */}
-          {done > 0 && done < exercise.sets.length && (
-            <button onClick={() => setRating(true)}>
-              <Check size={13} /> {t('train.finishExercise')}
-            </button>
-          )}
-          {exercise.sets.length > 1 && (
-            <button onClick={() => live.removeSet(live.setIdx)}>
-              <Trash2 size={13} /> {t('train.removeSet')}
-            </button>
-          )}
-        </div>
-      )}
+      {/* Ending an exercise early is now a button in the action bar rather than
+          a line of small print down here, so what is left is the count and the
+          one destructive action, which does not want promoting. */}
+      <div className="at-pad at-setmeta">
+        <span>{t('train.setsDone', { done, total: exercise.sets.length })}</span>
+        {exercise.sets.length > 1 && (
+          <button onClick={() => live.removeSet(live.setIdx)}>
+            <Trash2 size={13} /> {t('train.removeSet')}
+          </button>
+        )}
+      </div>
 
       {/* Swiping past the last exercise reaches the picker too, but a gesture is
           not an affordance — this is the one that can be seen. */}
@@ -485,8 +490,9 @@ export const AtlasTrain: React.FC = () => {
         </button>
       </div>
 
-      {/* Room for the fixed action bar, so the last row is never trapped under it. */}
-      <div className="at-train-spacer" />
+      {/* Room for the fixed action bar, so the last row is never trapped under
+          it — two rows' worth when the bar is carrying both actions. */}
+      <div className="at-train-spacer" data-stacked={canFinishExercise} />
 
       {/* One primary action, always the thing you would do next. Finish only
           takes the slot once there is genuinely nothing left to log — offering it
@@ -528,15 +534,53 @@ export const AtlasTrain: React.FC = () => {
             <Plus size={16} /> {t('train.addExercise')}
           </button>
         ) : (
-          <button
-            className="at-btn"
-            data-block="true"
-            onClick={() => live.logSet(draft.weight, draft.reps)}
-          >
-            <Check size={17} strokeWidth={3} /> {t('train.completeSet', { n: live.setIdx + 1 })}
-          </button>
+          <>
+            <button
+              className="at-btn"
+              data-block="true"
+              onClick={() => live.logSet(draft.weight, draft.reps)}
+            >
+              <Check size={17} strokeWidth={3} /> {t('train.completeSet', { n: live.setIdx + 1 })}
+            </button>
+            {/* Ending the exercise sits beside logging into it, because that is
+                where the decision is actually made — you finish an exercise
+                standing over the phone with a set left on the card, not by
+                going hunting for a link under the set list. Offered only with
+                work behind you and work still planned: with nothing done this
+                is "remove the exercise", and with nothing left the exercise has
+                already finished itself. */}
+            {canFinishExercise && (
+              <button
+                className="at-btn"
+                data-block="true"
+                data-ghost="true"
+                onClick={() => setAsk('finish')}
+              >
+                <Flag size={15} /> {t('train.finishExercise')}
+              </button>
+            )}
+          </>
         )}
       </div>
+
+      {/* One sheet for one question, whichever of the two moments raised it.
+          Answering the `finish` variant ends the exercise; skipping it ends the
+          exercise anyway, because Finish was pressed and the rating was only
+          ever the second half of that. */}
+      <AtlasRpeSheet
+        open={ask !== null}
+        exerciseName={exercise.name}
+        value={exercise.rpe}
+        onPick={rpe => {
+          setAsk(null);
+          if (ask === 'finish') live.finishExercise(rpe);
+          else live.rateExercise(exercise.name, rpe);
+        }}
+        onSkip={() => {
+          setAsk(null);
+          if (ask === 'finish') live.finishExercise();
+        }}
+      />
 
       {sheets}
     </>

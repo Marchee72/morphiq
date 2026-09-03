@@ -26,9 +26,11 @@ describe('screens', () => {
       // The X/16 targets are gone — no "/16" or "/8" should appear.
       expect(text).not.toContain('/16');
       expect(text).not.toContain('/8');
-      // The heat map card is present with its labels.
-      expect(text).toContain('This week');
-      expect(text).toContain('Last session');
+      // The heat map card is present with its labels. It no longer restates the
+      // last session or the weekly goal — the cards above it own both — so what
+      // identifies it is the balance heading and the set counts beside it.
+      expect(text).toContain('Balance');
+      expect(text).toContain('Weekly sets');
       expect(text).toContain('Front');
       expect(text).toContain('Back');
     });
@@ -46,7 +48,7 @@ describe('screens', () => {
     it('renders the heat map card with no history', () => {
       renderScreen('today', { data: 'empty' });
       const text = visibleText();
-      expect(text).toContain('Last session');
+      expect(text).toContain('Balance');
       // No X/16 targets even with empty data.
       expect(text).not.toContain('/16');
     });

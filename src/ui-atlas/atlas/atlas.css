@@ -41,6 +41,16 @@
   --at-dock-bg: #2c241d;
   --at-dock-ink: rgba(247, 241, 232, 0.5);
   --at-on-clay: #fff;
+
+  /* Five rungs of perceived exertion, sage through clay to a burnt deep.
+     Chosen to read as one ramp rather than as five unrelated chips: the hue
+     rotates and the value drops together, so the order survives a squint and
+     does not depend on the numbers being read. */
+  --at-effort-1: #6f8161;
+  --at-effort-2: #93813f;
+  --at-effort-3: #c4643c;
+  --at-effort-4: #a94f2b;
+  --at-effort-5: #86341a;
 }
 
 .at[data-mode='dark'] {
@@ -69,6 +79,14 @@
   --at-dock-bg: #302620;   /* lifted off the page so the pill still separates */
   --at-dock-ink: rgba(242, 231, 217, 0.55);
   --at-on-clay: #241d18;
+
+  /* The same ramp after sunset: it climbs in value rather than falling, because
+     against a cocoa page it is the brighter end that reads as the harder one. */
+  --at-effort-1: #97a888;
+  --at-effort-2: #c5a86e;
+  --at-effort-3: #dd8352;
+  --at-effort-4: #e97046;
+  --at-effort-5: #f2603a;
 }
 
 .at {
@@ -506,7 +524,134 @@
   color: var(--at-ink-soft);
 }
 
-/* ---------- week ring strip ---------- */
+/* ---------- the week ---------- */
+
+/* The card was a bare row of rings with its goal stranded in the section
+   heading above it. It now carries the whole answer to "how is the week
+   going": the count against the goal, the streak that earned it, the seven
+   days, and what they weighed. */
+.at-weekcard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.at-weekcard-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Baseline-aligned so the goal sits on the count's feet rather than its
+   middle — the pair has to read as one figure, not as two numbers. */
+.at-weekcard-count {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+}
+
+.at-weekcard-count b {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+}
+
+.at-weekcard-count span {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.at-weekcard-goal { flex: 1; min-width: 0; }
+
+.at-weekcard-goal small {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.at-weekcard-goal p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--at-ink-soft);
+}
+
+.at-weekcard-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--at-tonal-soft);
+  color: var(--clay);
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.at-weekcard-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--at-tonal);
+  overflow: hidden;
+}
+
+.at-weekcard-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--clay);
+  transition: width 0.45s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.at-weekcard-stats {
+  display: flex;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hair);
+}
+
+.at-weekcard-stats > div { flex: 1; min-width: 0; }
+
+.at-weekcard-stats b {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.at-weekcard-stats b i {
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+.at-weekcard-stats small {
+  display: block;
+  margin-top: 1px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.at-weekcard-empty {
+  margin: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--hair);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
 
 .at-week { display: flex; justify-content: space-between; gap: 4px; }
 
@@ -524,29 +669,49 @@
   cursor: pointer;
 }
 
+/* Above the ring, not below it: the letter is the label and the ring is the
+   answer, and a label under its own answer reads as a caption for the next one
+   along. */
+.at-day-name {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
 .at-day-ring {
   /* Seven fixed 36px rings plus gaps overflowed a 320px screen. */
   width: 100%;
   max-width: 36px;
   aspect-ratio: 1;
-  margin: 0 auto 6px;
+  margin: 0 auto;
   border-radius: 50%;
   border: 2.5px solid var(--hair);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--muted);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.12s ease;
 }
 
-/* Tonal, not clay: seven of these sit in a row on a card, and the check mark
-   going from absent to full ink is already the signal. Clay stays reserved for
-   today's ring below, so a day can be both without the two fighting. */
-.at-day-ring[data-done='true'] { background: var(--at-tonal); border-color: var(--at-tonal); color: var(--cocoa); }
-.at-day-ring[data-today='true'] { border-color: var(--clay); color: var(--clay); }
+/* A trained day is filled rather than outlined. Seven of these sit in a row, so
+   the fill is tonal and the check carries the ink — clay stays reserved for
+   today, which has to stay legible on a day that is also done. */
+.at-day-ring[data-done='true'] {
+  background: var(--at-tonal);
+  border-color: var(--at-tonal);
+  color: var(--cocoa);
+}
 
-.at-day span { font-size: 10px; font-weight: 600; color: var(--muted); }
+.at-day-ring[data-today='true'] { border-color: var(--clay); color: var(--clay); }
+.at-day-ring[data-today='true'][data-done='true'] { color: var(--clay); }
+
+.at-day:active .at-day-ring { transform: scale(0.93); }
 
 /* ---------- one-exercise trainer ---------- */
 
@@ -954,6 +1119,9 @@
   right: 0;
   bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 18px;
   background: linear-gradient(to top, var(--sand) 62%, transparent);
   pointer-events: none;
@@ -961,8 +1129,21 @@
 
 .at-train-actions > button { pointer-events: auto; }
 
-/* Reserves the height the fixed bar covers, so the last row is always reachable. */
+/* Ending the exercise stands under logging into it rather than beside it:
+   side by side, the two would be equal weights, and one of them is the button
+   you press forty times an hour. Solid rather than transparent — it sits over
+   scrolling content, and a ghost button with the set list showing through it is
+   unreadable at arm's length. */
+.at-train-actions > button[data-ghost='true'] {
+  background: var(--card);
+  min-height: 46px;
+  font-size: 13px;
+}
+
+/* Reserves the height the fixed bar covers, so the last row is always
+   reachable — one row's worth, or two when both actions are offered. */
 .at-train-spacer { height: 92px; }
+.at-train-spacer[data-stacked='true'] { height: 146px; }
 
 .at-swipe-hint {
   margin-top: 10px;
@@ -2445,6 +2626,134 @@ button.at-routine-item { cursor: pointer; }
   text-align: left;
 }
 
+/* ─── the exertion sheet ────────────────────────────────────────────────────
+   The question moved out of the scroll and onto its own surface, so it gets
+   the room a question deserves: five rungs at full width, each one a target you
+   can hit without looking, tinted along the ramp so the shape of the answer is
+   visible before the number is read. */
+
+.at-rpe-why {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.at-rpe-rungs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.at-rpe-rung {
+  --tint: var(--at-effort-3);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 62px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--hair);
+  border-radius: 20px;
+  background: var(--card);
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.at-rpe-rung[data-level='1'] { --tint: var(--at-effort-1); }
+.at-rpe-rung[data-level='2'] { --tint: var(--at-effort-2); }
+.at-rpe-rung[data-level='3'] { --tint: var(--at-effort-3); }
+.at-rpe-rung[data-level='4'] { --tint: var(--at-effort-4); }
+.at-rpe-rung[data-level='5'] { --tint: var(--at-effort-5); }
+
+/* The number carries the tint as a solid disc: at a glance the column of five
+   is the ramp itself, which is what makes "somewhere around the middle" a
+   thing you can answer without reading. */
+.at-rpe-rung b {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tint);
+  color: var(--at-on-clay);
+  font-size: 16px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.at-rpe-rung > span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.at-rpe-rung em {
+  font-style: normal;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.at-rpe-meter {
+  display: flex;
+  gap: 3px;
+  height: 5px;
+}
+
+.at-rpe-meter u {
+  flex: 1;
+  border-radius: 999px;
+  background: var(--hair);
+}
+
+.at-rpe-meter u[data-fill='true'] { background: var(--tint); }
+
+.at-rpe-rung:active { transform: scale(0.985); }
+
+/* The rating this exercise already carries, when the sheet is reopened to
+   change it. */
+.at-rpe-rung[data-on='true'] {
+  border-color: var(--tint);
+  background: var(--at-tonal-soft);
+}
+
+.at-rpe-fine {
+  align-self: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--clay);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.at-rpe-dial {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Ghost inside the completion card, where it is the second offer of a question
+   that was already declined once — it should be available, not insistent. */
+.at-rpe-reopen {
+  width: 100%;
+  justify-content: center;
+}
+
 .at-rpe-said {
   margin: 0;
   font-size: 12px;
@@ -3729,93 +4038,138 @@ button.at-routine-item { cursor: pointer; }
    crowded at the default. Matches the todaytrain card's rhythm. */
 .at-card.at-heatmap-card { padding: 16px 18px; }
 
-/* The three small captions: over the figure, over the last session, and over
-   today. Shares the label idiom of `.at-todaytrain-head small` and `.at-fact
-   small`. */
+/* The one caption left, over the set counts. The figure needs none: it is a
+   body, and the legend under it says which end is which. */
 .at-heatmap-label {
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 2px;
-}
-
-/* Centred over the body figure, which is centred itself. */
-.at-heatmap-figure > .at-heatmap-label {
-  text-align: center;
   margin-bottom: 6px;
 }
 
-.at-heatmap-today > .at-heatmap-label { margin-bottom: 4px; }
+/* Title and the front/back switch on one line, so the switch reads as belonging
+   to the figure rather than floating under it. */
+.at-heatmap-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.at-heatmap-head h4 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
 
 .at-heatmap-figure { flex-shrink: 0; }
+
+/* Was 96px with three columns of text beside it. With one column it can be the
+   size a body map should be. */
+.at-heatmap-figure svg { width: 108px; height: auto; display: block; }
 
 /* The fill here comes from the data, inline, so it already beats the Library's
    hover and active rules. Nothing left to override. */
 
 .at-heatmap-legend {
-  width: 80px;
+  width: 92px;
   height: 6px;
   border-radius: 3px;
   background: linear-gradient(to right, var(--at-figure-limb), var(--muted), var(--clay-strong));
-  margin: 6px auto 0;
+  margin: 8px auto 0;
 }
 
 .at-heatmap-legend-labels {
   display: flex;
   justify-content: space-between;
-  width: 80px;
-  margin: 2px auto 0;
-  font-size: 8px;
-  color: var(--muted);
-}
-
-/* Also an `.at-seg`, but the figure column is 96px wide, so the two labels get
-   a smaller type size than the control's default to keep them off each other. */
-.at-heatmap-side { margin-top: 8px; }
-.at-heatmap-side button { font-size: 11px; min-height: 38px; }
-
-.at-heatmap-info { flex: 1; min-width: 0; }
-
-.at-heatmap-info h4 {
-  font-family: 'Fraunces', Georgia, serif;
-  font-size: 17px;
+  width: 92px;
+  margin: 3px auto 0;
+  font-size: 8.5px;
   font-weight: 600;
-  margin: 0 0 2px;
-  letter-spacing: -0.02em;
-}
-
-.at-heatmap-info .at-heatmap-exercises {
-  font-size: 12px;
   color: var(--muted);
-  margin-bottom: 8px;
-  line-height: 1.45;
 }
 
-.at-heatmap-stats {
+/* A definite width, because `.at-seg button` is `flex: 1; min-width: 0` — in a
+   row that is sized to its content, that resolves to no content at all and the
+   two labels collapse into each other. Under the figure it inherited the
+   column's 96px and the question never came up. */
+.at-heatmap-side { flex-shrink: 0; width: 132px; }
+.at-heatmap-side button { min-height: 34px; }
+
+/* ── the heat map, read as numbers ──────────────────────────────────────── */
+
+.at-heatmap-rows {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  gap: 12px;
-  font-size: 11px;
-  color: var(--muted);
-  margin-bottom: 12px;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.at-heatmap-stats b { color: var(--cocoa); }
-
-.at-heatmap-today {
-  border-top: 1px solid var(--hair);
-  padding-top: 10px;
+.at-heatgroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.at-heatmap-today-goal {
-  font-size: 13px;
+/* Fixed rather than fluid: six bars that all start at the same x are comparable
+   at a glance, and six that do not are six unrelated bars. */
+.at-heatgroup > span {
+  width: 62px;
+  flex-shrink: 0;
+  font-size: 11.5px;
   font-weight: 600;
-  margin-bottom: 2px;
+  color: var(--at-ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.at-heatmap-today-nudge {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.4;
+.at-heatgroup > i {
+  flex: 1;
+  min-width: 0;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--at-tonal);
+  overflow: hidden;
+}
+
+.at-heatgroup > i u {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.4s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.at-heatgroup > b {
+  width: 18px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.at-heatgroup:active > i u { filter: brightness(0.94); }
+
+.at-heatmap-nudge {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--at-ink-soft);
 }
