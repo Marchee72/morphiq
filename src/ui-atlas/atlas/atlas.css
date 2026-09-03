@@ -2737,6 +2737,40 @@ button.at-routine-item { cursor: pointer; }
   gap: 12px;
 }
 
+/* ─── Sync banner ───────────────────────────────────────────────────────────
+   Borrows the install banner's frame — same slot, same altitude, same shape —
+   so "the app cannot reach the server" reads as the same kind of statement as
+   "the app can be installed", rather than as a new species of alert.
+
+   The icon is muted rather than the install banner's cocoa: this is a state of
+   affairs to be aware of, not an offer to act on. Work carries on either way,
+   which is the whole point of the queue behind it. */
+.at-sync-banner .at-top-banner-icon {
+  background: var(--at-surface-sunk, rgba(255, 255, 255, 0.08));
+  color: var(--at-text-dim, rgba(255, 255, 255, 0.72));
+}
+
+/* Something of the user's did not make it. The one state here worth alarming
+   about, and the only one that borrows the warning colour. */
+.at-sync-banner[data-warn] .at-top-banner-icon {
+  background: var(--at-danger, #c2452d);
+  color: var(--sand, #fff);
+}
+
+.at-spin {
+  animation: at-spin 1.1s linear infinite;
+}
+
+@keyframes at-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* A spinner is decoration; someone who asked for less motion has said they do
+   not want it, and the text beside it already says "Syncing…". */
+@media (prefers-reduced-motion: reduce) {
+  .at-spin { animation: none; }
+}
+
 .at-top-banner-icon {
   width: 34px;
   height: 34px;

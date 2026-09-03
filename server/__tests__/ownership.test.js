@@ -168,6 +168,33 @@ describe('guardRow', () => {
     expect(result.passed).toBe(true);
     expect(pool.query).not.toHaveBeenCalled();
   });
+
+  it('lets an id it cannot check through *unguarded* — which the offline queue depends on', async () => {
+    /**
+     * Pinned because something far away now relies on it.
+     *
+     * A non-numeric id skips the ownership lookup entirely and reaches the
+     * handler, where `WHERE id = 'tmp_…'` raises an invalid-input error and
+     * surfaces as a 500. So a temporary id from the offline outbox arriving
+     * here would be both an unchecked request and a broken one.
+     *
+     * The client's answer is that it never happens: the flusher rewrites every
+     * temp id to the real one before sending, and an op whose id cannot be
+     * resolved is failed rather than sent. That makes "no temp id reaches a
+     * by-id route" an authorization invariant, not merely a correctness one.
+     *
+     * If you are here because you want to reject non-numeric ids with a 400
+     * instead: that is a fine change and probably an improvement. Check
+     * `src/data/offline/flusher.ts` first — it is the thing that would start
+     * seeing them.
+     */
+    const pool = fakePool([OWNS_1_AND_2]);
+    const req = reqFor({ id: 7 }, { params: { id: 'tmp_8f2c-4a11' } });
+
+    const result = await run(guardRow(pool, 'workout_logs'), req);
+    expect(result.passed).toBe(true);
+    expect(result.status).toBeNull();
+  });
 });
 
 /**

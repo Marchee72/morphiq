@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { probeGate } from '../authGate';
 import { clearSession, onSessionCleared, setSession } from '../session';
+import { clearMarker, writeMarker } from '../../offline/snapshotMarker';
 
 /**
  * Who is allowed past the front door.
@@ -47,6 +48,7 @@ const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }
 
 beforeEach(() => {
   clearSession();
+  clearMarker();
 });
 
 afterEach(() => {
@@ -92,6 +94,58 @@ describe('probeGate — server build', () => {
   it('reports offline on a server error, which says nothing about the session', async () => {
     const { status } = await serverProbe({ ok: false, status: 500 } as Response);
     expect(status).toBe('offline');
+  });
+
+  it('opens the app on a snapshot when the API is unreachable', async () => {
+    // The gym case. A wall in front of a workout is the wrong answer to a
+    // basement with no signal, when there is a snapshot to show.
+    setSession({ token: 'good', user: USER });
+    writeMarker(['1']);
+
+    const { status } = await serverProbe(new TypeError('Failed to fetch'));
+    expect(status).toBe('offline-cached');
+  });
+
+  it('refuses to open on a snapshot belonging to another account', async () => {
+    /**
+     * The most important assertion in the offline feature.
+     *
+     * IndexedDB and localStorage are per-browser; an account is not. Sign out
+     * on a shared phone, sign in as someone else, lose the network — without
+     * the identity check this opens on the previous person's training history.
+     */
+    setSession({ token: 'alice', user: USER });
+    writeMarker(['1']);
+
+    setSession({ token: 'bob', user: { ...USER, id: 2 } });
+    const { status } = await serverProbe(new TypeError('Failed to fetch'));
+    expect(status).toBe('offline');
+  });
+
+  it('refuses to open on a snapshot with no session behind it', async () => {
+    writeMarker(['1']);
+    clearSession();
+
+    const { status } = await serverProbe(new TypeError('Failed to fetch'));
+    expect(status).toBe('offline');
+  });
+
+  it('refuses when there is a session but nothing cached to show', async () => {
+    // A fresh install that has never reached the server. An empty app is worse
+    // than an honest "cannot reach the server".
+    setSession({ token: 'good', user: USER });
+
+    const { status } = await serverProbe(new TypeError('Failed to fetch'));
+    expect(status).toBe('offline');
+  });
+
+  it('still walls off a session the server rejects outright, snapshot or not', async () => {
+    // A 401 is an answer, not a failure to reach. The snapshot must not soften it.
+    setSession({ token: 'stale', user: USER });
+    writeMarker(['1']);
+
+    const { status } = await serverProbe({ ok: false, status: 401 } as Response);
+    expect(status).toBe('blocked');
   });
 
   it('drops a token the server rejects outright', async () => {

@@ -1,5 +1,6 @@
 import { apiBaseUrl, isServerMode } from '../database/mode';
 import { authHeaders, clearSession, getToken } from './session';
+import { canEnterOffline } from '../offline/snapshotMarker';
 
 /**
  * Whether this build may show the app at all without a signed-in account.
@@ -17,7 +18,18 @@ export type GateStatus =
   | 'open'
   /** The API demands a session and this browser has none. */
   | 'blocked'
-  /** The API could not be reached, so the question is unanswered. */
+  /**
+   * Unreachable, but this device holds a token and a snapshot taken under it.
+   *
+   * Nothing here has been authorised just now — the token was accepted the last
+   * time anyone could ask. That is the deliberate trade: the app opens over data
+   * the account already had, and every write goes to the outbox rather than
+   * being trusted onward. A gym with no signal is the ordinary case, and a
+   * "cannot reach the server" wall in front of a workout is the wrong answer to
+   * it.
+   */
+  | 'offline-cached'
+  /** Unreachable, and nothing cached to fall back on. */
   | 'offline';
 
 interface AuthMe {
@@ -46,7 +58,9 @@ export async function probeGate(signal?: AbortSignal): Promise<GateStatus> {
         clearSession();
         return 'blocked';
       }
-      return 'offline';
+      // A 5xx says nothing about the session — the server is simply not
+      // answering — so it is the same case as a dead socket below.
+      return offlineStatus();
     }
 
     const me = await res.json() as AuthMe;
@@ -59,6 +73,19 @@ export async function probeGate(signal?: AbortSignal): Promise<GateStatus> {
   } catch {
     // A dead network is not a rejected sign-in. Saying so lets the screen offer
     // "try again" rather than a sign-in button that cannot possibly work.
-    return 'offline';
+    return offlineStatus();
   }
+}
+
+/**
+ * Unreachable — with or without something to show.
+ *
+ * `canEnterOffline` reads localStorage synchronously, deliberately. The gate
+ * decides on the first render, and an asynchronous check against IndexedDB
+ * would paint the sign-in wall and swap it for the app a frame later. It also
+ * checks the snapshot's account stamp against the signed-in user, which is what
+ * keeps a shared phone from showing the last person's training history.
+ */
+function offlineStatus(): GateStatus {
+  return canEnterOffline() ? 'offline-cached' : 'offline';
 }

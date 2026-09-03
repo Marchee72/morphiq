@@ -698,6 +698,17 @@ export const en = {
   'gate.offlineBody': 'MorphIQ could not contact the API. Check your connection and try again.',
   'gate.retry': 'Try again',
 
+  // -- Syncing what was logged offline ---------------------------
+  'sync.offline': 'Offline',
+  'sync.offlineSub': 'What you log is saved on this device and sent when you are back.',
+  'sync.pending_one': '{n} change waiting to sync',
+  'sync.pending_other': '{n} changes waiting to sync',
+  'sync.syncing': 'Syncing…',
+  'sync.retry': 'Try now',
+  'sync.failedTitle': 'Some changes could not be saved',
+  'sync.failedBody': 'The server refused {n} of them. They are still on this device.',
+  'sync.needsConnection': 'This needs a connection.',
+
   // -- Install to the home screen --------------------------------
   'install.title': 'Install MorphIQ',
   'install.topSubtitle': 'Add to home screen for offline access & full screen',

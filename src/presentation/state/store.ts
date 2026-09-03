@@ -30,6 +30,11 @@ import {
   ServerWellnessLogRepository,
 } from '../../data/database/ServerDatabase';
 import { isServerMode } from '../../data/database/mode';
+import {
+  OfflineUnavailableError, clearMarker, decorateRepositories, isOnline, onDrained,
+  onIdResolved, resetOfflineDb, startConnectivity, startFlusher,
+} from '../../data/offline';
+import { onSessionCleared } from '../../data/auth/session';
 import type { RoutineTemplate, RoutineExerciseItem } from '../../core/entities/RoutineTemplate';
 import { wellnessDayKey, type WellnessLog } from '../../core/entities/WellnessLog';
 import type { WellnessSignals } from '../../core/interfaces/IHealthProvider';
@@ -62,16 +67,59 @@ import {
 
 // Repository instances — switch between local IndexedDB and remote server via env vars
 const isServer = isServerMode;
-const profileRepo = isServer ? new ServerUserProfileRepository() : new UserProfileRepository();
-const measurementRepo = isServer ? new ServerMeasurementRepository() : new MeasurementRepository();
-const foodRepo = isServer ? new ServerFoodLogRepository() : new FoodLogRepository();
-const workoutRepo = isServer ? new ServerWorkoutLogRepository() : new WorkoutLogRepository();
-const messageRepo = isServer ? new ServerMessageRepository() : new MessageRepository();
-const workoutSetRepo = isServer ? new ServerWorkoutSetRepository() : new WorkoutSetRepository();
-const favoriteRepo = isServer ? new ServerFavoriteExerciseRepository() : new FavoriteExerciseRepository();
-const routineTemplateRepo = isServer ? new ServerRoutineTemplateRepository() : new RoutineTemplateRepository();
-const wellnessRepo = isServer ? new ServerWellnessLogRepository() : new WellnessLogRepository();
 
+/**
+ * Server repositories, wrapped so a dead network is survivable.
+ *
+ * Only in server mode. Local mode is already offline — Dexie is the database,
+ * not a copy of one — so there is nothing to cache and nothing to queue, and
+ * wrapping it would add a second copy of the user's own data next to the real
+ * one.
+ *
+ * The decorators implement the same interfaces, so every call site below is
+ * unchanged. That is the reason the wrapping happens here rather than inside
+ * `ServerDatabase`: this is the one place the app already decides what a
+ * repository is.
+ */
+const serverRepos = isServer ? decorateRepositories({
+  profile: new ServerUserProfileRepository(),
+  measurement: new ServerMeasurementRepository(),
+  food: new ServerFoodLogRepository(),
+  workout: new ServerWorkoutLogRepository(),
+  message: new ServerMessageRepository(),
+  workoutSet: new ServerWorkoutSetRepository(),
+  favorite: new ServerFavoriteExerciseRepository(),
+  routine: new ServerRoutineTemplateRepository(),
+  wellness: new ServerWellnessLogRepository(),
+}) : null;
+
+const profileRepo = serverRepos?.profile ?? new UserProfileRepository();
+const measurementRepo = serverRepos?.measurement ?? new MeasurementRepository();
+const foodRepo = serverRepos?.food ?? new FoodLogRepository();
+const workoutRepo = serverRepos?.workout ?? new WorkoutLogRepository();
+const messageRepo = serverRepos?.message ?? new MessageRepository();
+const workoutSetRepo = serverRepos?.workoutSet ?? new WorkoutSetRepository();
+const favoriteRepo = serverRepos?.favorite ?? new FavoriteExerciseRepository();
+const routineTemplateRepo = serverRepos?.routine ?? new RoutineTemplateRepository();
+const wellnessRepo = serverRepos?.wellness ?? new WellnessLogRepository();
+
+
+/**
+ * Refuses a bulk operation there is no sensible offline answer for.
+ *
+ * The five callers — wiping a profile, wiping the database, restoring a backup,
+ * and the two mock-data helpers — each loop over hundreds of rows. Queuing them
+ * would fill the outbox with a thousand ops whose ordering against everything
+ * else is meaningless, and `deleteProfile` in particular invalidates every
+ * cached partition and every queued op at once.
+ *
+ * All five are Settings-screen actions taken deliberately, where "this needs a
+ * connection" is a complete and honest answer. That is not true of anything
+ * else in the app, which is why this is five call sites rather than a rule.
+ */
+function requireConnection(): void {
+  if (isServer && !isOnline()) throw new OfflineUnavailableError();
+}
 
 // AI Coach adapter
 const aiCoach = new DeepSeekCoach();
@@ -228,6 +276,23 @@ interface StoreState {
   wellnessLogs: WellnessLog[];
   activeWorkoutSets: Record<string, WorkoutSet[]>;
   exerciseStats: Record<string, { maxWeight: number; avgWeight: number; avgReps: number } | null>;
+
+  /**
+   * Placeholder ids the server has since replaced, and what it called them.
+   *
+   * Memory-only, and short-lived by design. `rewriteId` swaps the id everywhere
+   * it is stored, but a component can be *holding* the old one in its own state
+   * — a session sheet opened offline keeps the workout id it was given, and
+   * would go blank the moment the id underneath it changed. Anything resolving
+   * a workout id looks through here first, which covers the seconds between the
+   * swap and the user closing the sheet. It dies with the session, which is all
+   * it needs to outlive.
+   */
+  resolvedIds: Record<string, string>;
+  /** Follows a placeholder id to the real one, through any chain of them. */
+  resolveId: (id: string) => string;
+  /** Swaps a placeholder for the id the server gave it, across every slice. */
+  rewriteId: (tempId: string, serverId: string) => void;
 
   // Configuration
   selectedDate: Date;
@@ -424,6 +489,7 @@ export const useStore = create<StoreState>((set, get) => ({
   savedRoutines: [],
   wellnessLogs: [],
   activeWorkoutSets: {},
+  resolvedIds: {},
   allSets: [],
   dailySteps: [],
   exerciseStats: {},
@@ -934,6 +1000,69 @@ export const useStore = create<StoreState>((set, get) => ({
     }
   },
 
+  /**
+   * Follows a placeholder id to whatever the server ended up calling it.
+   *
+   * Chained, because an id can in principle be rewritten more than once, and a
+   * single hop would silently return a stale answer if it ever were. Bounded so
+   * a corrupt map cannot spin — an id that fails to resolve is handed back as
+   * it came, which is the same as no rewrite having happened.
+   */
+  resolveId: (id: string) => {
+    const map = get().resolvedIds;
+    let current = id;
+    for (let hops = 0; hops < 8; hops++) {
+      const next = map[current];
+      if (!next) return current;
+      current = next;
+    }
+    return current;
+  },
+
+  /**
+   * Swaps a placeholder id for the real one, everywhere it is held.
+   *
+   * One synchronous `set` rather than a reload: the workout is already on
+   * screen and already correct in every way except its id, so refetching would
+   * be a visible flicker in exchange for nothing.
+   *
+   * React keys change here, which remounts a card. That is harmless; what is
+   * not harmless is a component holding the old id in its own state, which is
+   * what `resolvedIds` covers.
+   */
+  rewriteId: (tempId: string, serverId: string) => {
+    const swapId = <T extends { id?: string }>(row: T): T =>
+      (row.id === tempId ? { ...row, id: serverId } : row);
+
+    const swapParent = (row: WorkoutSet): WorkoutSet => {
+      const next = row.workoutLogId === tempId ? { ...row, workoutLogId: serverId } : row;
+      return next.id === tempId ? { ...next, id: serverId } : next;
+    };
+
+    set(state => {
+      // The keys of `activeWorkoutSets` are workout ids, so the map has to be
+      // rebuilt rather than mapped over — a set filed under a placeholder would
+      // otherwise be unreachable from the session it belongs to.
+      const activeWorkoutSets: Record<string, WorkoutSet[]> = {};
+      for (const [key, sets] of Object.entries(state.activeWorkoutSets)) {
+        activeWorkoutSets[key === tempId ? serverId : key] = sets.map(swapParent);
+      }
+
+      return {
+        measurements: state.measurements.map(swapId),
+        foodLogs: state.foodLogs.map(swapId),
+        workoutLogs: state.workoutLogs.map(swapId),
+        workoutHistory: state.workoutHistory.map(swapId),
+        chatHistory: state.chatHistory.map(swapId),
+        savedRoutines: state.savedRoutines.map(swapId),
+        wellnessLogs: state.wellnessLogs.map(swapId),
+        allSets: state.allSets.map(swapParent),
+        activeWorkoutSets,
+        resolvedIds: { ...state.resolvedIds, [tempId]: serverId },
+      };
+    });
+  },
+
   dismissActiveSession: () => {
     set({ activeSession: null, isGymModeOpen: false });
   },
@@ -1102,6 +1231,9 @@ export const useStore = create<StoreState>((set, get) => ({
   },
 
   deleteProfile: async (id) => {
+    // Cascades across every table on the server and invalidates every cached
+    // partition here. There is no coherent half of that to do offline.
+    requireConnection();
     await profileRepo.delete(id);
     if (get().activeProfile?.id === id) {
       set({ activeProfile: null });
@@ -1921,6 +2053,7 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
   },
 
   seedMockData: async () => {
+    requireConnection();
     let profile = get().activeProfile;
     if (!profile) {
       const newId = await get().createProfile({
@@ -1973,6 +2106,7 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
    * seeds none, so clearing them could only destroy a real conversation.
    */
   clearMockData: async () => {
+    requireConnection();
     const profile = get().activeProfile;
     if (!profile?.id) return;
 
@@ -2025,6 +2159,7 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
   },
 
   importBackupData: async (jsonContent: string) => {
+    requireConnection();
     try {
       const data = JSON.parse(jsonContent);
       if (!data || typeof data !== 'object' || !Array.isArray(data.profiles)) {
@@ -2072,6 +2207,7 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
   },
 
   clearDatabaseData: async () => {
+    requireConnection();
     const profile = get().activeProfile;
     if (!profile?.id) return;
     const allMeas = await measurementRepo.getAll(profile.id);
@@ -2123,3 +2259,48 @@ useStore.subscribe((state, previous) => {
   }
   writeStoredSession(profileId, session);
 });
+
+/**
+ * Keeps the screen in step with a queue draining underneath it.
+ *
+ * Only in server mode: local mode has no queue and no temp ids to resolve.
+ *
+ * Two halves, and both are needed. The rewrite swaps the placeholder id for the
+ * real one across every slice that holds one, synchronously, so nothing has to
+ * reload. The reconcile then re-runs the loaders once the queue is empty, so
+ * anything the server normalised — or already had, via `ON CONFLICT` — replaces
+ * the client's optimistic copy.
+ */
+if (isServerMode) {
+  onIdResolved((_kind, tempId, serverId) => {
+    useStore.getState().rewriteId(tempId, serverId);
+  });
+
+  onDrained(() => {
+    const state = useStore.getState();
+    if (!state.activeProfile?.id) return;
+    // Individually caught: one dead endpoint should cost one stale slice, not
+    // the whole reconcile — the same shape as the loader burst in
+    // `AppDataProvider`.
+    void state.loadWorkoutHistory(30).catch(() => {});
+    void state.loadAllSets().catch(() => {});
+    void state.loadSavedRoutines().catch(() => {});
+    void state.loadWellnessLogs().catch(() => {});
+  });
+
+  /**
+   * Signing out takes the cache and the queue with it.
+   *
+   * IndexedDB is per-browser and an account is not, so a snapshot that outlived
+   * its session is one offline launch away from showing the previous person's
+   * training history. And a queue that survived would replay one account's
+   * writes under another's token.
+   */
+  onSessionCleared(() => {
+    clearMarker();
+    void resetOfflineDb();
+  });
+
+  startConnectivity();
+  startFlusher();
+}

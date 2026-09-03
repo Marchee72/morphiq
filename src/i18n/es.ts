@@ -695,6 +695,17 @@ export const es: Translations = {
   'gate.offlineBody': 'MorphIQ no ha podido llegar a la API. Revisa tu conexion e intentalo de nuevo.',
   'gate.retry': 'Reintentar',
 
+  // -- Sincronizar lo registrado sin conexion --------------------
+  'sync.offline': 'Sin conexion',
+  'sync.offlineSub': 'Lo que registres se guarda en este dispositivo y se envia al volver.',
+  'sync.pending_one': '{n} cambio pendiente de sincronizar',
+  'sync.pending_other': '{n} cambios pendientes de sincronizar',
+  'sync.syncing': 'Sincronizando…',
+  'sync.retry': 'Reintentar ahora',
+  'sync.failedTitle': 'Algunos cambios no se pudieron guardar',
+  'sync.failedBody': 'El servidor rechazo {n}. Siguen en este dispositivo.',
+  'sync.needsConnection': 'Esto necesita conexion.',
+
   // -- Instalar en la pantalla de inicio -------------------------
   'install.title': 'Instalar MorphIQ',
   'install.topSubtitle': 'Añádela a tu pantalla para acceso sin conexión y pantalla completa',

@@ -1,5 +1,6 @@
 import { authHeaders, clearSession } from '../auth/session';
 import { apiBaseUrl } from '../database/mode';
+import { BACKOFF_START_MS, jitter, nextBackoff } from '../net/backoff';
 
 /**
  * One frame off the wire.
@@ -24,13 +25,6 @@ export interface SocialTransport {
 
 /** Clean end of a stream, which the server does on purpose every few minutes. */
 const RECONNECT_IMMEDIATE_MS = 50;
-const BACKOFF_START_MS = 1_000;
-const BACKOFF_MAX_MS = 30_000;
-
-/** ±20%, so a hundred clients dropped by one outage do not return in lockstep. */
-function jitter(ms: number): number {
-  return Math.round(ms * (0.8 + Math.random() * 0.4));
-}
 
 /**
  * Server-sent events over `fetch`, not `EventSource`.
@@ -89,7 +83,7 @@ export const sseTransport: SocialTransport = {
         if (stopped || (err as Error).name === 'AbortError') return;
         onStatus('retrying');
         schedule(jitter(backoff));
-        backoff = Math.min(backoff * 2, BACKOFF_MAX_MS);
+        backoff = nextBackoff(backoff);
       }
     };
 

@@ -15,6 +15,7 @@ import { AtlasNav } from '../atlas/AtlasNav';
 import { AtlasSkeleton } from '../atlas/AtlasStates';
 
 import { AtlasTopInstallBanner } from '../atlas/AtlasTopInstallBanner';
+import { AtlasSyncBanner } from '../atlas/AtlasSyncBanner';
 
 import './app-base.css';
 import '../atlas/atlas.css';
@@ -77,6 +78,9 @@ export const AppShell: React.FC = () => {
     <div className="app at" data-mode={resolved}>
       <div className="app-statusbar" />
       <AtlasTopInstallBanner />
+      {/* Above the scroll region: "the server cannot be reached" is a fact
+          about the app, not about the screen you happen to be on. */}
+      <AtlasSyncBanner />
       {/* Keyed on the tab so switching screens resets scroll. */}
       <div className="app-scroll" key={screen}>
         {ready ? <Screen /> : <AtlasSkeleton />}

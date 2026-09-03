@@ -280,6 +280,26 @@ app.post('/api/profiles/:id/restore', async (req, res) => {
   }
 });
 
+/**
+ * What to do when a write arrives twice.
+ *
+ * Every insert below that a phone can replay carries a `"clientId"` the client
+ * chose before sending — see migration 008. This clause is what makes the
+ * second arrival a no-op instead of a duplicate row.
+ *
+ * `DO UPDATE` rather than `DO NOTHING`, and the assignment is deliberately
+ * pointless. `DO NOTHING` returns no row, so `RETURNING *` yields nothing and
+ * the handler answers with an undefined id — but a replaying client is asking
+ * precisely because it does not know the row's id yet. Re-assigning the column
+ * to the value it already has is the cheapest way to make `RETURNING` fire.
+ *
+ * Writes without a `clientId` — every app version already installed, and every
+ * server-side path — insert a NULL, which no unique index ever conflicts on, so
+ * this clause never fires for them.
+ */
+const ON_CLIENT_ID_CONFLICT =
+  'ON CONFLICT ("profileId", "clientId") DO UPDATE SET "clientId" = EXCLUDED."clientId"';
+
 // ─── Measurements ─────────────────────────────────────────────────────────────
 app.get('/api/profiles/:id/measurements', async (req, res) => {
   try {
@@ -305,10 +325,11 @@ app.post('/api/measurements', ownBody, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO measurements ("profileId", timestamp, weight, impedance, bmi, bmr,
-        "bodyFat", "bodyWater", "boneMass", "muscleMass")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+        "bodyFat", "bodyWater", "boneMass", "muscleMass", "clientId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       ${ON_CLIENT_ID_CONFLICT} RETURNING *`,
       [m.profileId, m.timestamp || new Date(), m.weight, m.impedance, m.bmi, m.bmr,
-       m.bodyFat, m.bodyWater, m.boneMass, m.muscleMass]
+       m.bodyFat, m.bodyWater, m.boneMass, m.muscleMass, m.clientId ?? null]
     );
     const r = rows[0];
     res.status(201).json({ ...r, id: r.id.toString() });
@@ -347,9 +368,10 @@ app.post('/api/food-logs', ownBody, async (req, res) => {
   const f = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO food_logs ("profileId", timestamp, "mealType", description, calories, protein, carbs, fat)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [f.profileId, f.timestamp || new Date(), f.mealType, f.description, f.calories, f.protein, f.carbs, f.fat]
+      `INSERT INTO food_logs ("profileId", timestamp, "mealType", description, calories, protein, carbs, fat, "clientId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ${ON_CLIENT_ID_CONFLICT} RETURNING *`,
+      [f.profileId, f.timestamp || new Date(), f.mealType, f.description, f.calories, f.protein, f.carbs, f.fat, f.clientId ?? null]
     );
     const r = rows[0];
     res.status(201).json({ ...r, id: r.id.toString() });
@@ -396,8 +418,9 @@ app.post('/api/workout-logs', ownBody, async (req, res) => {
   const w = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO workout_logs ("profileId", timestamp, type, description, duration, "caloriesBurned", "distanceKm", steps, "avgHeartRate", "maxHeartRate", "source", "externalId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      `INSERT INTO workout_logs ("profileId", timestamp, type, description, duration, "caloriesBurned", "distanceKm", steps, "avgHeartRate", "maxHeartRate", "source", "externalId", "clientId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       ${ON_CLIENT_ID_CONFLICT} RETURNING *`,
       [
         w.profileId,
         w.timestamp || new Date(),
@@ -410,7 +433,8 @@ app.post('/api/workout-logs', ownBody, async (req, res) => {
         w.avgHeartRate,
         w.maxHeartRate,
         w.source || 'manual',
-        w.externalId
+        w.externalId,
+        w.clientId ?? null
       ]
     );
     const r = rows[0];
@@ -497,9 +521,10 @@ app.post('/api/messages', ownBody, async (req, res) => {
   const msg = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO messages ("profileId", timestamp, sender, content)
-       VALUES ($1,$2,$3,$4) RETURNING *`,
-      [msg.profileId, msg.timestamp || new Date(), msg.sender, msg.content]
+      `INSERT INTO messages ("profileId", timestamp, sender, content, "clientId")
+       VALUES ($1,$2,$3,$4,$5)
+       ${ON_CLIENT_ID_CONFLICT} RETURNING *`,
+      [msg.profileId, msg.timestamp || new Date(), msg.sender, msg.content, msg.clientId ?? null]
     );
     const r = rows[0];
     res.status(201).json({ ...r, id: r.id.toString() });
@@ -519,10 +544,14 @@ app.post('/api/workout-sets', ownBody, async (req, res) => {
   try {
     // "exerciseId" has had a column since the catalogue landed and was never
     // listed here, so every set written in server mode lost its catalogue link.
+    // "isCompleted" and "biserieGroupId" were the same story — the client has
+    // always sent both and this INSERT named neither, so both were dropped on
+    // the floor until migration 008 gave them columns.
     const { rows } = await pool.query(
-      `INSERT INTO workout_sets ("workoutLogId", "profileId", "exerciseName", "exerciseId", "setNumber", reps, weight, timestamp, notes, "distanceKm", "duration", "speed", rpe)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-      [s.workoutLogId, s.profileId, s.exerciseName, s.exerciseId, s.setNumber, s.reps, s.weight, s.timestamp || new Date(), s.notes, s.distanceKm, s.duration, s.speed, s.rpe]
+      `INSERT INTO workout_sets ("workoutLogId", "profileId", "exerciseName", "exerciseId", "setNumber", reps, weight, timestamp, notes, "distanceKm", "duration", "speed", rpe, "isCompleted", "biserieGroupId", "clientId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       ${ON_CLIENT_ID_CONFLICT} RETURNING *`,
+      [s.workoutLogId, s.profileId, s.exerciseName, s.exerciseId, s.setNumber, s.reps, s.weight, s.timestamp || new Date(), s.notes, s.distanceKm, s.duration, s.speed, s.rpe, s.isCompleted ?? null, s.biserieGroupId ?? null, s.clientId ?? null]
     );
     const r = rows[0];
     res.status(201).json({
@@ -681,9 +710,9 @@ app.post('/api/routines', ownBody, async (req, res) => {
   const r = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO routine_templates ("profileId", title, description, "targetMuscles", exercises, "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
+      `INSERT INTO routine_templates ("profileId", title, description, "targetMuscles", exercises, "createdAt", "clientId")
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ${ON_CLIENT_ID_CONFLICT} RETURNING *`,
       [
         r.profileId,
         r.title,
@@ -691,6 +720,7 @@ app.post('/api/routines', ownBody, async (req, res) => {
         JSON.stringify(r.targetMuscles || []),
         JSON.stringify(r.exercises || []),
         r.createdAt || new Date(),
+        r.clientId ?? null,
       ]
     );
     res.status(201).json({ ...rows[0], id: rows[0].id.toString(), createdAt: rows[0].createdAt });

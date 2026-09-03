@@ -65,10 +65,34 @@ function App() {
   }, []);
 
   // Profiles are only worth loading once we know we are allowed to see any.
+  // `offline-cached` counts: the load serves from the snapshot, and it *has* to
+  // run — an empty `profiles` below reads as "new user" and opens the sign-up
+  // form, which is the worst possible screen to land an offline user on.
   useEffect(() => {
-    if (gate !== 'open') return;
+    if (gate !== 'open' && gate !== 'offline-cached') return;
     loadProfiles().catch(err => console.error('Failed to load profiles', err));
   }, [gate, loadProfiles]);
+
+  /**
+   * Re-asks once the connection comes back.
+   *
+   * Entering on a cached snapshot leaves one question genuinely unanswered:
+   * whether the server still accepts this session. Asking again on `online` and
+   * on app resume settles it — and if the answer is now `blocked`, the wall goes
+   * up through the same path a mid-session 401 uses.
+   */
+  useEffect(() => {
+    if (gate !== 'offline-cached') return;
+
+    const recheck = () => { void probeGate().then(setGate, () => {}); };
+    window.addEventListener('online', recheck);
+    const resumed = CapApp.addListener('resume', recheck);
+
+    return () => {
+      window.removeEventListener('online', recheck);
+      void resumed.then(l => l.remove());
+    };
+  }, [gate]);
 
   /**
    * A token rejected mid-session puts the wall straight back up.
@@ -91,7 +115,9 @@ function App() {
    * waiting on `profilesLoaded` would hold the splash for the full eight-second
    * timeout in front of a sign-in screen that was ready immediately.
    */
-  const ready = gate === 'open' ? profilesLoaded : gate !== 'checking';
+  const ready = gate === 'open' || gate === 'offline-cached'
+    ? profilesLoaded
+    : gate !== 'checking';
   const splashDone = (ready && minTimeElapsed) || gaveUpWaiting;
 
   useEffect(() => {
@@ -258,6 +284,9 @@ function App() {
    * returns an empty list, and the branch below would read that as a new user
    * and open the sign-up form — which then fails on every write.
    */
+  // `offline-cached` deliberately falls through to the app: there is a snapshot
+  // taken under this account, so there is something honest to show, and every
+  // write from here goes to the outbox. A real 401 still lands on `blocked`.
   if (gate === 'blocked' || gate === 'offline') {
     return (
       <>
