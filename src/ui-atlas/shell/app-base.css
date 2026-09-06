@@ -100,6 +100,88 @@
 
 .app-scroll::-webkit-scrollbar { display: none; }
 
+/* ---------- pull to sync ---------- */
+
+/* Anchors the badge, which is absolutely positioned so it does not push the
+   screen down and reflow it. */
+.app-scroll { position: relative; }
+
+/* The badge is the only thing that moves.
+ *
+ * The page itself deliberately stays put. Riding the content down would mean a
+ * transform on the screen's own children, and a transform — even
+ * `translateY(0)` — makes the element a containing block for everything fixed
+ * inside it. Every sheet Today and Body open is `position: fixed`, so the scrim
+ * would stop covering the viewport and start covering the scroller. The gesture
+ * reads just as well with the badge descending alone, and nothing else has to
+ * be true for it to work.
+ *
+ * `--at-pull` is written by the gesture on `.app-scroll`, per touchmove, so
+ * this is a compositor-only move with no React render behind it. */
+.at-pull {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
+  height: 52px;
+  margin-top: -52px;
+  transform: translateY(var(--at-pull, 0px));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Eased only once the finger is gone. During the drag the badge has to be
+   exactly where the finger is, and a transition there feels like lag. */
+.at-pull[data-state='idle'],
+.at-pull[data-state='refreshing'] {
+  transition: transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* Idle but still mounted means the sync finished and its result is being shown
+   — `--at-pull` is back to zero by then, so the resting position is its own.
+   The component unmounts once the message expires. */
+.at-pull[data-state='idle'] { transform: translateY(52px); }
+
+.at-pull-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: calc(100% - 36px);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--at-ink-soft);
+  box-shadow: 0 2px 3px rgba(64, 44, 26, 0.05), 0 10px 24px -14px rgba(64, 44, 26, 0.4);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Armed is the one state that has to be unmistakable — it is the difference
+   between letting go and syncing, and letting go and nothing happening. */
+.at-pull[data-state='armed'] .at-pull-badge {
+  background: var(--clay);
+  color: var(--at-on-clay);
+}
+
+/* The arrow flips to point at the release, rather than being a second icon. */
+.at-pull[data-state='armed'] svg { transform: rotate(180deg); }
+.at-pull svg { transition: transform 0.2s ease; }
+
+.at-pull-spin { animation: at-pull-spin 0.9s linear infinite; }
+
+@keyframes at-pull-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .at-pull-spin { animation-duration: 2.4s; }
+  .at-pull { transition: none; }
+}
+
 /* Overlays (sheets, the live session, dialogs) mount inside `.app` so they
    inherit its palette, but above the scrolling body. */
 .app-overlays {

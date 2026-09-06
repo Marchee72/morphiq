@@ -1,9 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../../presentation/state/store';
 import { resolveMode, SURFACE } from '../../presentation/state/preferences';
 import { useAppData, useAppActions } from '../data/useAppData';
+import { useHealthSync } from '../data/useHealthSync';
+import { usePullToRefresh } from '../components/usePullToRefresh';
 import type { ScreenId } from '../types';
 import { AppOverlays } from './AppOverlays';
+import { AtlasPullRefresh } from '../atlas/AtlasPullRefresh';
 
 import { AtlasToday } from '../atlas/AtlasToday';
 import { AtlasTrain } from '../atlas/AtlasTrain';
@@ -74,6 +77,38 @@ export const AppShell: React.FC = () => {
     actions.openOverlay('resumeSession');
   }, [ready, actions]);
 
+  /**
+   * Pull down to pull in — from Health Connect, which is the door Samsung Health
+   * writes through.
+   *
+   * Only on the two screens made of that data. Train is a live session with a
+   * horizontal swipe of its own and a clock that must not stall behind a network
+   * import; Library, Coach and Buddies hold nothing Health Connect has ever
+   * heard of, and a gesture that appears to do something and does nothing is
+   * worse than no gesture.
+   */
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const canPull = ready && (screen === 'today' || screen === 'body');
+
+  /** The last sync's outcome, kept on screen briefly once the spinner is gone. */
+  const [syncNote, setSyncNote] = useState<string | null>(null);
+  const { sync } = useHealthSync();
+
+  const onRefresh = useCallback(async () => {
+    const result = await sync();
+    setSyncNote(result.message || null);
+  }, [sync]);
+
+  const pull = usePullToRefresh(scrollRef, onRefresh, canPull);
+
+  // The result is an answer to a gesture, not a status bar — it says what the
+  // pull did and then gets out of the way.
+  useEffect(() => {
+    if (!syncNote) return;
+    const timer = setTimeout(() => setSyncNote(null), 2600);
+    return () => clearTimeout(timer);
+  }, [syncNote]);
+
   return (
     <div className="app at" data-mode={resolved}>
       <div className="app-statusbar" />
@@ -82,7 +117,8 @@ export const AppShell: React.FC = () => {
           about the app, not about the screen you happen to be on. */}
       <AtlasSyncBanner />
       {/* Keyed on the tab so switching screens resets scroll. */}
-      <div className="app-scroll" key={screen}>
+      <div className="app-scroll" key={screen} ref={scrollRef} data-pullable={canPull}>
+        <AtlasPullRefresh state={pull.state} message={syncNote} />
         {ready ? <Screen /> : <AtlasSkeleton />}
       </div>
       <AtlasNav active={screen} onNavigate={setActiveTab} />

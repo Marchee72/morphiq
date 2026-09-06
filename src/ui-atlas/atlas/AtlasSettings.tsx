@@ -3,12 +3,10 @@ import { Capacitor } from '@capacitor/core';
 import { Check, Database, Dumbbell, Monitor, Moon, RefreshCw, Sun, Trash2, X } from 'lucide-react';
 import { useStore } from '../../presentation/state/store';
 import { useT } from '../../i18n';
-import { CapacitorHealthProvider } from '../../data/health/CapacitorHealthProvider';
-import { WebHealthProvider } from '../../data/health/WebHealthProvider';
 import { ALL_EQUIPMENT } from '../../features/settings/gymEquipmentData';
 import { LANGUAGES, MODES } from '../../presentation/state/preferences';
 import { MAX_HEIGHT_CM, MIN_HEIGHT_CM, parseHeightCm } from '../../core/entities/UserProfile';
-import { HEALTH_IMPORT_DAYS } from '../derive/bodyMetrics';
+import { useHealthSync } from '../data/useHealthSync';
 import { AtlasSheet } from './AtlasSheet';
 import { AtlasInput, AtlasChoice, AtlasSwitch } from './AtlasField';
 import { isBackgroundSyncOn, setBackgroundSync } from '../../data/health/BodyCompositionPlugin';
@@ -34,13 +32,11 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     profiles, activeProfile, setActiveProfile, updateProfile,
     theme, setTheme, language, setLanguage,
     exportBackupData, importBackupData, clearDatabaseData,
-    seedMockData, clearMockData, importWorkouts, importMeasurements,
+    seedMockData, clearMockData,
   } = useStore();
 
   const [panel, setPanel] = useState<Panel>(null);
   const [account, setAccount] = useState(getUser());
-  const [status, setStatus] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
   const [background, setBackground] = useState(isBackgroundSyncOn);
 
   /**
@@ -56,38 +52,12 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     }
   };
 
-  const syncHealth = async () => {
-    if (!activeProfile) return;
-    setSyncing(true);
-    setStatus(t('settings.syncing'));
-    try {
-      const capacitor = new CapacitorHealthProvider();
-      const provider = capacitor.isAvailable() ? capacitor : new WebHealthProvider();
-      if (!(await provider.requestPermissions())) {
-        setStatus(t('settings.syncDenied'));
-        return;
-      }
-      const since = new Date();
-      since.setDate(since.getDate() - 30);
-      const workouts = await provider.importWorkouts(since);
-      if (provider.importBodyComposition) {
-        // Reaches back further than the workouts do: the Body charts cover
-        // 12 weeks, and a 30-day import leaves two thirds of every chart
-        // filled by gap-filling over readings Health Connect already holds.
-        const bodySince = new Date();
-        bodySince.setDate(bodySince.getDate() - HEALTH_IMPORT_DAYS);
-        const measurements = await provider.importBodyComposition(bodySince, activeProfile);
-        if (measurements.length > 0) await importMeasurements(measurements);
-      }
-      await importWorkouts(workouts);
-      setStatus(t('settings.syncOk', { n: workouts.length }));
-    } catch (err) {
-      console.error('Health sync error:', err);
-      setStatus(t('settings.syncError'));
-    } finally {
-      setSyncing(false);
-    }
-  };
+  /**
+   * The same importer the pull gesture runs — see `useHealthSync`. This button
+   * used to own it privately, which is fine right up until a second caller
+   * needs it and the two copies start disagreeing about how far back to reach.
+   */
+  const { sync: syncHealth, syncing, status } = useHealthSync();
 
   return (
     <div className="at-settings">
