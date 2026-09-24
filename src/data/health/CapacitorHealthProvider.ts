@@ -2,7 +2,7 @@ import type { IHealthProvider, WellnessSignals } from '../../core/interfaces/IHe
 import type { WorkoutLog } from '../../core/entities/WorkoutLog';
 import type { Measurement } from '../../core/entities/Measurement';
 import type { UserProfile } from '../../core/entities/UserProfile';
-import type { Workout, HeartRateSample } from 'capacitor-health';
+import type { Workout, HeartRateSample, HealthPermission, PermissionResponse } from 'capacitor-health';
 import { getAge } from '../../core/entities/UserProfile';
 import { BodyComposition } from './BodyCompositionPlugin';
 import { Wellness, SLEEP_READ_PERMISSIONS, type DailyBpm, type DailyRmssd } from './WellnessPlugin';
@@ -28,6 +28,23 @@ function settleWithin<T>(work: Promise<T>, ms: number): Promise<T | null> {
     work,
     new Promise<null>(resolve => setTimeout(() => resolve(null), ms)),
   ]);
+}
+
+/**
+ * `{ READ_WORKOUTS: true, … }` out of whichever shape the plugin answered in.
+ *
+ * Typed as an array of one-key objects, but the Android side sends one object
+ * keyed by every permission — so both are read. `null` is a call that timed out.
+ */
+function grantedIn(response: PermissionResponse | null): Record<string, boolean> {
+  const map: Record<string, boolean> = {};
+  const permissions: unknown = response?.permissions;
+  if (Array.isArray(permissions)) {
+    for (const p of permissions as Record<string, boolean>[]) Object.assign(map, p);
+  } else if (permissions && typeof permissions === 'object') {
+    Object.assign(map, permissions);
+  }
+  return map;
 }
 
 /** Either of these means Health Connect will hand over a weigh-in. */
@@ -69,9 +86,25 @@ export class CapacitorHealthProvider implements IHealthProvider {
     try {
       // Dynamic import to prevent bundler errors on the web
       const { Health } = await import('capacitor-health');
-      const result = await Health.requestHealthPermissions({
-        permissions: ['READ_WORKOUTS', 'READ_STEPS', 'READ_DISTANCE', 'READ_ACTIVE_CALORIES', 'READ_HEART_RATE']
-      });
+      const permissions: HealthPermission[] = ['READ_WORKOUTS', 'READ_STEPS', 'READ_DISTANCE', 'READ_ACTIVE_CALORIES', 'READ_HEART_RATE'];
+
+      /**
+       * Asked only when something is missing, and never without a deadline.
+       *
+       * `requestHealthPermissions` launches Health Connect's permission activity
+       * every time, granted or not, and keeps a single pending call: a second
+       * request replaces the first, which then never settles. The launch itself
+       * pauses and resumes the app, which fires the resume listener in `App.tsx`,
+       * which can ask again — so a pull-to-sync waited on a reply that had been
+       * overwritten, and its spinner turned forever.
+       */
+      // A failed check only means "ask", never "refused".
+      const checked = await settleWithin(
+        Health.checkHealthPermissions({ permissions }).catch(() => null), PERMISSION_DIALOG_TIMEOUT_MS);
+      const allGranted = permissions.every(p => grantedIn(checked)[p] === true);
+      const result = allGranted
+        ? checked
+        : await settleWithin(Health.requestHealthPermissions({ permissions }), PERMISSION_DIALOG_TIMEOUT_MS);
 
       // Request BodyComposition permissions if native
       let bodyGranted = false;
@@ -112,17 +145,7 @@ export class CapacitorHealthProvider implements IHealthProvider {
         }
       }
 
-      const permissionsMap: Record<string, boolean> = {};
-      if (Array.isArray(result?.permissions)) {
-        result.permissions.forEach(p => {
-          const key = Object.keys(p)[0];
-          if (key) {
-            permissionsMap[key] = p[key];
-          }
-        });
-      } else if (result?.permissions) {
-        Object.assign(permissionsMap, result.permissions);
-      }
+      const permissionsMap = grantedIn(result);
 
       /**
        * Any granted read is enough to call the sync on.

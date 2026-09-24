@@ -279,6 +279,35 @@ describe('failure handling', () => {
     expect(h.calls.some(c => c.url.includes('/workout-sets'))).toBe(false);
   });
 
+  it('sends a refused workout and its sets once retried by hand after a fix', async () => {
+    let online = false;
+    let fixed = false;
+    const h = await harness(call => {
+      if (!online) return DEAD;
+      if (call.url.includes('/workout-logs')) return fixed ? created('42') : errorStatus(500);
+      return created('900');
+    });
+
+    const logId = await h.repos.workout.add(workout);
+    await h.repos.workoutSet.add({ ...set(1), workoutLogId: logId });
+    await h.repos.workoutSet.add({ ...set(2), workoutLogId: logId });
+
+    online = true;
+    h.connectivity.reportReachable();
+    await h.flusher.flush();
+    expect(await h.outbox.failedCount()).toBe(3);
+
+    fixed = true;
+    h.calls.length = 0;
+    await h.flusher.retryNow();
+
+    expect(await h.outbox.failedCount()).toBe(0);
+    expect(await h.outbox.pendingCount()).toBe(0);
+    const setCalls = h.calls.filter(c => c.url.includes('/workout-sets'));
+    expect(setCalls).toHaveLength(2);
+    expect(setCalls.every(c => c.body.workoutLogId === '42')).toBe(true);
+  });
+
   it('stops but keeps everything when the session expires', async () => {
     /**
      * These are still the user's writes. Discarding a workout because a token

@@ -173,11 +173,16 @@ export async function settle(seq: number): Promise<void> {
 }
 
 /**
- * The op will never land.
+ * The op did not land, and sending it again unchanged will not help.
  *
  * Kept rather than deleted, so the count can be surfaced and the user told that
  * something of theirs did not make it. Silently dropping a workout is the one
  * outcome this whole layer exists to prevent.
+ *
+ * Its dependents are failed with it rather than cancelled. They cannot succeed
+ * while the parent is refused, and leaving them pending would block every later
+ * write behind it — but deleting them meant that fixing whatever the server
+ * disliked brought back a workout with none of its sets.
  */
 export async function fail(seq: number, reason: string): Promise<void> {
   const db = offlineDb();
@@ -185,9 +190,36 @@ export async function fail(seq: number, reason: string): Promise<void> {
   if (!op) return;
 
   await db.ops.update(seq, { status: 'failed', error: reason });
-  // Its dependents cannot succeed either, and leaving them pending would block
-  // every later write behind a parent that is never coming.
-  if (op.tempId) await cancelDependents(op.tempId);
+  if (op.tempId) await failDependents(op.tempId, seq);
+}
+
+async function failDependents(tempId: string, parentSeq: number): Promise<void> {
+  const db = offlineDb();
+  const pending = await db.ops.where('status').equals('pending').toArray();
+
+  const blocked = pending.filter(p =>
+    p.targetId === tempId
+    || (p.refs ?? []).some(field => p.payload?.[field] === tempId));
+
+  for (const op of blocked) {
+    await db.ops.update(op.seq!, { status: 'failed', error: `Depends on change ${parentSeq}` });
+    if (op.tempId) await failDependents(op.tempId, parentSeq);
+  }
+}
+
+/**
+ * Gives every refused op another go, in its original order.
+ *
+ * `seq` is kept, so a workout still goes out ahead of its sets. Worth offering
+ * because "permanent" means "the same request fails the same way" — and after a
+ * server fix, it is no longer the same server.
+ */
+export async function requeueFailed(): Promise<void> {
+  const db = offlineDb();
+  const failed = await db.ops.where('status').equals('failed').toArray();
+  for (const op of failed) {
+    await db.ops.update(op.seq!, { status: 'pending', error: undefined });
+  }
 }
 
 export async function pendingCount(): Promise<number> {

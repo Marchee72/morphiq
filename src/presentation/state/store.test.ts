@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useStore } from './store';
 import { db } from '../../data/database/LocalDatabase';
 
@@ -345,6 +345,40 @@ describe('Zustand store state management', () => {
     const synced = useStore.getState().workoutHistory.find(w => w.externalId === 'hc_strength_1');
     expect(synced).toBeDefined();
     expect(synced!.caloriesBurned).toBe(320);
+  });
+
+  it('dedupes a synced workout older than 30 days instead of re-importing it every sync', async () => {
+    await useStore.getState().createProfile({
+      name: 'Diana Prince', gender: 'female', birthDate: new Date('1990-01-01'), height: 178,
+    });
+
+    const old = {
+      type: 'RUNNING', duration: 30, description: 'Run via watch',
+      source: 'health-connect' as const, externalId: 'hc_old_run',
+      timestamp: new Date(Date.now() - 60 * 86_400_000),
+    };
+    await useStore.getState().importWorkouts([old]);
+    await useStore.getState().importWorkouts([old]);
+
+    expect((await db.workoutLogs.toArray()).filter(w => w.externalId === 'hc_old_run').length).toBe(1);
+  });
+
+  it('keeps importing past a workout that fails to save, then reports the failure', async () => {
+    await useStore.getState().createProfile({
+      name: 'Hal Jordan', gender: 'male', birthDate: new Date('1988-02-02'), height: 183,
+    });
+
+    const at = (days: number) => new Date(Date.now() - days * 86_400_000);
+    const add = vi.spyOn(db.workoutLogs, 'add').mockRejectedValueOnce(new Error('HTTP 500'));
+
+    await expect(useStore.getState().importWorkouts([
+      { type: 'WALKING', duration: 10, description: 'a', source: 'health-connect', externalId: 'hc_a', timestamp: at(3) },
+      { type: 'WALKING', duration: 10, description: 'b', source: 'health-connect', externalId: 'hc_b', timestamp: at(2) },
+    ])).rejects.toThrow('HTTP 500');
+    add.mockRestore();
+
+    // The refused first record did not cost the second one.
+    expect((await db.workoutLogs.toArray()).filter(w => w.externalId === 'hc_b').length).toBe(1);
   });
 
   it('should import body composition measurements and filter out duplicate entries', async () => {

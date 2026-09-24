@@ -4,6 +4,7 @@ import { useT } from '../../i18n';
 import { CapacitorHealthProvider } from '../../data/health/CapacitorHealthProvider';
 import { WebHealthProvider } from '../../data/health/WebHealthProvider';
 import { HEALTH_IMPORT_DAYS } from '../derive/bodyMetrics';
+import { syncSince } from '../../data/health/syncWindow';
 
 /** What a finished sync amounts to, for whoever asked for it. */
 export interface HealthSyncResult {
@@ -54,17 +55,18 @@ export function useHealthSync() {
         return finish({ ok: false, workouts: 0, message: t('settings.syncDenied') });
       }
 
-      const since = new Date();
-      since.setDate(since.getDate() - 30);
-      const workouts = await provider.importWorkouts(since);
+      // The same windows as the automatic sync in `App.tsx`, stretched back to
+      // the last clean sync after a gap. Only that sync moves the checkpoint: it
+      // is the one that also imports wellness.
+      const profileId = String(activeProfile.id);
+      const workouts = await provider.importWorkouts(syncSince(profileId, 30));
 
       if (provider.importBodyComposition) {
         // Reaches back further than the workouts do: the Body charts cover
         // 12 weeks, and a 30-day import leaves two thirds of every chart
         // filled by gap-filling over readings Health Connect already holds.
-        const bodySince = new Date();
-        bodySince.setDate(bodySince.getDate() - HEALTH_IMPORT_DAYS);
-        const measurements = await provider.importBodyComposition(bodySince, activeProfile);
+        const measurements = await provider.importBodyComposition(
+          syncSince(profileId, HEALTH_IMPORT_DAYS), activeProfile);
         if (measurements.length > 0) await importMeasurements(measurements);
       }
 

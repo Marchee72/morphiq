@@ -125,6 +125,38 @@ app.use('/api', (_req, res, next) => {
   next();
 });
 
+/**
+ * On Vercel, nothing is served until this cold start's schema is in place.
+ *
+ * `initDb` used to run in the background while requests were already being
+ * answered. The first deploy that added `wellness_logs` 500'd every write that
+ * beat it to the table, and the client files a 500 as refused for good — so a
+ * race of a second became days of sleep data stuck in the outbox.
+ *
+ * A failed init is forgotten rather than cached, so the next request tries
+ * again instead of the instance answering 503 until it is recycled. 503 is one
+ * the client queues and retries.
+ */
+let schemaReady = null;
+function ensureSchema() {
+  schemaReady ??= initDb().catch(err => {
+    schemaReady = null;
+    throw err;
+  });
+  return schemaReady;
+}
+
+if (process.env.VERCEL) {
+  app.use('/api', async (_req, res, next) => {
+    try {
+      await ensureSchema();
+      next();
+    } catch {
+      res.status(503).json({ error: 'The database is not ready yet' });
+    }
+  });
+}
+
 // ─── Authentication ───────────────────────────────────────────────────────────
 
 /**
@@ -835,7 +867,9 @@ if (!process.env.VERCEL) {
       process.exit(1);
     });
 } else {
-  initDb().catch((err) => {
+  // Started now so a cold start begins on the schema before its first request
+  // arrives; the `/api` gate above is what makes requests wait for it.
+  ensureSchema().catch((err) => {
     console.error('❌ Failed to initialize database on Vercel cold start:', err);
   });
 }

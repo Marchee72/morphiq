@@ -11,8 +11,8 @@ export { decorateRepositories, type RepositoryBundle } from './offlineRepositori
 export { resetOfflineDb } from './offlineDb';
 export { canEnterOffline, clearMarker } from './snapshotMarker';
 export { isOnline, startConnectivity } from './connectivity';
-export { OfflineUnavailableError, discardFailed } from './outbox';
+export { OfflineUnavailableError } from './outbox';
 export {
-  onDrained, onIdResolved, resumeAfterAuth, retryNow, startFlusher, flush,
+  discardRefused, onDrained, onIdResolved, resumeAfterAuth, retryNow, startFlusher, flush,
 } from './flusher';
 export { getSyncState, subscribeSyncState, type SyncState } from './syncState';

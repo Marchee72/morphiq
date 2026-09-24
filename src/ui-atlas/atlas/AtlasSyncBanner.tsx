@@ -1,7 +1,7 @@
 import React, { useSyncExternalStore } from 'react';
-import { AlertTriangle, CloudOff, RefreshCw, WifiOff } from 'lucide-react';
+import { AlertTriangle, CloudOff, RefreshCw, RotateCw, Trash2, WifiOff } from 'lucide-react';
 import { useT } from '../../i18n';
-import { getSyncState, retryNow, subscribeSyncState } from '../../data/offline';
+import { discardRefused, getSyncState, retryNow, subscribeSyncState } from '../../data/offline';
 
 /**
  * What the app tells you when it cannot reach the server.
@@ -33,6 +33,22 @@ export const AtlasSyncBanner: React.FC = () => {
             <b>{t('sync.failedTitle')}</b>
             <small>{t('sync.failedBody', { n: state.failed })}</small>
           </div>
+          {/* Retry puts them back in the queue — the thing to press once the
+              server has been fixed. Discard is the way out when it never will. */}
+          {/* Icons, like the install banner's dismiss: two labelled buttons
+              left the message a sliver of the strip. */}
+          {!state.flushing && state.online && (
+            <button className="at-round-sm" onClick={() => void retryNow()}
+              aria-label={t('sync.retry')} title={t('sync.retry')}>
+              <RotateCw size={16} />
+            </button>
+          )}
+          {!state.flushing && (
+            <button className="at-round-sm" onClick={() => void discardRefused()}
+              aria-label={t('sync.discard')} title={t('sync.discard')}>
+              <Trash2 size={16} />
+            </button>
+          )}
         </div>
       </div>
     );
@@ -54,7 +70,7 @@ export const AtlasSyncBanner: React.FC = () => {
           {/* Only when nothing is in flight — a retry mid-drain would do
               nothing, and a button that does nothing is worse than no button. */}
           {!state.flushing && state.online && (
-            <button className="at-btn at-btn-sm" onClick={retryNow}>{t('sync.retry')}</button>
+            <button className="at-btn at-btn-sm" onClick={() => void retryNow()}>{t('sync.retry')}</button>
           )}
         </div>
       </div>

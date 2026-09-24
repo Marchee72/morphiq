@@ -65,7 +65,7 @@ describe('AtlasSyncBanner', () => {
 
   it('drains on demand when asked', async () => {
     const offline = await import('../../data/offline');
-    const retry = vi.spyOn(offline, 'retryNow').mockImplementation(() => {});
+    const retry = vi.spyOn(offline, 'retryNow').mockImplementation(async () => {});
 
     setSyncState({ online: true, pending: 2, flushing: false });
     render(<AtlasSyncBanner />);
@@ -82,6 +82,22 @@ describe('AtlasSyncBanner', () => {
 
     expect(screen.getByText(/could not be saved|no se pudieron guardar/i)).toBeTruthy();
     expect(screen.getByText(/refused 2|rechazo 2/i)).toBeTruthy();
+  });
+
+  it('offers a way out of a refusal, instead of a banner that never leaves', async () => {
+    // Refused ops are never retried on their own, so without these two buttons
+    // the banner stayed up for good, even after the server was fixed.
+    const offline = await import('../../data/offline');
+    const retry = vi.spyOn(offline, 'retryNow').mockImplementation(async () => {});
+    const discard = vi.spyOn(offline, 'discardRefused').mockImplementation(async () => {});
+
+    setSyncState({ online: true, failed: 3 });
+    render(<AtlasSyncBanner />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Try now|Reintentar ahora/i }));
+    expect(retry).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /^(Discard|Descartar)$/i }));
+    expect(discard).toHaveBeenCalled();
   });
 
   it('reports a failure ahead of a queue, because it is the worse news', () => {

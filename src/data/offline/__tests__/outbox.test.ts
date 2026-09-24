@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import {
   OUTBOX_LIMIT, OfflineUnavailableError, cancelDependents, clearOutbox, enqueue,
-  fail, failedCount, hasPending, peekNext, pendingCount,
+  fail, failedCount, hasPending, peekNext, pendingCount, requeueFailed,
   resolveId, lookupId, settle,
 } from '../outbox';
 import { offlineDb } from '../offlineDb';
@@ -192,9 +192,36 @@ describe('failure', () => {
 
     await fail(seq!, 'HTTP 400');
 
-    // The set can never succeed. The measurement is unrelated and must survive.
+    // The set cannot succeed while its parent is refused. The measurement is
+    // unrelated and must survive.
     expect(await pendingCount()).toBe(1);
     expect((await peekNext())!.kind).toBe('measurement');
+  });
+
+  it('keeps a failed insert\'s dependents, failed with it', async () => {
+    // Deleting them meant a retry after a server fix brought the workout back
+    // with none of its sets.
+    const seq = await enqueue(op({ tempId: 'tmp_A' }));
+    await enqueue(op({ kind: 'workoutSet', tempId: 'tmp_B', payload: { workoutLogId: 'tmp_A' }, refs: ['workoutLogId'] }));
+    await enqueue(op({ kind: 'workoutSet', op: 'update', targetId: 'tmp_B' }));
+
+    await fail(seq!, 'HTTP 500');
+    expect(await failedCount()).toBe(3);
+  });
+});
+
+describe('requeueFailed', () => {
+  it('puts refused ops back in their original order', async () => {
+    const parent = await enqueue(op({ tempId: 'tmp_A' }));
+    await enqueue(op({ kind: 'workoutSet', payload: { workoutLogId: 'tmp_A' }, refs: ['workoutLogId'] }));
+    await fail(parent!, 'HTTP 500');
+
+    await requeueFailed();
+
+    expect(await failedCount()).toBe(0);
+    expect(await pendingCount()).toBe(2);
+    // The workout still goes out ahead of the set that names it.
+    expect((await peekNext())!.seq).toBe(parent);
   });
 });
 

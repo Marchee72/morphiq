@@ -1495,8 +1495,15 @@ export const useStore = create<StoreState>((set, get) => ({
     
     const end = new Date();
     end.setDate(end.getDate() + 1); // tomorrow
+    // As far back as the oldest log handed in, not a fixed 30 days: after a
+    // long gap the caller reads further back, and a dedupe window shorter than
+    // the read re-imports everything in between on every sync.
     const start = new Date();
     start.setDate(start.getDate() - 30);
+    for (const log of logs) {
+      const at = new Date(log.timestamp);
+      if (at < start) start.setTime(at.getTime());
+    }
     const existing = await workoutRepo.getRange(profile.id!, start, end);
     const existingExtIds = new Set(existing.map(w => w.externalId).filter(Boolean));
     
@@ -1504,70 +1511,79 @@ export const useStore = create<StoreState>((set, get) => ({
     console.log('MorphIQ Store: Existing external IDs in DB:', Array.from(existingExtIds));
 
     let addedCount = 0;
+    // One record the server refuses must not cost every record behind it: the
+    // loop keeps going and the first failure is rethrown once it is done, so the
+    // caller still knows this sync was not clean.
+    let firstError: unknown;
     for (const log of logs) {
-      if (log.externalId && existingExtIds.has(log.externalId)) {
-        console.log('MorphIQ Store: Skipping duplicate workout:', log.externalId);
-        continue;
-      }
-      console.log('MorphIQ Store: Saving new synced workout:', log.externalId || log.timestamp);
-      const newLogId = await workoutRepo.add({
-        ...log,
-        profileId: profile.id!,
-        timestamp: new Date(log.timestamp),
-      });
-      addedCount++;
-
-      /**
-       * Fold the synced record into the session you logged, when they are the
-       * same event.
-       *
-       * Two rules, both of which this used to get wrong:
-       *
-       * 1. The synced activity must itself be strength work. It previously
-       *    merged into *any* record within four hours, so a walk logged between
-       *    gym sessions absorbed 30 sets of pull-ups and rows.
-       * 2. Your session is what survives. It previously kept the synced record
-       *    and deleted the manual one, which threw away the session's name,
-       *    feeling tag and notes and left the walk's 14-minute duration
-       *    standing in front of an hour of lifting. The watch only contributes
-       *    what it actually knows: calories, heart rate, distance.
-       *
-       * The synced row is then dropped and its `externalId` moved onto the
-       * surviving session, so the next sync dedupes against it instead of
-       * importing the same activity again.
-       */
-      if (!isStrengthActivity(log.type)) continue;
-
-      const candidateWorkouts = existing.filter(w =>
-        w.source === 'manual' &&
-        w.id !== newLogId &&
-        overlaps(w, { ...log, source: 'health-connect' })
-      );
-
-      for (const candidate of candidateWorkouts) {
-        if (!candidate.id) continue;
-        // Only a session with sets is a session worth protecting.
-        const candidateSets = await workoutSetRepo.getForWorkout(candidate.id);
-        if (candidateSets.length === 0) continue;
-
-        console.log(`MorphIQ Store: Folding synced ${log.type} ${newLogId} into manual session ${candidate.id} (${candidateSets.length} sets)`);
-
-        await workoutRepo.update({
-          ...candidate,
-          // Keep the session's own duration when it recorded one; a session
-          // saved before durations were tracked can take the watch's.
-          duration: candidate.duration > 0 ? candidate.duration : log.duration,
-          caloriesBurned: candidate.caloriesBurned ?? log.caloriesBurned,
-          avgHeartRate: candidate.avgHeartRate ?? log.avgHeartRate,
-          maxHeartRate: candidate.maxHeartRate ?? log.maxHeartRate,
-          distanceKm: candidate.distanceKm ?? log.distanceKm,
-          externalId: candidate.externalId ?? log.externalId,
+      try {
+        if (log.externalId && existingExtIds.has(log.externalId)) {
+          console.log('MorphIQ Store: Skipping duplicate workout:', log.externalId);
+          continue;
+        }
+        console.log('MorphIQ Store: Saving new synced workout:', log.externalId || log.timestamp);
+        const newLogId = await workoutRepo.add({
+          ...log,
+          profileId: profile.id!,
+          timestamp: new Date(log.timestamp),
         });
+        addedCount++;
 
-        await workoutRepo.delete(newLogId);
-        addedCount--;
-        // The synced row is gone; nothing else may merge into it.
-        break;
+        /**
+         * Fold the synced record into the session you logged, when they are the
+         * same event.
+         *
+         * Two rules, both of which this used to get wrong:
+         *
+         * 1. The synced activity must itself be strength work. It previously
+         *    merged into *any* record within four hours, so a walk logged between
+         *    gym sessions absorbed 30 sets of pull-ups and rows.
+         * 2. Your session is what survives. It previously kept the synced record
+         *    and deleted the manual one, which threw away the session's name,
+         *    feeling tag and notes and left the walk's 14-minute duration
+         *    standing in front of an hour of lifting. The watch only contributes
+         *    what it actually knows: calories, heart rate, distance.
+         *
+         * The synced row is then dropped and its `externalId` moved onto the
+         * surviving session, so the next sync dedupes against it instead of
+         * importing the same activity again.
+         */
+        if (!isStrengthActivity(log.type)) continue;
+
+        const candidateWorkouts = existing.filter(w =>
+          w.source === 'manual' &&
+          w.id !== newLogId &&
+          overlaps(w, { ...log, source: 'health-connect' })
+        );
+
+        for (const candidate of candidateWorkouts) {
+          if (!candidate.id) continue;
+          // Only a session with sets is a session worth protecting.
+          const candidateSets = await workoutSetRepo.getForWorkout(candidate.id);
+          if (candidateSets.length === 0) continue;
+
+          console.log(`MorphIQ Store: Folding synced ${log.type} ${newLogId} into manual session ${candidate.id} (${candidateSets.length} sets)`);
+
+          await workoutRepo.update({
+            ...candidate,
+            // Keep the session's own duration when it recorded one; a session
+            // saved before durations were tracked can take the watch's.
+            duration: candidate.duration > 0 ? candidate.duration : log.duration,
+            caloriesBurned: candidate.caloriesBurned ?? log.caloriesBurned,
+            avgHeartRate: candidate.avgHeartRate ?? log.avgHeartRate,
+            maxHeartRate: candidate.maxHeartRate ?? log.maxHeartRate,
+            distanceKm: candidate.distanceKm ?? log.distanceKm,
+            externalId: candidate.externalId ?? log.externalId,
+          });
+
+          await workoutRepo.delete(newLogId);
+          addedCount--;
+          // The synced row is gone; nothing else may merge into it.
+          break;
+        }
+      } catch (err) {
+        console.warn('MorphIQ Store: Failed to import synced workout:', log.externalId, err);
+        firstError ??= err;
       }
     }
     console.log('MorphIQ Store: Finished inserting new workouts. Total added:', addedCount);
@@ -1581,6 +1597,7 @@ export const useStore = create<StoreState>((set, get) => ({
       }
     }
     set({ workoutLogs: todayWorkouts, activeWorkoutSets: workoutSets });
+    if (firstError !== undefined) throw firstError;
   },
 
   loadSetsForWorkout: async (workoutLogId) => {
@@ -1832,26 +1849,35 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
     const existingKeys = new Set(existing.map(m => toMinuteKey(m.timestamp)));
 
     let addedCount = 0;
+    // Same rule as `importWorkouts`: keep going past a refused record, and
+    // rethrow the first failure once the rest are in.
+    let firstError: unknown;
     for (const rec of records) {
       const key = toMinuteKey(rec.timestamp);
       if (existingKeys.has(key)) {
         console.log('MorphIQ Store: Skipping duplicate body composition measurement:', rec.timestamp);
         continue;
       }
-      
+
       console.log('MorphIQ Store: Importing new measurement:', rec.timestamp);
-      await measurementRepo.save({
-        ...rec,
-        profileId: profile.id!,
-        timestamp: new Date(rec.timestamp),
-      });
-      addedCount++;
+      try {
+        await measurementRepo.save({
+          ...rec,
+          profileId: profile.id!,
+          timestamp: new Date(rec.timestamp),
+        });
+        addedCount++;
+      } catch (err) {
+        console.warn('MorphIQ Store: Failed to import measurement:', rec.timestamp, err);
+        firstError ??= err;
+      }
     }
 
     if (addedCount > 0) {
       const history = await measurementRepo.getAll(profile.id!);
       set({ measurements: history });
     }
+    if (firstError !== undefined) throw firstError;
   },
 
   analyzeWorkoutHistoryPeriod: async (period) => {
