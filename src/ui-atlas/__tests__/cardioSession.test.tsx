@@ -19,7 +19,7 @@ import { renderScreen } from '../../test/renderScreen';
 
 const initialState = useStore.getState();
 const card = () => document.querySelector('.at-todaytrain') as HTMLElement | null;
-const rail = () => document.querySelector('.at-rail') as HTMLElement | null;
+const rail = () => document.querySelector('.at-moments') as HTMLElement | null;
 const text = () => document.body.textContent?.replace(/\s+/g, ' ') ?? '';
 
 /** A synced activity: numbers on the log, no sets anywhere. */

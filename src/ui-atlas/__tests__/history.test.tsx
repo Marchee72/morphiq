@@ -247,11 +247,13 @@ describe('history entry points', () => {
   it('opens a past session straight from Today', async () => {
     renderScreen('today', { data: 'empty' });
 
-    // By label rather than by position: the muscle-load rows share the row class.
-    const row = await waitFor(
-      () => screen.getAllByRole('button', { name: /open push a/i })[0],
+    // "Recent" is a card that opens into the last sessions; open it first.
+    const recent = await waitFor(
+      () => screen.getAllByRole('button', { expanded: false }).find(b => /push a/i.test(b.textContent ?? ''))!,
       { timeout: 20000 },
     );
+    fireEvent.click(recent);
+    const row = await waitFor(() => screen.getAllByRole('button', { name: /open push a/i })[0]);
 
     fireEvent.click(row);
     await waitFor(() => expect(document.querySelector('.at-sheet')).toBeTruthy());

@@ -154,10 +154,275 @@
 }
 
 .at .app-statusbar { background: var(--sand); }
+/* On Today the status bar is the top of the ember header. */
+.at[data-screen='today'] .app-statusbar { background: #d2461b; }
 
 .at-serif { font-family: 'Urbanist', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.02em; }
 
 .at-pad { padding: 0 18px; }
+
+/* ---------- Today's header ----------
+   Ember, edge to edge from the top of the scroll area, rounded only at the
+   bottom. Solid in light (the canvas's choice), the hero gradient in dark.
+   White text on #d2461b is 4.5:1. */
+
+.at-today-head {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 18px 20px;
+  border-radius: 0 0 32px 32px;
+  background: #d2461b;
+  color: #fff;
+  animation: at-today-drop 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.at[data-mode='dark'] .at-today-head { background: var(--grad-hero); }
+
+@keyframes at-today-drop {
+  from { transform: translateY(-24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.at-today-glow {
+  position: absolute;
+  right: -70px;
+  top: -80px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 176, 32, 0.55), rgba(255, 176, 32, 0) 70%);
+  animation: at-today-drift 7s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes at-today-drift {
+  0%, 100% { transform: none; }
+  50% { transform: translate(-18px, 14px); }
+}
+
+.at-today-in {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transform-origin: 50% 0;
+}
+
+.at-today-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.at-today-top small { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.at-today-top h1 { margin: 3px 0 0; font-size: 30px; font-weight: 800; letter-spacing: -0.025em; line-height: 1.08; }
+
+.at-today-avatar {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.at-today-live { margin: -6px 0 0; font-size: 13px; font-weight: 700; }
+
+.at-today-week { display: flex; flex-direction: column; gap: 12px; }
+.at-today-week-head { display: flex; justify-content: space-between; align-items: center; }
+.at-today-week-head small { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+
+.at-today-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--lime);
+  color: var(--lime-ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.at-today-count { display: flex; align-items: baseline; gap: 2px; }
+.at-today-count b { font-size: 54px; font-weight: 800; line-height: 0.9; }
+.at-today-count span { font-size: 22px; font-weight: 800; }
+.at-today-count em { margin-left: 8px; font-style: normal; font-size: 15px; font-weight: 600; }
+
+.at-today-days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.at-today-days button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+}
+
+.at-today-days small { font-size: 12px; font-weight: 600; }
+
+.at-today-days span {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.12);
+  animation: at-today-pop 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.3) both;
+}
+
+.at-today-days span[data-done='true'] {
+  background: var(--lime);
+  color: var(--lime-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(0, 0, 0, 0.1);
+}
+
+.at-today-days span[data-today='true'] { box-shadow: inset 0 0 0 2px #fff; }
+.at-today-days span[data-today='true'][data-done='true'] { box-shadow: inset 0 0 0 2px #fff, inset 0 -2px 0 rgba(0, 0, 0, 0.1); }
+
+@keyframes at-today-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.at-today-stats {
+  margin: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.at-today-stats > div { padding: 10px 12px; }
+.at-today-stats > div + div { border-left: 1px solid rgba(255, 255, 255, 0.18); }
+.at-today-stats dt { font-size: 12px; font-weight: 600; }
+.at-today-stats dd { margin: 0; font-size: 18px; font-weight: 800; line-height: 1.15; }
+
+.at-today-ctarow { display: flex; align-items: center; gap: 12px; }
+
+.at-today-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 24px;
+  background: linear-gradient(160deg, #fff, #ffe9da);
+  color: #9a2c12;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: inset 0 -2px 0 rgba(154, 44, 18, 0.12), 0 6px 16px rgba(90, 20, 5, 0.28);
+}
+
+.at-today-next { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; line-height: 1.25; }
+.at-today-next b { font-weight: 800; }
+
+/* The compact bar: a zero-height sticky slot at the top of the scroll area,
+   and the bar hanging from it. It floats, so it casts the float shadow. */
+.at-today-compact-slot {
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 6;
+}
+
+.at-today-compact {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 18px;
+  border-radius: 0 0 24px 24px;
+  background: #d2461b;
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(90, 20, 5, 0.3);
+}
+
+.at[data-mode='dark'] .at-today-compact { background: var(--grad-hero); }
+
+.at-today-compact-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.at-today-compact-text b { font-size: 17px; font-weight: 800; line-height: 1.1; }
+.at-today-compact-text > span { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.at-today-dots { display: inline-flex; gap: 4px; flex-shrink: 0; }
+.at-today-dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, 0.32); }
+.at-today-dots i[data-done='true'] { background: var(--lime); }
+.at-today-dots i[data-today='true'] { box-shadow: inset 0 0 0 2px #fff; background: rgba(255, 255, 255, 0.18); }
+
+.at-today-cta-round {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #fff, #ffe9da);
+  color: #9a2c12;
+  cursor: pointer;
+  box-shadow: inset 0 -2px 0 rgba(154, 44, 18, 0.12), 0 4px 12px rgba(90, 20, 5, 0.28);
+}
+
+/* Today's metrics: a grid of cards rather than a rail you had to scroll. */
+.at-moments {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 18px;
+}
+
+.at-moments .at-moment { width: auto; }
+.at-moment-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.at-moment-top .at-moment-icon { margin-bottom: 12px; }
+
+.at-moment-ring { flex-shrink: 0; }
+.at-moment-ring circle { fill: none; stroke-width: 5; stroke: var(--at-tonal); }
+.at-moment-ring circle + circle {
+  stroke: var(--ember);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: at-ring-draw 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards;
+}
+
+@keyframes at-ring-draw { from { stroke-dashoffset: 94.25; } }
+
+.at-moment-spark { display: block; width: 100%; height: 24px; margin: 4px 0 2px; overflow: visible; }
+.at-moment-spark path { fill: none; stroke: var(--ember); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+
+@media (prefers-reduced-motion: reduce) {
+  .at-moment-ring circle + circle { animation: none; transition: none; }
+}
+
+/* Cards arrive one after another, top to bottom. `backwards` holds each one
+   hidden through its delay. */
+.at-enter { animation: at-moment-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .at-today-head, .at-today-glow, .at-today-days span, .at-enter { animation: none; }
+}
 
 /* ---------- greeting ---------- */
 
@@ -426,7 +691,7 @@
    it, so it reads as information rather than as decoration on every card. */
 .at-moment-bar {
   display: block;
-  height: 3px;
+  height: 8px;
   margin-top: 8px;
   border-radius: 999px;
   background: var(--at-tonal);
@@ -439,7 +704,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--clay);
+  background: linear-gradient(90deg, var(--amber), var(--ember));
   transform-origin: left center;
   animation: at-bar-fill 560ms 120ms cubic-bezier(0.22, 0.68, 0.32, 1) backwards;
 }

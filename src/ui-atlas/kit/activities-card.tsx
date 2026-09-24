@@ -9,6 +9,8 @@ export interface ActivityItem {
   desc: string;
   time: string;
   onClick?: () => void;
+  /** Accessible name for the row, when the visible text is not enough. */
+  ariaLabel?: string;
 }
 
 /**
@@ -84,6 +86,7 @@ export function ActivitiesCard({ icon, title, subtitle, items, defaultOpen = fal
                     <button
                       type="button"
                       onClick={item.onClick}
+                      aria-label={item.ariaLabel}
                       disabled={!item.onClick}
                       className="flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 py-2.5 text-left text-[var(--cocoa)] disabled:cursor-default"
                     >

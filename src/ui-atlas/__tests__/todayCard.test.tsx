@@ -104,10 +104,10 @@ describe("Today — what you have trained", () => {
   });
 
   it('stays out of the way of a live session that has logged nothing yet', async () => {
-    // The hero already says a session is running; this card saying "not trained
+    // The header already says a session is running; this card saying "not trained
     // yet" over the top of it is the one reading that would be wrong.
     renderScreen('today', { data: 'empty', now: new Date(), session: {} });
-    await waitFor(() => expect(document.querySelector('.at-hero')).toBeTruthy());
+    await waitFor(() => expect(document.querySelector('.at-today-live')).toBeTruthy());
     expect(card()).toBeNull();
   });
 

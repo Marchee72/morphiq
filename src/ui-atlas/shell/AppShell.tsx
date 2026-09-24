@@ -149,7 +149,7 @@ export const AppShell: React.FC = () => {
     // `reducedMotion="user"`: every motion component follows the OS setting,
     // so no animation has to check it on its own.
     <MotionConfig reducedMotion="user">
-    <div className="app at" data-mode={resolved}>
+    <div className="app at" data-mode={resolved} data-screen={screen}>
       <div className="app-statusbar" />
       <AtlasTopInstallBanner />
       {/* Above the scroll region: "the server cannot be reached" is a fact
