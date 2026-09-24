@@ -2,11 +2,18 @@
    Palette and components live in ./ui-atlas/atlas/atlas.css; the app frame in
    ./ui-atlas/shell/app-base.css. Only what has to sit on <html>/<body> is here. */
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
+/* Declared before anything else so it is the order every later `@layer` joins:
+   the reset below sits under Tailwind's utilities (src/ui-atlas/tw.css), or an
+   unlayered `* { padding: 0 }` would beat every `p-*` class a kit component uses. */
+@layer theme, base, components, utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 html, body {
@@ -19,8 +26,8 @@ body {
   /* The page background is painted on <html> before React mounts (see
      `applySurface`), so a cold start never flashes the browser default. */
   background: inherit;
-  color: #2c241d;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #221a14;
+  font-family: 'Urbanist', system-ui, -apple-system, sans-serif;
   font-size: 15px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
@@ -38,20 +45,12 @@ body {
 button, input, select, textarea { font-family: inherit; }
 
 :focus-visible {
-  outline: 2px solid #c4643c;
+  outline: 2px solid #ff6a2b;
   outline-offset: 2px;
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #e4dacc; border-radius: 999px; }
+::-webkit-scrollbar-thumb { background: #e4d2bc; border-radius: 999px; }
 
-[data-theme='dark'] body { color: #f2e7d9; }
-[data-theme='dark'] ::-webkit-scrollbar-thumb { background: #3a2f27; }
-
-/* Recharts focus and tap outline fixes. */
-.recharts-wrapper,
-.recharts-surface,
-.recharts-responsive-container {
-  outline: none;
-  -webkit-tap-highlight-color: transparent;
-}
+[data-theme='dark'] body { color: #f7ede2; }
+[data-theme='dark'] ::-webkit-scrollbar-thumb { background: #3e3027; }

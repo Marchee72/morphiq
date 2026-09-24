@@ -12,8 +12,7 @@ const CHART_PAD = 6;
  * Was inline in the Body screen and drew weight only, which is why nothing else
  * had a chart — every metric has carried a `series` all along.
  *
- * Deliberately not a charting library: `recharts` is in package.json and unused,
- * and this is a sparkline of twelve points. What it adds over a bare sparkline
+ * Deliberately not a charting library: this is a sparkline of twelve points. What it adds over a bare sparkline
  * is a scale — min and max labels and a dot on the latest point — because a line
  * with no numbers on it says "something changed" and nothing more.
  */

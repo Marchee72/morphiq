@@ -1,98 +1,153 @@
 /* ==========================================================================
-   ATLAS — warm paper-sand palette, large rounded surfaces, one thing at a
-   time. Soft shadows, serif headings, generous touch targets.
+   ATLAS — warm sand and ember, large rounded surfaces, one thing at a time.
+   Urbanist throughout, generous touch targets, relief that says what a thing
+   is (see "Relief" below).
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
    Palettes.
 
-   Light is the concept as designed. Dark keeps the same warm structure after
-   sunset — cocoa surfaces, sand-tinted ink, the clay accent held — rather than
-   inverting to a generic grey. `data-mode` is written by the shell from the
-   user's setting.
+   Light is sand with an ember accent; dark keeps the same warmth after sunset
+   — near-black cocoa, sand-tinted ink, ember held — rather than inverting to a
+   generic grey. `data-mode` is written by the shell from the user's setting.
+   The original names (`--sand`, `--clay`, …) are kept so every rule written
+   against them follows the new palette without being touched.
+
+   Relief (the "D" system, chosen on the design canvas):
+   - primary: ember gradient, a light edge on top, a dark edge below and a
+     coloured shadow — `--d-grad` + `--d-hi`;
+   - secondary (−/+, round icons, buttons on cards): tonal gradient with a soft
+     edge, no border and no outer shadow — `--d-tonal` + `--d-soft`;
+   - the selected pill of a segmented control — `--d-pill` + `--d-soft`;
+   - danger — `--d-danger` + `--d-danger-hi`;
+   - cards: a faint top-to-bottom gradient and a light edge, no outer shadow —
+     `--d-card` + `--d-card-hi`;
+   - only what floats (sheets, notifications, the dock, menus) casts a shadow,
+     `--shadow-float`.
    -------------------------------------------------------------------------- */
 
 .at,
 .at[data-mode='light'] {
-  --sand: #f3ece2;
-  --card: #fffdfa;
-  --cocoa: #2c241d;
-  --clay: #a94f2b;          /* 4.66:1 on sand, 5.47:1 under white text */
-  --clay-strong: #c4643c;   /* the original tone, for fills that carry no text */
-  --sage: #7d8d70;
-  --muted: #736759;         /* 4.70:1 on sand, 5.42:1 on card */
-  --hair: #e4dacc;
+  --sand: #fbf4ea;
+  --card: #f3e6d5;          /* a step darker than the page, so a card reads as one */
+  --cocoa: #221a14;
+  --clay: #c8401a;          /* 4.6:1 on sand, 5.0:1 under white text */
+  --clay-strong: #ff6a2b;   /* ember, for fills that carry no text */
+  --sage: #466d22;          /* achievement ink, on --at-sage-bg */
+  --muted: #6e6153;         /* 5.5:1 on sand, 4.9:1 on card */
+  --hair: #e4d2bc;
 
-  --at-on-cocoa: #f7f1e8;
-  --at-on-cocoa-dim: #e8b79c;
-  --at-ink-soft: #3c352c;
-  --at-tonal: #f1e7da;
-  --at-tonal-soft: #fbeee7;
-  --at-sage-bg: #e7ece1;
-  --at-clay-light: #d98a5e;
-  --at-placeholder: #b4a897;
-  --at-figure-skin: #ece0d1;
-  --at-figure-limb: #e0d0bc;
-  --at-figure-core: #d9a98a;
-  --at-figure-hover: #ddcbb6;
-  --at-shadow: rgba(44, 36, 29, 0.07);
+  --ember: #ff6a2b;
+  --coral: #ff8a5b;
+  --amber: #ffb020;
+  --lime: #c6f24e;          /* always with dark ink: --lime-ink */
+  --lime-ink: #233300;
+  --lime-bg: #e6f8b5;
+  --grad-hero: linear-gradient(160deg, #d2461b 0%, #b23a17 55%, #9a2c12 100%);
+  --glow: radial-gradient(circle, rgba(255, 176, 32, 0.55), rgba(255, 176, 32, 0) 70%);
+  --shadow-float: 0 16px 40px rgba(30, 15, 5, 0.28);
+
+  --d-grad: linear-gradient(140deg, #d2461b, #b23a17 55%, #9a2c12);
+  --d-hi: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 0 rgba(0, 0, 0, 0.12), 0 6px 16px rgba(154, 44, 18, 0.28);
+  --d-tonal: linear-gradient(160deg, #f4e4d2, #e2cbb2);
+  --d-soft: inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(120, 60, 20, 0.1);
+  --d-card: linear-gradient(170deg, #f8ede0, #efdfcb);
+  --d-card-hi: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --d-pill: linear-gradient(160deg, #ffffff, #f1e3d2);
+  --d-danger: linear-gradient(140deg, #c24a2f, #a8321a);
+  --d-danger-hi: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 0 rgba(0, 0, 0, 0.12), 0 6px 16px rgba(168, 50, 26, 0.28);
+
+  --at-on-cocoa: #fbf4ea;
+  --at-on-cocoa-dim: #ffb089;
+  --at-ink-soft: #3a2e25;
+  --at-tonal: #ead7c1;
+  --at-tonal-soft: #fbe6d8;
+  --at-sage-bg: #e6f8b5;
+  --at-clay-light: #ff8a5b;
+  --at-placeholder: #a8957f;
+  --at-figure-skin: #eadbc8;
+  --at-figure-limb: #dfcbb3;
+  --at-figure-core: #f0a27a;
+  --at-figure-hover: #d8c0a5;
+  --at-shadow: rgba(120, 50, 20, 0.1);
   /* The dock is a floating control surface, not page content, so it stays a dark
      pill in both modes rather than inverting along with the page. */
-  --at-dock-bg: #2c241d;
-  --at-dock-ink: rgba(247, 241, 232, 0.5);
+  --at-dock-bg: #221a14;
+  --at-dock-ink: rgba(255, 244, 234, 0.6);
   --at-on-clay: #fff;
 
-  /* Five rungs of perceived exertion, sage through clay to a burnt deep.
-     Chosen to read as one ramp rather than as five unrelated chips: the hue
-     rotates and the value drops together, so the order survives a squint and
-     does not depend on the numbers being read. */
-  --at-effort-1: #6f8161;
-  --at-effort-2: #93813f;
-  --at-effort-3: #c4643c;
-  --at-effort-4: #a94f2b;
-  --at-effort-5: #86341a;
+  /* Five rungs of perceived exertion, green through amber to ember. Chosen to
+     read as one ramp rather than as five unrelated chips: the hue rotates and
+     the value drops together, so the order survives a squint. Every rung holds
+     white text at 4.5:1 or better. */
+  --at-effort-1: #4f7a28;
+  --at-effort-2: #8a6d12;
+  --at-effort-3: #b85a14;
+  --at-effort-4: #c8401a;
+  --at-effort-5: #9a2c12;
 }
 
 .at[data-mode='dark'] {
-  --sand: #1a1512;
-  --card: #241d18;
-  --cocoa: #f2e7d9;          /* ink and surface swap roles; the hue does not */
-  --clay: #e08050;
-  --clay-strong: #c4643c;
-  --sage: #97a888;
-  --muted: #a29483;
-  --hair: #3a2f27;
+  --sand: #140f0c;
+  --card: #2b211b;          /* a step lighter than the page */
+  --cocoa: #f7ede2;          /* ink and surface swap roles; the hue does not */
+  --clay: #ff6b35;          /* dark ink on it (--at-on-clay); 6.6:1 as text on sand */
+  --clay-strong: #ff6b35;
+  --sage: #b6e05a;
+  --muted: #b8a898;
+  --hair: #3e3027;
 
-  --at-on-cocoa: #241d18;
-  --at-on-cocoa-dim: #8a6a52;
-  --at-ink-soft: #d8cabb;
-  --at-tonal: #33291f;
-  --at-tonal-soft: #3a2a22;
-  --at-sage-bg: #262c22;
-  --at-clay-light: #b56743;
-  --at-placeholder: #6d6055;
-  --at-figure-skin: #33291f;
-  --at-figure-limb: #3d3128;
-  --at-figure-core: #6b4634;
-  --at-figure-hover: #4a3b30;
+  --ember: #ff6b35;
+  --coral: #ff8a5b;
+  --amber: #ffb020;
+  --lime: #c6f24e;
+  --lime-ink: #233300;
+  --lime-bg: #2f3a12;
+  --grad-hero: linear-gradient(160deg, #d2461b 0%, #b23a17 55%, #9a2c12 100%);
+  --glow: radial-gradient(circle, rgba(255, 107, 53, 0.3), rgba(255, 107, 53, 0) 70%);
+  --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.5);
+
+  --d-grad: linear-gradient(140deg, #ff9a5e, #ff6b35 55%, #e8531f);
+  --d-hi: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 0 rgba(0, 0, 0, 0.12), 0 6px 16px rgba(0, 0, 0, 0.35);
+  --d-tonal: linear-gradient(160deg, #4a3628, #33241b);
+  --d-soft: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  --d-card: linear-gradient(170deg, #33271f, #261d18);
+  --d-card-hi: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --d-pill: linear-gradient(160deg, #56443a, #3a2d24);
+  --d-danger: linear-gradient(140deg, #c24a2f, #a8321a);
+  --d-danger-hi: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.15), 0 6px 16px rgba(0, 0, 0, 0.35);
+
+  --at-on-cocoa: #140f0c;
+  --at-on-cocoa-dim: #a0673f;
+  --at-ink-soft: #e3d5c6;
+  --at-tonal: #3f2d22;
+  --at-tonal-soft: #3a2519;
+  --at-sage-bg: #2f3a12;
+  --at-clay-light: #d9683c;
+  --at-placeholder: #7a6a5c;
+  --at-figure-skin: #3f2d22;
+  --at-figure-limb: #4a372b;
+  --at-figure-core: #b0502a;
+  --at-figure-hover: #574235;
   --at-shadow: rgba(0, 0, 0, 0.45);
-  --at-dock-bg: #302620;   /* lifted off the page so the pill still separates */
-  --at-dock-ink: rgba(242, 231, 217, 0.55);
-  --at-on-clay: #241d18;
+  --at-dock-bg: #2a1f19;   /* lifted off the page so the pill still separates */
+  --at-dock-ink: rgba(247, 237, 226, 0.6);
+  --at-on-clay: #1a0e07;
 
   /* The same ramp after sunset: it climbs in value rather than falling, because
-     against a cocoa page it is the brighter end that reads as the harder one. */
-  --at-effort-1: #97a888;
-  --at-effort-2: #c5a86e;
-  --at-effort-3: #dd8352;
-  --at-effort-4: #e97046;
-  --at-effort-5: #f2603a;
+     against a dark page it is the brighter end that reads as the harder one.
+     Every rung holds the dark --at-on-clay ink at 4.5:1 or better. */
+  --at-effort-1: #9ccc5a;
+  --at-effort-2: #d9b43a;
+  --at-effort-3: #ffa04a;
+  --at-effort-4: #ff7a3d;
+  --at-effort-5: #ff5a2b;
 }
 
 .at {
   background: var(--sand);
   color: var(--cocoa);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -100,7 +155,7 @@
 
 .at .app-statusbar { background: var(--sand); }
 
-.at-serif { font-family: 'Fraunces', Georgia, serif; letter-spacing: -0.02em; }
+.at-serif { font-family: 'Urbanist', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.02em; }
 
 .at-pad { padding: 0 18px; }
 
@@ -122,9 +177,9 @@
 }
 
 .at-greet h1 {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 27px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.025em;
   margin: 3px 0 0;
   line-height: 1.1;
@@ -149,10 +204,10 @@
 /* ---------- surfaces ---------- */
 
 .at-card {
-  background: var(--card);
+  background: var(--d-card);
   border-radius: 28px;
   padding: 20px;
-  box-shadow: 0 2px 3px rgba(64, 44, 26, 0.04), 0 14px 30px -18px rgba(64, 44, 26, 0.35);
+  box-shadow: var(--d-card-hi);
 }
 
 .at-hero {
@@ -177,9 +232,9 @@
 }
 
 .at-hero h2 {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 25px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.15;
   margin: 10px 0 6px;
@@ -219,12 +274,13 @@
   gap: 10px;
   border: 0;
   border-radius: 999px;
-  background: var(--clay);
+  background: var(--d-grad);
   color: var(--at-on-clay);
   font-size: 13.5px;
   font-weight: 650;
   padding: 6px 6px 6px 20px;
   cursor: pointer;
+  box-shadow: var(--d-hi);
 }
 
 .at-btn i {
@@ -245,7 +301,9 @@
   justify-content: center;
   padding: 14px 20px;
 }
-.at-btn[data-ghost='true'] { background: transparent; color: var(--cocoa); border: 1.5px solid var(--hair); padding: 12px 18px; min-height: 44px; }
+.at-btn[data-ghost='true'] { background: var(--d-tonal); color: var(--cocoa); border: 1.5px solid transparent; padding: 12px 18px; min-height: 44px;
+  box-shadow: var(--d-soft);
+}
 
 /* ---------- horizontal snap rail ---------- */
 
@@ -257,9 +315,9 @@
 }
 
 .at-rail-head h3 {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 800;
   margin: 0;
   letter-spacing: -0.02em;
 }
@@ -301,10 +359,10 @@
   scroll-snap-align: start;
   flex: 0 0 auto;
   width: 156px;
-  background: var(--card);
+  background: var(--d-card);
   border-radius: 24px;
   padding: 16px;
-  box-shadow: 0 2px 3px rgba(64, 44, 26, 0.04), 0 12px 26px -18px rgba(64, 44, 26, 0.35);
+  box-shadow: var(--d-card-hi);
   text-align: left;
   border: 0;
   cursor: pointer;
@@ -326,7 +384,7 @@
    sheet, and nothing said so. */
 .at-moment:active {
   transform: scale(0.965);
-  box-shadow: 0 1px 2px rgba(64, 44, 26, 0.05), 0 6px 14px -12px rgba(64, 44, 26, 0.35);
+  box-shadow: var(--d-card-hi);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -347,14 +405,14 @@
 }
 
 .at-moment b {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   display: block;
   font-size: 21px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.03em;
 }
 
-.at-moment b small { font-size: 12px; font-family: 'Inter', sans-serif; color: var(--muted); margin-left: 3px; }
+.at-moment b small { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 3px; }
 
 .at-moment span {
   display: block;
@@ -435,9 +493,9 @@
 
 .at-todaytrain-head b {
   display: block;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.02em;
   margin-top: 2px;
 }
@@ -551,9 +609,9 @@
 }
 
 .at-weekcard-count b {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 34px;
-  font-weight: 600;
+  font-weight: 800;
   line-height: 0.9;
   letter-spacing: -0.03em;
 }
@@ -741,9 +799,9 @@
 
 .at-train-clock b {
   display: block;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 20px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -796,14 +854,15 @@
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  border: 1.5px solid var(--hair);
-  background: var(--card);
+  border: 1.5px solid transparent;
+  background: var(--d-tonal);
   color: var(--cocoa);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
+  box-shadow: var(--d-soft);
 }
 
 /* The swipe surface. Bound here rather than to the screen so the vertical
@@ -855,8 +914,8 @@
   padding: 0;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--card);
-  box-shadow: 0 20px 40px -22px rgba(64, 44, 26, 0.5);
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
   cursor: pointer;
 }
 
@@ -868,7 +927,8 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
+  font-weight: 800;
   font-size: 46px;
   color: var(--at-placeholder);
 }
@@ -891,9 +951,9 @@
 
 .at-exercise-name {
   text-align: center;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 22px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.03em;
   margin: 14px 18px 3px;
 }
@@ -916,12 +976,12 @@
 }
 
 .at-fact {
-  background: var(--card);
+  background: var(--d-card);
   border-radius: 18px;
   padding: 10px 8px;
   text-align: center;
   min-width: 0;
-  box-shadow: 0 2px 3px var(--at-shadow);
+  box-shadow: var(--d-card-hi);
 }
 
 .at-fact small {
@@ -1034,9 +1094,9 @@
 }
 
 .at-setview b {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 26px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
@@ -1058,11 +1118,11 @@
 .at-wells { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 18px; }
 
 .at-well {
-  background: var(--card);
+  background: var(--d-card);
   border-radius: 24px;
   padding: 14px;
   text-align: center;
-  box-shadow: inset 0 1px 0 #fff, 0 10px 24px -18px rgba(64, 44, 26, 0.4);
+  box-shadow: var(--d-card-hi);
 }
 
 .at-well-label {
@@ -1094,14 +1154,14 @@
 }
 
 .at-well-value {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 26px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
 }
 
-.at-well-value small { font-size: 11px; font-family: 'Inter', sans-serif; color: var(--muted); }
+.at-well-value small { font-size: 11px; font-weight: 600; color: var(--muted); }
 
 .at-lastline {
   text-align: center;
@@ -1236,23 +1296,23 @@
 .at-summary-stats[data-cols='3'] b { font-size: 19px; }
 
 .at-summary-stats > div {
-  background: var(--card);
+  background: var(--d-card);
   border-radius: 20px;
   padding: 14px;
   text-align: center;
-  box-shadow: 0 2px 3px var(--at-shadow);
+  box-shadow: var(--d-card-hi);
 }
 
 .at-summary-stats b {
   display: block;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 24px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 
-.at-summary-stats b i { font-style: normal; font-size: 11px; font-family: 'Inter', sans-serif; color: var(--muted); margin-left: 3px; }
+.at-summary-stats b i { font-style: normal; font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 3px; }
 .at-summary-stats small { display: block; margin-top: 3px; font-size: 11px; font-weight: 600; color: var(--muted); }
 
 .at-summary-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 10px; }
@@ -1313,7 +1373,9 @@
 }
 
 .at-btn[data-danger='true'] { color: var(--clay); }
-.at-btn[data-danger='true']:not([data-ghost='true']) { background: var(--clay); color: var(--sand); }
+.at-btn[data-danger='true']:not([data-ghost='true']) { background: var(--d-danger); color: #fff;
+  box-shadow: var(--d-danger-hi);
+}
 
 /* ---------- library: body map + visual grid ---------- */
 
@@ -1322,10 +1384,10 @@
   align-items: center;
   gap: 10px;
   margin: 4px 18px 0;
-  background: var(--card);
+  background: var(--d-card);
   border-radius: 999px;
   padding: 13px 18px;
-  box-shadow: 0 2px 3px rgba(64, 44, 26, 0.04);
+  box-shadow: var(--d-card-hi);
 }
 
 .at-searchpill input {
@@ -1379,9 +1441,9 @@
 .at-map-legend { flex: 1; min-width: 0; }
 
 .at-map-legend h4 {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 800;
   margin: 0 0 4px;
   letter-spacing: -0.02em;
   text-transform: capitalize;
@@ -1432,9 +1494,10 @@
    the primary button), just softened for something reversible. Both sides of
    the mix follow the theme, so nothing inverts after dark. */
 .at-chip[data-on='true'] {
-  background: color-mix(in srgb, var(--clay) 16%, var(--card));
-  border-color: var(--clay);
+  background: var(--d-pill);
+  border-color: transparent;
   color: var(--clay);
+  box-shadow: var(--d-soft);
 }
 
 .at-grid {
@@ -1447,7 +1510,7 @@
 }
 
 .at-ex {
-  background: var(--card);
+  background: var(--d-card);
   border-radius: 24px;
   overflow: hidden;
   border: 0;
@@ -1455,7 +1518,7 @@
   cursor: pointer;
   text-align: left;
   color: inherit;
-  box-shadow: 0 2px 3px rgba(64, 44, 26, 0.04), 0 12px 26px -20px rgba(64, 44, 26, 0.4);
+  box-shadow: var(--d-card-hi);
 }
 
 .at-ex-img { display: block; position: relative; aspect-ratio: 4 / 3; background: var(--at-figure-skin); }
@@ -1507,9 +1570,9 @@
 
 .at-callout b {
   display: block;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 17px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.03em;
 }
 
@@ -1522,9 +1585,9 @@
 }
 
 .at-bignum b {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 52px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.045em;
   line-height: 1;
 }
@@ -1600,9 +1663,9 @@
 }
 
 .at-bubble[data-from='coach'] {
-  background: var(--card);
+  background: var(--d-card);
   border-bottom-left-radius: 8px;
-  box-shadow: 0 2px 3px rgba(64, 44, 26, 0.04);
+  box-shadow: var(--d-card-hi);
 }
 
 .at-bubble[data-from='user'] {
@@ -1621,16 +1684,16 @@
 }
 
 .at-routine {
-  background: var(--card);
+  background: var(--d-card);
   border-radius: 28px;
   padding: 18px;
-  box-shadow: 0 2px 3px rgba(64, 44, 26, 0.04), 0 14px 30px -20px rgba(64, 44, 26, 0.4);
+  box-shadow: var(--d-card-hi);
 }
 
 .at-routine h4 {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 19px;
-  font-weight: 600;
+  font-weight: 800;
   margin: 0 0 2px;
   letter-spacing: -0.025em;
 }
@@ -1758,7 +1821,7 @@ button.at-routine-item { cursor: pointer; }
   padding: 7px;
   background: var(--at-dock-bg);
   border-radius: 999px;
-  box-shadow: 0 14px 30px -14px var(--at-shadow);
+  box-shadow: var(--shadow-float);
 }
 
 .at-dock button {
@@ -1845,7 +1908,8 @@ button.at-routine-item { cursor: pointer; }
 
 .at-empty h4 {
   margin: 0;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
+  font-weight: 800;
   font-size: 19px;
   letter-spacing: -0.02em;
 }
@@ -1878,9 +1942,9 @@ button.at-routine-item { cursor: pointer; }
 }
 
 .at-launch-repeat b {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.02em;
 }
 
@@ -2100,9 +2164,10 @@ button.at-routine-item { cursor: pointer; }
   width: 44px;
   height: 44px;
   flex-shrink: 0;
-  background: var(--clay);
+  background: var(--d-grad);
   color: var(--at-on-clay);
   border: none;
+  box-shadow: var(--d-hi);
 }
 
 .at-searchpill button.at-round:disabled { opacity: 0.4; }
@@ -2432,8 +2497,9 @@ button.at-routine-item { cursor: pointer; }
   width: calc((100% - 6px) / var(--at-seg-n));
   transform: translateX(calc(100% * var(--at-seg-i)));
   border-radius: 999px;
-  background: var(--at-tonal);
+  background: var(--d-pill);
   transition: transform 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
+  box-shadow: var(--d-soft);
 }
 
 /* Positioned so they paint over the thumb — later in the DOM wins, no z-index. */
@@ -2541,9 +2607,9 @@ button.at-routine-item { cursor: pointer; }
 
 .at-settings-name {
   display: block;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 19px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.02em;
   margin-top: 4px;
 }
@@ -2596,7 +2662,7 @@ button.at-routine-item { cursor: pointer; }
 .at-danger small { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
 .at-danger p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--cocoa); }
 
-.at-chip[data-danger='true'] { background: var(--clay); color: var(--at-on-clay); border-color: var(--clay); }
+.at-chip[data-danger='true'] { background: var(--d-danger); color: #fff; border-color: transparent; }
 .at-chip[data-static='true'] { cursor: default; }
 
 /* ---------- feeling chips ---------- */
@@ -2995,9 +3061,9 @@ button.at-routine-item { cursor: pointer; }
 }
 
 .at-history-dayhead b {
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.01em;
   text-transform: capitalize;
 }
@@ -3450,8 +3516,8 @@ button.at-routine-item { cursor: pointer; }
   min-width: 0;
   padding: 14px 0 12px;
   border-radius: 22px;
-  background: var(--card);
-  box-shadow: 0 2px 3px var(--at-shadow);
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
   text-align: center;
 }
 
@@ -3468,9 +3534,9 @@ button.at-routine-item { cursor: pointer; }
   width: 100%;
   border: 0;
   background: none;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 30px;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--cocoa);
   cursor: pointer;
@@ -3493,9 +3559,9 @@ button.at-routine-item { cursor: pointer; }
   border-bottom: 2px solid var(--clay);
   background: none;
   text-align: center;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
   font-size: 30px;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--cocoa);
   padding: 4px 0 2px;
   outline: none;
@@ -3910,9 +3976,10 @@ button.at-routine-item { cursor: pointer; }
   flex-shrink: 0;
   width: 44px;
   height: 44px;
-  background: var(--clay);
+  background: var(--d-grad);
   color: var(--at-on-clay);
   border: none;
+  box-shadow: var(--d-hi);
 }
 
 .at-buddy-composer .at-round:disabled { opacity: 0.4; }
@@ -4064,7 +4131,8 @@ button.at-routine-item { cursor: pointer; }
 .at-buddy-routinetitle {
   display: block;
   margin-top: 3px;
-  font-family: 'Fraunces', Georgia, serif;
+  font-family: 'Urbanist', system-ui, sans-serif;
+  font-weight: 800;
   font-size: 15px;
   letter-spacing: -0.02em;
 }

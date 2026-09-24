@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { MotionConfig } from 'motion/react';
 import { useStore } from '../../presentation/state/store';
 import { resolveMode, SURFACE } from '../../presentation/state/preferences';
 import { useAppData, useAppActions } from '../data/useAppData';
@@ -22,6 +23,7 @@ import { AtlasSyncBanner } from '../atlas/AtlasSyncBanner';
 import { AtlasResumeBanner } from '../atlas/AtlasResumeBanner';
 
 import './app-base.css';
+import '../tw.css';
 import '../atlas/atlas.css';
 
 const SCREENS: Record<ScreenId, React.FC> = {
@@ -111,6 +113,9 @@ export const AppShell: React.FC = () => {
   }, [syncNote]);
 
   return (
+    // `reducedMotion="user"`: every motion component follows the OS setting,
+    // so no animation has to check it on its own.
+    <MotionConfig reducedMotion="user">
     <div className="app at" data-mode={resolved}>
       <div className="app-statusbar" />
       <AtlasTopInstallBanner />
@@ -129,5 +134,6 @@ export const AppShell: React.FC = () => {
       <AtlasNav active={screen} onNavigate={setActiveTab} />
       <AppOverlays onClose={actions.closeOverlay} />
     </div>
+    </MotionConfig>
   );
 };

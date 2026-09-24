@@ -160,7 +160,7 @@ export interface SocialState {
 /** Overlays the shell can open. Any screen can request one. */
 export type OverlayId =
   | 'settings' | 'logWeight' | 'addFood' | 'exercisePicker'
-  | 'dayNote' | 'sessionEditor' | 'quickAdd' | 'history'
+  | 'dayNote' | 'history'
   | 'startSession' | 'routineMerge' | 'resumeSession'
   // Reached from Today's rail and from the day sheet, so it earns a slot in the
   // shell rather than sitting on one screen's local state.
