@@ -29,7 +29,7 @@ export const AppMark: React.FC<{
    * figure on a near-black page in dark mode, which is why the splash looked
    * empty.
    */
-  const cocoa = variant === 'icon' ? MARK_COLOURS.cocoa : 'var(--cocoa, #2c241d)';
+  const cocoa = variant === 'icon' ? MARK_COLOURS.cocoa : 'var(--cocoa, #221a14)';
   const clay = variant === 'icon' ? MARK_COLOURS.clay : 'var(--ember, #ff6a2b)';
 
   return (

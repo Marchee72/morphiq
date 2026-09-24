@@ -22,7 +22,7 @@ const GEOMETRY = {
   legRight: { x: 33.5, y: 39, width: 7, height: 13.5, rx: 3.5 },
 };
 
-const COLOURS = { sand: '#f3ece2', cocoa: '#2c241d', clay: '#c4643c' };
+const COLOURS = { sand: '#fbf4ea', cocoa: '#221a14', clay: '#ff6a2b' };
 const PLATE_RADIUS = 15;
 
 const rect = (r, fill) =>

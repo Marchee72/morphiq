@@ -3621,7 +3621,10 @@ button.at-routine-item { cursor: pointer; }
   inset: 0;
   z-index: 9000;
   overflow-y: auto;
-  background: var(--sand);
+  /* The brand's ember glow behind the figure, the same bloom the splash has. */
+  background:
+    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--ember) 24%, transparent), transparent 55%),
+    var(--sand);
   color: var(--cocoa);
   display: flex;
   align-items: center;
