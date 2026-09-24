@@ -1,4 +1,6 @@
 import React, { useId } from 'react';
+import { FluidTabs } from '../kit/fluid-tabs';
+import { LiquidToggle } from '../kit/liquid-toggle';
 
 /**
  * Form controls in Atlas's language.
@@ -90,17 +92,7 @@ export const AtlasSwitch: React.FC<{
     <div className="at-field">
       <div className="at-switch-row">
         <label className="at-field-label" htmlFor={id}>{label}</label>
-        <button
-          id={id}
-          type="button"
-          role="switch"
-          aria-checked={checked}
-          className="at-switch"
-          data-on={checked}
-          onClick={() => onChange(!checked)}
-        >
-          <span className="at-switch-knob" />
-        </button>
+        <LiquidToggle id={id} checked={checked} onChange={onChange} />
       </div>
       {hint && <span className="at-field-hint">{hint}</span>}
     </div>
@@ -114,13 +106,10 @@ export interface AtlasOption<T extends string> {
 }
 
 /**
- * A sliding segmented control — one track, one thumb that moves to the chosen
- * option. For the small closed sets where the options are alternatives to each
- * other (front/back, on/off) rather than a list you scan, which is what
- * `AtlasChoice`'s loose chips are for.
- *
- * The thumb is positioned from two custom properties instead of per-option
- * classes, so it works for any number of options without measuring anything.
+ * A segmented control — one track, one pill that springs to the chosen option
+ * (`FluidTabs`). For the small closed sets where the options are alternatives
+ * to each other (front/back, 7d/30d/3m) rather than a list you scan, which is
+ * what `AtlasChoice`'s loose chips are for.
  */
 export function AtlasSegment<T extends string>({ label, options, value, onChange }: {
   label?: string;
@@ -128,33 +117,10 @@ export function AtlasSegment<T extends string>({ label, options, value, onChange
   value: T | undefined;
   onChange: (value: T) => void;
 }): React.ReactElement {
-  // Falls back to the first option rather than hiding the thumb: a segmented
-  // control with nothing selected reads as broken, and every caller here has a
-  // value at all times.
-  const index = Math.max(0, options.findIndex(option => option.value === value));
   return (
     <div className="at-field">
       {label && <span className="at-field-label">{label}</span>}
-      <div
-        className="at-seg"
-        role="radiogroup"
-        aria-label={label}
-        style={{ '--at-seg-n': options.length, '--at-seg-i': index } as React.CSSProperties}
-      >
-        <span className="at-seg-thumb" aria-hidden="true" />
-        {options.map(option => (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={value === option.value}
-            data-on={value === option.value}
-            onClick={() => onChange(option.value)}
-          >
-            {option.icon}{option.label}
-          </button>
-        ))}
-      </div>
+      <FluidTabs label={label} options={options} value={value} onChange={onChange} />
     </div>
   );
 }

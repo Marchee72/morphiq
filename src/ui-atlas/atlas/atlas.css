@@ -1451,7 +1451,7 @@
 
 .at-map-legend p { margin: 0 0 12px; font-size: 12px; color: var(--muted); line-height: 1.45; }
 
-/* Just spacing: the Front/Back control itself is `.at-seg`, rendered by
+/* Just spacing: the Front/Back control itself is `FluidTabs`, rendered by
    `AtlasSegment` inside this wrapper. */
 .at-map-side { margin-top: 4px; }
 
@@ -2412,35 +2412,6 @@ button.at-routine-item { cursor: pointer; }
 
 .at-switch-row .at-field-label { margin: 0; }
 
-.at-switch {
-  flex-shrink: 0;
-  position: relative;
-  width: 46px;
-  height: 27px;
-  padding: 0;
-  border: 1.5px solid var(--hair);
-  border-radius: 999px;
-  background: var(--at-tonal);
-  cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease;
-}
-
-.at-switch[data-on='true'] { background: var(--clay); border-color: var(--clay); }
-.at-switch:active .at-switch-knob { width: 22px; } /* a squash on press, the way a real switch gives */
-
-.at-switch-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--card);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), width 0.12s ease;
-}
-
-.at-switch[data-on='true'] .at-switch-knob { transform: translateX(19px); }
 
 .at-input-wrap { position: relative; display: flex; align-items: center; }
 
@@ -2481,54 +2452,6 @@ button.at-routine-item { cursor: pointer; }
    light, so filling the thumb with it reads as raised in both modes. Filling
    the selected option with `--cocoa` — which swaps with `--sand` after dark —
    is what made the old chips look like a light-mode block at night. */
-.at-seg {
-  position: relative;
-  display: flex;
-  padding: 3px;
-  border: 1.5px solid var(--hair);
-  border-radius: 999px;
-}
-
-.at-seg-thumb {
-  position: absolute;
-  top: 3px;
-  bottom: 3px;
-  left: 3px;
-  width: calc((100% - 6px) / var(--at-seg-n));
-  transform: translateX(calc(100% * var(--at-seg-i)));
-  border-radius: 999px;
-  background: var(--d-pill);
-  transition: transform 0.24s cubic-bezier(0.2, 0.9, 0.3, 1);
-  box-shadow: var(--d-soft);
-}
-
-/* Positioned so they paint over the thumb — later in the DOM wins, no z-index. */
-.at-seg button {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 650;
-  color: var(--muted);
-  cursor: pointer;
-  transition: color 0.18s ease;
-}
-
-.at-seg button[data-on='true'] { color: var(--cocoa); }
-
-@media (prefers-reduced-motion: reduce) {
-  .at-seg-thumb { transition: none; }
-}
-
 /* ---------- onboarding ----------
    Sits outside the app shell (there is no profile yet) but inside an `.at`
    wrapper, so it shares the palette, the fonts and the form controls. */
@@ -4275,7 +4198,7 @@ button.at-routine-item { cursor: pointer; }
   color: var(--muted);
 }
 
-/* A definite width, because `.at-seg button` is `flex: 1; min-width: 0` — in a
+/* A definite width, because each `FluidTabs` option is `flex: 1; min-width: 0` — in a
    row that is sized to its content, that resolves to no content at all and the
    two labels collapse into each other. Under the figure it inherited the
    column's 96px and the question never came up. */

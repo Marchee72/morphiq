@@ -59,7 +59,7 @@ export interface Formatters {
   bpm(value: number): string;
 }
 
-const LOCALE: Record<Lang, string> = { en: 'en-GB', es: 'es-ES' };
+export const LOCALE: Record<Lang, string> = { en: 'en-GB', es: 'es-ES' };
 
 const MS_PER_DAY = 86_400_000;
 
