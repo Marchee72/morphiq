@@ -24,7 +24,7 @@ export const AtlasExerciseDetail: React.FC<{
   onClose: () => void;
 }> = ({ exercise, onClose }) => {
   const { t, tp, fmt, lang } = useT();
-  const { catalog, session, exerciseHistory, exerciseStats } = useAppData();
+  const { catalog, session, sessionExercises, exerciseHistory, exerciseStats } = useAppData();
   const actions = useAppActions();
   const favouriteIds = useStore(s => s.favoriteExerciseIds);
   const addExercise = useStore(s => s.addActiveSessionExercise);
@@ -64,7 +64,9 @@ export const AtlasExerciseDetail: React.FC<{
           >
             <Heart size={15} fill={isFavourite ? 'var(--clay)' : 'none'} /> {t('detail.favourite')}
           </button>
-          {session && (
+          {/* Not when it is already in the session — opened from Train's GIF,
+              it would offer to add the lift you are standing over. */}
+          {session && !sessionExercises.some(ex => ex.exerciseId === exercise.id) && (
             <button
               className="at-btn"
               onClick={() => { addExercise({ id: exercise.id, name: exercise.name }); onClose(); }}

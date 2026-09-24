@@ -194,10 +194,15 @@ describe('— full session flow', () => {
       });
     }
 
-    // 4. The exercise reads as complete, and with nothing left to log the
-    //    primary action becomes finishing rather than another set.
+    // 4. The exercise reads as complete and offers the next set on demand; the
+    //    bar asks to finish the exercise, and once that is answered, finishing
+    //    the session is one tap away.
     await waitFor(() => expect(text()).toMatch(/Exercise complete/i));
-    expect(document.querySelector('.at-train-actions')?.textContent).toMatch(/finish session/i);
+    expect(screen.getByRole('button', { name: /add set 2/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /finish exercise/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^skip$/i }));
+    await waitFor(() =>
+      expect(document.querySelector('.at-train-actions')?.textContent).toMatch(/finish session/i));
     // Adding another exercise stays available in the body of the screen.
     expect(screen.getAllByRole('button', { name: /add exercise/i }).length).toBeGreaterThan(0);
   });

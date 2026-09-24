@@ -14,8 +14,10 @@ import { cn } from './cn';
  * The width follows its content with a spring (`layout`), so the swap from the
  * action's label to the undo label does not jump.
  */
-export function UndoAction({ label, undoLabel, seconds = 5, onCommit, icon, className }: {
+export function UndoAction({ label, ariaLabel, undoLabel, seconds = 5, onCommit, icon, className }: {
   label: ReactNode;
+  /** Accessible name before the countdown, when `label` is only an icon. */
+  ariaLabel?: string;
   undoLabel: string;
   seconds?: number;
   onCommit: () => void;
@@ -43,6 +45,7 @@ export function UndoAction({ label, undoLabel, seconds = 5, onCommit, icon, clas
     <motion.button
       type="button"
       onClick={() => setLeft(counting ? null : seconds)}
+      aria-label={counting ? undefined : ariaLabel}
       aria-live="polite"
       layout
       transition={{ type: 'spring', stiffness: 250, damping: 22 }}

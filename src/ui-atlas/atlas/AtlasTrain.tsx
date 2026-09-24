@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Check, Flag, Gauge, Plus, Timer, Trash2, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
 import { borgLabelKey } from '../derive/borg';
-import { WEIGHT_DECIMALS, WEIGHT_PRECISION } from '../derive/weightLadder';
+import { e1rm } from '../derive/records';
 import { useStore } from '../../presentation/state/store';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { useLiveSession } from '../data/useLiveSession';
@@ -17,7 +17,9 @@ import { AtlasGymHub } from './AtlasGymHub';
 import { AtlasSessionEditor } from './AtlasSessionEditor';
 import { AtlasSessionStart } from './AtlasSessionStart';
 import { AtlasRpeSheet } from './AtlasRpeSheet';
-import { AtlasDial } from './AtlasDial';
+import { WeightWheel } from '../kit/weight-wheel';
+import { Stepper } from '../kit/stepper';
+import { SlideToConfirm } from '../kit/slide-to-confirm';
 import { AtlasSetList } from './AtlasSetList';
 import { AtlasSharedStrip } from './AtlasSharedStrip';
 import { AtlasTrainHeader } from './AtlasTrainHeader';
@@ -26,19 +28,6 @@ import { AtlasFinishSheet } from './AtlasFinishSheet';
 import { AtlasExerciseDetail } from './AtlasExerciseDetail';
 
 const MAX_WEIGHT_KG = 300;
-/**
- * The wheel stops on whole kilos; the fraction is a chip row under it.
- *
- * Feeding it the full ladder put four rungs in every kilo, and since a gesture
- * cannot travel past the mounted window, reaching 60 kg measured twenty flicks.
- * `snapWeight` stays the truth for what gets typed and stored — the dial snaps
- * the typed value against these same fractions.
- *
- * Built once: rebuilding an array per render churned the dial.
- */
-const WEIGHT_KILOS = Array.from({ length: MAX_WEIGHT_KG + 1 }, (_, i) => i);
-/** The chip row under the wheel. Copied once, for the same reason the kilos are. */
-const WEIGHT_FRACTIONS = [...WEIGHT_DECIMALS];
 const MAX_REPS = 50;
 
 /**
@@ -289,16 +278,17 @@ export const AtlasTrain: React.FC = () => {
   const exerciseComplete = done === exercise.sets.length && exercise.sets.length > 0;
 
   /**
-   * Most exercises end by logging the last set, not by pressing "finish
-   * exercise" — so asking only from that button would leave nearly everything
-   * unrated. Raised here, during render, rather than from an effect: the sheet
-   * belongs to the same paint as the completion card behind it, and an effect
-   * would show the card unasked for a frame first.
+   * Whether this exercise has been closed — rated, or the question put and
+   * waved away. Until then a finished last set is not the end of the exercise:
+   * sets are added on demand, so the screen offers the next one and "Finish
+   * exercise", which is what asks how hard it was. Raising the question on its
+   * own after every last set would fire after the first set of every exercise.
    */
-  if (exerciseComplete && exercise.rpe === undefined && ask === null && !asked.includes(exercise.name)) {
-    setAsked([...asked, exercise.name]);
+  const closed = exercise.rpe !== undefined || asked.includes(exercise.name);
+  const closeExercise = () => {
+    if (!asked.includes(exercise.name)) setAsked([...asked, exercise.name]);
     setAsk('rate');
-  }
+  };
 
   /**
    * The earliest set still to log. Sets happen in order, so it is also the only
@@ -324,9 +314,9 @@ export const AtlasTrain: React.FC = () => {
    * built to avoid. With more than one exercise behind you, finishing is a
    * deliberate answer and takes the slot back.
    */
-  const soloExerciseDone = sessionComplete && exerciseComplete && sessionExercises.length === 1;
+  const soloExerciseDone = sessionComplete && exerciseComplete && closed && sessionExercises.length === 1;
   /** The action bar's Finish branch — see the two places below that read it. */
-  const barIsFinish = sessionComplete && !soloExerciseDone;
+  const barIsFinish = sessionComplete && closed && !soloExerciseDone;
   const exerciseVolume = exercise.sets.reduce((sum, s) => (s.done ? sum + s.weightKg * s.reps : sum), 0);
 
   /**
@@ -338,6 +328,11 @@ export const AtlasTrain: React.FC = () => {
     (ex, i) => i !== live.cursor.exerciseIdx && ex.sets.some(s => !s.done),
   );
   const nextExercise = nextUnfinished === -1 ? undefined : sessionExercises[nextUnfinished];
+
+  /** What the set on the wheels is worth as a one-rep max, and whether it beats the best. */
+  const best = exercise.best?.e1rm ?? 0;
+  const projected = e1rm(draft.weight, draft.reps);
+  const record = best > 0 && projected > best + 0.05;
 
   const openDetail = () => {
     const full = exercise.exerciseId ? catalog.byId(exercise.exerciseId) : undefined;
@@ -361,6 +356,13 @@ export const AtlasTrain: React.FC = () => {
               {exercise.target && ` · ${exercise.target}`}
               {exercise.equipment && ` · ${exercise.equipment}`}
             </div>
+            {!exerciseComplete && viewSet == null && projected > 0 && (
+              <span className="at-e1rm-chip" data-record={record}>
+                {record
+                  ? t('train.newE1rm', { weight: fmt.upTo(projected, 1) })
+                  : t('train.thisSet', { weight: fmt.upTo(projected, 1) })}
+              </span>
+            )}
           </>
         }
         onNext={() => {
@@ -476,7 +478,12 @@ export const AtlasTrain: React.FC = () => {
                 what belongs here is the answer — or, if the sheet was waved
                 away, the way back to it. Two chances at a question that costs
                 one tap, and no third. */}
-            {exercise.rpe === undefined ? (
+            {!closed && (
+              <button className="at-addset" onClick={live.addSet}>
+                <Plus size={18} strokeWidth={2.6} /> {t('train.addSetN', { n: exercise.sets.length + 1 })}
+              </button>
+            )}
+            {!closed ? null : exercise.rpe === undefined ? (
               <button
                 className="at-btn at-rpe-reopen"
                 data-ghost="true"
@@ -509,31 +516,25 @@ export const AtlasTrain: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="at-dials">
-            <AtlasDial
+        <div className="at-pad">
+          <div className="at-card at-dials">
+            <WeightWheel
               label={t('train.weight')}
               value={draft.weight}
               onChange={draft.setWeight}
-              min={0}
+              best={exercise.best?.e1rm}
               max={MAX_WEIGHT_KG}
-              // Unused when `values` is given, but the prop is required and the
-              // whole-kilo rung is what the ladder is built around.
-              step={1}
-              values={WEIGHT_KILOS}
-              fractions={WEIGHT_FRACTIONS}
-              suffix={t('unit.kg')}
-              // Three decimals, not the default two: 80.125 renders as 80.13 at
-              // two and the dial would disagree with the value it holds.
-              formatValue={v => fmt.upTo(v, WEIGHT_PRECISION)}
             />
-            <AtlasDial
-              label={t('train.reps')}
+            <Stepper
               value={draft.reps}
               onChange={draft.setReps}
               min={1}
               max={MAX_REPS}
-              step={1}
+              unit={t('train.reps').toLowerCase()}
+              decLabel={t('train.decrease', { label: t('train.reps') })}
+              incLabel={t('train.increase', { label: t('train.reps') })}
             />
+          </div>
         </div>
       )}
 
@@ -600,15 +601,19 @@ export const AtlasTrain: React.FC = () => {
           >
             {t('train.backToSet', { n: live.setIdx + 1 })}
           </button>
-        ) : barIsFinish ? (
-          <button
-            className="at-btn"
-            data-block="true"
-            disabled={finishing}
-            onClick={() => setFinishingAt(new Date())}
-          >
-            <Flag size={16} /> {finishing ? t('train.finishing') : t('train.finish')}
+        ) : exerciseComplete && !closed ? (
+          <button className="at-btn" data-block="true" onClick={closeExercise}>
+            <Flag size={16} /> {t('train.finishExercise')}
           </button>
+        ) : barIsFinish ? (
+          // A slide rather than a tap: ending the session is the one action
+          // here a stray thumb must not trigger. It opens the finish sheet.
+          <SlideToConfirm
+            key={finishingAt ? 'open' : 'idle'}
+            label={finishing ? t('train.finishing') : t('train.slideToFinish')}
+            disabled={finishing}
+            onConfirm={() => setFinishingAt(new Date())}
+          />
         ) : exerciseComplete && nextExercise ? (
           <button
             className="at-btn"

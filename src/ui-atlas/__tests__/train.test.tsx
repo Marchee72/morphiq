@@ -14,6 +14,24 @@ const primaryAction = () =>
   document.querySelector('.at-train-actions .at-btn:not([data-ghost])')?.textContent ?? '';
 const text = () => document.body.textContent?.replace(/\s+/g, ' ') ?? '';
 
+/**
+ * Closes the exercise on screen the way the bar offers it once its sets are in:
+ * "Finish exercise", then skip the effort question. Sets are added on demand,
+ * so a done last set no longer closes the exercise by itself.
+ */
+const closeExercise = async () => {
+  fireEvent.click(await screen.findByRole('button', { name: /finish exercise/i }));
+  fireEvent.click(await screen.findByRole('button', { name: /^skip$/i }));
+};
+
+/** Rates on the effort sheet: the slider opens on 13; the keys move it and Save commits. */
+const rate = async (n: number) => {
+  const slider = await screen.findByRole('slider', { name: /effort/i });
+  fireEvent.keyDown(slider, { key: 'Home' });
+  for (let i = 6; i < n; i++) fireEvent.keyDown(slider, { key: 'ArrowRight' });
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^save ${n}$`, 'i') }));
+};
+
 // The summary outlives the session it describes by design, so it also outlives
 // the test that produced it unless it is cleared for every one of them.
 beforeEach(async () => {
@@ -112,6 +130,7 @@ describe('Train', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /go to barbell row/i }));
+    await closeExercise();
     await waitFor(() =>
       expect(document.querySelector('.at-train-actions')?.textContent)
         .toMatch(/next: barbell bench press/i),
@@ -153,7 +172,9 @@ describe('Train', () => {
       },
     });
 
-    await waitFor(() => expect(primaryAction()).toMatch(/finish session/i));
+    await closeExercise();
+    // A slide rather than a tap: the one action here a stray thumb must not trigger.
+    await waitFor(() => expect(screen.getByRole('button', { name: /slide to finish/i })).toBeInTheDocument());
   });
 
   /**
@@ -174,12 +195,14 @@ describe('Train', () => {
 
     it('keeps adding an exercise as the primary action, not finishing', async () => {
       soloDone();
+      await closeExercise();
       await waitFor(() => expect(primaryAction()).toMatch(/add exercise/i));
       expect(primaryAction()).not.toMatch(/finish session/i);
     });
 
     it('leaves finishing one tap away, as a ghost under it', async () => {
       soloDone();
+      await closeExercise();
       await waitFor(() => expect(primaryAction()).toMatch(/add exercise/i));
       const ghost = document.querySelector('.at-train-actions .at-btn[data-ghost]');
       expect(ghost?.textContent).toMatch(/finish session/i);
@@ -232,40 +255,40 @@ describe('Train', () => {
     const names = () =>
       (useStore.getState().activeSession?.routineExercises ?? []).map(e => e.exerciseName);
 
-    it('asks before dropping an exercise that has sets logged against it', async () => {
+    /** A second of the undo countdown, the way the component counts it. */
+    const second = () => act(() => { vi.advanceTimersByTime(1000); });
+
+    it('counts down with an undo before dropping an exercise with sets logged', async () => {
       renderScreen('train', { data: 'rich', session: twoExercises });
       await openList();
-
-      fireEvent.click(trashButtons()[0]);
-
-      // The count is the point: the confirmation has to name what goes.
-      await waitFor(() => expect(text()).toMatch(/2 logged sets|2 series hechas/i));
-      expect(names()).toContain('Barbell Bench Press');
+      vi.useFakeTimers();
+      try {
+        fireEvent.click(trashButtons()[0]);
+        // The count is the point: the undo names what goes.
+        expect(screen.getByRole('button', { name: /undo · 2 sets go/i })).toBeTruthy();
+        expect(names()).toContain('Barbell Bench Press');
+        for (let i = 0; i < 5; i++) second();
+        expect(names()).toEqual(['Barbell Row']);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
-    it('keeps the exercise, and its sets, when the question is declined', async () => {
+    it('keeps the exercise, and its sets, when undone in time', async () => {
       renderScreen('train', { data: 'rich', session: twoExercises });
       await openList();
-
-      fireEvent.click(trashButtons()[0]);
-      await waitFor(() => expect(screen.getByRole('button', { name: /^(cancel|cancelar)$/i })).toBeTruthy());
-      fireEvent.click(screen.getByRole('button', { name: /^(cancel|cancelar)$/i }));
-
-      await waitFor(() => expect(trashButtons().length).toBe(2));
+      vi.useFakeTimers();
+      try {
+        fireEvent.click(trashButtons()[0]);
+        second(); second();
+        fireEvent.click(screen.getByRole('button', { name: /undo · 2 sets go/i }));
+        for (let i = 0; i < 6; i++) second();
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(trashButtons().length).toBe(2);
       expect(names()).toContain('Barbell Bench Press');
       expect(useStore.getState().activeSession?.sets).toHaveLength(2);
-    });
-
-    it('drops it once the question is answered', async () => {
-      renderScreen('train', { data: 'rich', session: twoExercises });
-      await openList();
-
-      fireEvent.click(trashButtons()[0]);
-      // Only the confirm button carries the label now — the icon it replaced is gone.
-      await waitFor(() => expect(screen.getAllByRole('button', { name: /^(remove|quitar)$/i })).toHaveLength(2));
-      fireEvent.click(screen.getAllByRole('button', { name: /^(remove|quitar)$/i })[0]);
-
-      await waitFor(() => expect(names()).toEqual(['Barbell Row']));
     });
 
     it('does not ask about an exercise with nothing logged against it', async () => {
@@ -276,25 +299,23 @@ describe('Train', () => {
       fireEvent.click(trashButtons()[1]);
 
       await waitFor(() => expect(names()).toEqual(['Barbell Bench Press']));
-      expect(text()).not.toMatch(/logged sets? go|series hechas|serie hecha/i);
+      expect(text()).not.toMatch(/undo/i);
     });
 
-    it('forgets the question when the panel is closed', async () => {
-      // Closing with the X reads as "cancel". The panel used to stay mounted
-      // behind an `if (!open) return null`, so the answer stayed armed and
-      // reopening the list put an exercise and its sets one tap from gone.
+    it('cancels the countdown when the panel is closed', async () => {
+      // Closing with the X reads as "cancel", so it has to mean it: the panel
+      // unmounts, and the countdown with it.
       renderScreen('train', { data: 'rich', session: twoExercises });
       await openList();
-
-      fireEvent.click(trashButtons()[0]);
-      await waitFor(() => expect(text()).toMatch(/2 logged sets|2 series hechas/i));
-
-      fireEvent.click(screen.getByRole('button', { name: /^(close|cerrar)$/i }));
-      await waitFor(() => expect(document.querySelector('.at-editor')).toBeNull());
-      await openList();
-
-      expect(document.querySelector('.at-confirm')).toBeNull();
-      expect(text()).not.toMatch(/2 logged sets|2 series hechas/i);
+      vi.useFakeTimers();
+      try {
+        fireEvent.click(trashButtons()[0]);
+        second();
+        fireEvent.click(screen.getByRole('button', { name: /^(close|cerrar)$/i }));
+        for (let i = 0; i < 8; i++) second();
+      } finally {
+        vi.useRealTimers();
+      }
       expect(names()).toContain('Barbell Bench Press');
     });
 
@@ -329,7 +350,7 @@ describe('Train', () => {
         fireEvent.click(trashButtons()[0]);
 
         await waitFor(() => expect(names()).toHaveLength(1));
-        expect(text()).not.toMatch(/2 logged sets|2 series hechas/i);
+        expect(text()).not.toMatch(/sets go/i);
       });
     });
   });
@@ -348,6 +369,7 @@ describe('Train — finishing', () => {
 
   it('asks before ending the session', async () => {
     renderScreen('train', { data: 'rich', session: finishedSession });
+    await closeExercise();
 
     fireEvent.click(screen.getByRole('button', { name: /finish session/i }));
     await waitFor(() => expect(text()).toMatch(/finish this session/i));
@@ -373,6 +395,7 @@ describe('Train — finishing', () => {
     // `finishActiveSession` nulls `activeSession`; a summary derived after that
     // call would describe nothing at all.
     renderScreen('train', { data: 'rich', session: finishedSession });
+    await closeExercise();
 
     fireEvent.click(screen.getByRole('button', { name: /finish session/i }));
     await waitFor(() => expect(text()).toMatch(/finish this session/i));
@@ -419,6 +442,7 @@ describe('Train — finishing', () => {
 
   it('records how the session felt at the point you can answer it', async () => {
     renderScreen('train', { data: 'rich', session: finishedSession });
+    await closeExercise();
 
     fireEvent.click(screen.getByRole('button', { name: /finish session/i }));
     await waitFor(() => expect(text()).toMatch(/finish this session/i));
@@ -474,7 +498,7 @@ describe('Train — perceived exertion', () => {
     renderScreen('train', { data: 'rich', session: partway });
 
     fireEvent.click(await screen.findByRole('button', { name: /finish exercise/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /15/ }));
+    await rate(15);
 
     await waitFor(() => {
       expect(setsOf('Barbell Bench Press').map(s => s.rpe)).toEqual([15, 15]);
@@ -497,7 +521,7 @@ describe('Train — perceived exertion', () => {
     });
 
     fireEvent.click(await screen.findByRole('button', { name: /finish exercise/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /17/ }));
+    await rate(17);
 
     await waitFor(() => {
       const kept = setsOf('Barbell Bench Press');
@@ -522,7 +546,7 @@ describe('Train — perceived exertion', () => {
     });
   });
 
-  it('asks on the exercise that completed itself, which is how most of them end', async () => {
+  it('offers another set before asking, once the last set is in', async () => {
     renderScreen('train', {
       data: 'rich',
       session: {
@@ -531,10 +555,29 @@ describe('Train — perceived exertion', () => {
       },
     });
 
-    // Nobody presses "finish exercise" here — the last set finished it.
-    await waitFor(() => expect(text()).toMatch(/how hard was that/i));
-    fireEvent.click(await screen.findByRole('button', { name: /19/ }));
+    // Sets are added on demand, so the last one in is not the end: the screen
+    // offers the next set and asks only when the exercise is finished.
+    await waitFor(() => expect(screen.getByRole('button', { name: /add set 2/i })).toBeInTheDocument());
+    expect(text()).not.toMatch(/how hard was that/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /finish exercise/i }));
+    await rate(19);
     await waitFor(() => expect(setsOf('Barbell Bench Press')[0].rpe).toBe(19));
+  });
+
+  it('adds the next set on demand', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 1 }],
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: /add set 2/i }));
+    await waitFor(() => expect(text()).toMatch(/Complete set 2/i));
+    // Opened on the set just lifted.
+    expect(screen.getByRole('slider', { name: /weight/i })).toHaveAttribute('aria-valuenow', '80');
   });
 
   it('offers the exercise you were still on when finishing the session', async () => {
@@ -575,6 +618,7 @@ describe('Train — perceived exertion', () => {
         sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
       },
     });
+    await closeExercise();
 
     fireEvent.click(screen.getByRole('button', { name: /finish session/i }));
     await waitFor(() => expect(text()).toMatch(/finish this session/i));
@@ -667,12 +711,12 @@ describe('Train — signature controls', () => {
     useStore.setState(initialState, true);
   });
 
-  it('renders the circular disc and both number dials', () => {
+  it('renders the exercise GIF, the weight wheel and the reps stepper', () => {
     const { container } = renderScreen('train', { session: {} });
     expect(container.querySelector('.at-disc-wrap')).toBeTruthy();
-    // Weight and reps, each a scroll wheel with keyboard entry.
-    expect(container.querySelectorAll('.at-dial')).toHaveLength(2);
-    expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+    // Weight on a wheel with keyboard control; reps on − / +.
+    expect(screen.getByRole('slider', { name: /weight/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /increase reps/i })).toBeInTheDocument();
   });
 
   it('keeps reorder and swap reachable, which the concept never had', () => {
@@ -948,9 +992,8 @@ describe('Train — where the cursor lands', () => {
     });
 
     expect(text()).toMatch(/Complete set 2/i);
-    const dials = document.querySelectorAll('.at-dial');
-    expect(dials[0].querySelector('.at-dial-value')?.textContent).toMatch(/62[.,]5/);
-    expect(dials[1].querySelector('.at-dial-value')?.textContent).toMatch(/^6$/);
+    expect(screen.getByRole('slider', { name: /weight/i })).toHaveAttribute('aria-valuenow', '62.5');
+    expect(document.querySelector('.at-dials')?.textContent).toMatch(/6\s*reps/i);
   });
 
   it('shows a finished set back read-only, with no way to type into it', async () => {
@@ -1269,6 +1312,7 @@ describe('Train — the picker on the completion card', () => {
       },
     });
 
+    await closeExercise();
     await waitFor(() => expect(card()).toBeTruthy());
     expect(bar()).toMatch(/finish/i);
     expect(within(card()).getByRole('button', { name: /pick the next|elegir el siguiente/i })).toBeTruthy();

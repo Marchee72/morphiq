@@ -171,8 +171,12 @@ export interface ActiveSession {
   bodyNotes?: string;
 }
 
-/** Sets an exercise starts with when added by hand. Trimming one is a tap; adding one is a tap. */
-export const DEFAULT_TARGET_SETS = 4;
+/**
+ * Sets an exercise starts with when added by hand: one, and the next is added
+ * on demand ("+ Add set 2", pre-filled from the last). Four blank sets up
+ * front was a plan nobody had made. Routines keep their own `targetSets`.
+ */
+export const DEFAULT_TARGET_SETS = 1;
 
 /**
  * Every set except the ones belonging to `exerciseName`. Keys the same way the
