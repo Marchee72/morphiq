@@ -733,6 +733,10 @@ export const en = {
   'sync.failedTitle': 'Some changes could not be saved',
   'sync.failedBody': 'The server refused {n} of them. They are still on this device.',
   'sync.discard': 'Discard',
+  'sync.discardConfirm_one': 'Discard {n} change? It will not reach the server.',
+  'sync.discardConfirm_other': 'Discard {n} changes? They will not reach the server.',
+  'sync.saved': 'All saved',
+  'sync.savedSub': 'Everything reached the server.',
   'sync.needsConnection': 'This needs a connection.',
 
   // -- Install to the home screen --------------------------------

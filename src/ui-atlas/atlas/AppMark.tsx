@@ -30,7 +30,7 @@ export const AppMark: React.FC<{
    * empty.
    */
   const cocoa = variant === 'icon' ? MARK_COLOURS.cocoa : 'var(--cocoa, #2c241d)';
-  const clay = variant === 'icon' ? MARK_COLOURS.clay : 'var(--clay, #c4643c)';
+  const clay = variant === 'icon' ? MARK_COLOURS.clay : 'var(--ember, #ff6a2b)';
 
   return (
     <svg

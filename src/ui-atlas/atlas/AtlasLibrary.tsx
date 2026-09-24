@@ -65,7 +65,7 @@ export const AtlasLibrary: React.FC = () => {
     </div>
   );
 
-  if (!search.ready) return <AtlasSkeleton />;
+  if (!search.ready) return <AtlasSkeleton shape="library" />;
 
   return (
     <>

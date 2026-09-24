@@ -1840,7 +1840,20 @@ button.at-routine-item { cursor: pointer; }
   cursor: pointer;
 }
 
-.at-dock button[data-on='true'] { background: var(--clay); color: var(--at-on-clay); flex: 1.6; }
+.at-dock button { position: relative; }
+.at-dock button > svg,
+.at-dock-label { position: relative; }
+
+.at-dock button[data-on='true'] { color: var(--at-on-clay); flex: 1.6; }
+
+/* The ember pill behind the active tab, shared across tabs so it slides. */
+.at-dock-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--d-grad);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+}
 
 /* ==========================================================================
    Additions for the real app — states the showcase never had to render.
@@ -1975,17 +1988,33 @@ button.at-routine-item { cursor: pointer; }
 
 .at-skel {
   border-radius: 14px;
-  background: linear-gradient(90deg, var(--at-figure-skin) 25%, var(--card) 50%, var(--at-figure-skin) 75%);
+  background: linear-gradient(90deg, var(--card) 25%, var(--at-tonal) 50%, var(--card) 75%);
   background-size: 200% 100%;
   animation: at-shimmer 1.4s ease-in-out infinite;
 }
 
-.at-skel-line { height: 12px; border-radius: 6px; }
-.at-skel-title { height: 34px; width: 70%; }
-.at-skel-hero { height: 168px; border-radius: 26px; }
 .at-skel-rail { display: flex; gap: 12px; }
-.at-skel-moment { flex: 1; height: 120px; border-radius: 20px; }
-.at-skel-card { height: 110px; border-radius: 22px; }
+
+/* Over the skeleton while the first sync runs; the dock below stays usable. */
+.at-syncing-pill {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 4;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--at-dock-bg);
+  color: var(--at-on-cocoa);
+  font-size: 12.5px;
+  font-weight: 700;
+  box-shadow: var(--shadow-float);
+}
+
+[data-mode='dark'] .at-syncing-pill { color: var(--cocoa); }
 
 @keyframes at-shimmer {
   from { background-position: 200% 0; }
@@ -2017,8 +2046,7 @@ button.at-routine-item { cursor: pointer; }
   position: fixed;
   inset: 0;
   z-index: 90;
-  background: rgba(44, 36, 29, 0.42);
-  animation: at-fade 0.18s ease-out;
+  background: rgba(20, 12, 8, 0.45);
 }
 
 .at-editor {
@@ -2316,8 +2344,7 @@ button.at-routine-item { cursor: pointer; }
   z-index: 130;
   display: flex;
   align-items: flex-end;
-  background: rgba(44, 36, 29, 0.42);
-  animation: at-fade 0.18s ease-out;
+  background: rgba(20, 12, 8, 0.45);
 }
 
 .at-sheet {
@@ -2327,8 +2354,7 @@ button.at-routine-item { cursor: pointer; }
   max-height: 88vh;
   background: var(--sand);
   border-radius: 30px 30px 0 0;
-  box-shadow: 0 -10px 40px -12px var(--at-shadow);
-  animation: at-rise 0.26s cubic-bezier(0.2, 0.9, 0.3, 1);
+  box-shadow: var(--shadow-float);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -2340,6 +2366,11 @@ button.at-routine-item { cursor: pointer; }
   margin: 10px auto 0;
   flex-shrink: 0;
 }
+
+/* The grip and the head are where a sheet is dragged down from; the body
+   keeps its own vertical scroll. */
+.at-sheet-grip,
+.at-sheet-head { touch-action: none; cursor: grab; }
 
 .at-sheet-head {
   display: flex;
@@ -2357,7 +2388,7 @@ button.at-routine-item { cursor: pointer; }
   color: var(--muted);
 }
 
-.at-sheet-head h3 { margin: 2px 0 0; font-size: 22px; font-weight: 600; }
+.at-sheet-head h3 { margin: 2px 0 0; font-size: 22px; font-weight: 800; }
 
 .at-sheet-body {
   flex: 1;
@@ -2379,12 +2410,6 @@ button.at-routine-item { cursor: pointer; }
 
 .at-sheet-foot .at-btn { flex: 1; justify-content: center; }
 
-@keyframes at-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes at-rise { from { transform: translateY(14%); } to { transform: none; } }
-
-@media (prefers-reduced-motion: reduce) {
-  .at-scrim, .at-sheet { animation: none; }
-}
 
 /* ---------- fields ---------- */
 
@@ -3058,20 +3083,65 @@ button.at-routine-item { cursor: pointer; }
 /* ---------- install offer ---------- */
 
 .at-top-banner {
+  /* A notification card: it floats (so it casts the float shadow) and drops in
+     on a spring, but it stays in the flow above the scroll area, so a message
+     that lingers — a refusal, an unclosed session — pushes the screen down
+     instead of covering its header. */
   flex-shrink: 0;
-  background: var(--at-surface-raised, #25201b);
-  border-bottom: 1px solid var(--at-border, rgba(255, 255, 255, 0.08));
-  padding: 10px 16px;
+  margin: 8px 12px 0;
+  padding: 10px 10px 10px 12px;
+  border-radius: 20px;
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi), 0 10px 26px -12px rgba(30, 15, 5, 0.35);
+  color: var(--cocoa);
   z-index: 50;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  animation: at-slide-down 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  animation: at-drop 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.15);
 }
 
-@keyframes at-slide-down {
-  from { transform: translateY(-100%); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+@keyframes at-drop {
+  from { transform: translateY(-120%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .at-top-banner { animation: none; }
+}
+
+.at-top-banner-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Indeterminate: the sync has no real percentage, so none is invented. */
+.at-top-banner-bar {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--at-tonal);
+}
+
+.at-top-banner-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 2px;
+  background: var(--d-grad);
+  animation: at-sweep 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes at-sweep {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(260%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .at-top-banner-bar i { animation: none; width: 100%; opacity: 0.5; }
 }
 
 .at-top-banner-main {
@@ -3089,15 +3159,20 @@ button.at-routine-item { cursor: pointer; }
    affairs to be aware of, not an offer to act on. Work carries on either way,
    which is the whole point of the queue behind it. */
 .at-sync-banner .at-top-banner-icon {
-  background: var(--at-surface-sunk, rgba(255, 255, 255, 0.08));
-  color: var(--at-text-dim, rgba(255, 255, 255, 0.72));
+  background: var(--at-tonal);
+  color: var(--muted);
 }
 
 /* Something of the user's did not make it. The one state here worth alarming
    about, and the only one that borrows the warning colour. */
 .at-sync-banner[data-warn] .at-top-banner-icon {
-  background: var(--at-danger, #c2452d);
-  color: var(--sand, #fff);
+  background: var(--d-danger);
+  color: #fff;
+}
+
+.at-sync-banner[data-saved] .at-top-banner-icon {
+  background: var(--lime);
+  color: var(--lime-ink);
 }
 
 /* ─── Resume banner ─────────────────────────────────────────────────────────
@@ -3110,11 +3185,9 @@ button.at-routine-item { cursor: pointer; }
   font: inherit;
   color: inherit;
   cursor: pointer;
-  /* A <button> arrives with the user agent's own border on all four sides,
-     which drew a frame around the band and doubled `at-top-banner`'s hairline.
-     Reset, then put that hairline back. */
+  /* A <button> arrives with the user agent's own border on all four sides. */
   border: 0;
-  border-bottom: 1px solid var(--at-border, rgba(255, 255, 255, 0.08));
+  width: auto;
 }
 
 .at-spin {
@@ -3132,11 +3205,11 @@ button.at-routine-item { cursor: pointer; }
 }
 
 .at-top-banner-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--cocoa, #ff6b35);
-  color: var(--sand, #fff);
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--d-grad);
+  color: var(--at-on-clay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3151,14 +3224,14 @@ button.at-routine-item { cursor: pointer; }
 }
 
 .at-top-banner-text b {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 800;
   line-height: 1.2;
 }
 
 .at-top-banner-text small {
-  font-size: 11px;
-  opacity: 0.75;
+  font-size: 12px;
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3173,13 +3246,13 @@ button.at-routine-item { cursor: pointer; }
 }
 
 .at-round-sm {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: none;
-  background: transparent;
-  color: inherit;
-  opacity: 0.6;
+  background: var(--d-tonal);
+  box-shadow: var(--d-soft);
+  color: var(--cocoa);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3187,14 +3260,11 @@ button.at-routine-item { cursor: pointer; }
   flex-shrink: 0;
 }
 
-.at-round-sm:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
-}
+
 
 .at-top-banner-ios {
   padding-top: 6px;
-  border-top: 1px dashed var(--at-border, rgba(255, 255, 255, 0.1));
+  border-top: 1px dashed var(--hair);
 }
 
 .at-install-steps {
@@ -3343,10 +3413,56 @@ button.at-routine-item { cursor: pointer; }
   animation: at-splash-piece 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.2) forwards;
 }
 
-.at-splash-mark rect[data-piece='leg-left'] { animation-delay: 0.05s; }
-.at-splash-mark rect[data-piece='leg-right'] { animation-delay: 0.12s; }
-.at-splash-mark rect[data-piece='torso'] { animation-delay: 0.22s; }
-.at-splash-mark rect[data-piece='shoulders'] { animation-delay: 0.32s; }
+/* Assembled, the figure squats in a loop: the legs compress from the floor
+   and the torso and shoulders ride down with them, by the 5 units the legs
+   lose. The second animation takes over the transform once the first has
+   finished. */
+.at-splash-mark rect[data-piece='leg-left'] {
+  animation: at-splash-piece 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.2) 0.05s forwards, at-squat-legs 1.4s ease-in-out 1s infinite;
+}
+.at-splash-mark rect[data-piece='leg-right'] {
+  animation: at-splash-piece 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.2) 0.12s forwards, at-squat-legs 1.4s ease-in-out 1s infinite;
+}
+.at-splash-mark rect[data-piece='torso'] {
+  animation: at-splash-piece 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.2) 0.22s forwards, at-squat-body 1.4s ease-in-out 1s infinite;
+}
+.at-splash-mark rect[data-piece='shoulders'] {
+  animation: at-splash-piece 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.2) 0.32s forwards, at-squat-body 1.4s ease-in-out 1s infinite;
+}
+
+/* The floor under the figure: it spreads at the bottom of each rep. */
+.at-splash-mark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  width: 44px;
+  height: 7px;
+  margin-left: -22px;
+  border-radius: 50%;
+  background: var(--cocoa);
+  opacity: 0;
+  animation: at-floor-in 0.4s ease-out 0.5s forwards, at-squat-floor 1.4s ease-in-out 1s infinite;
+}
+
+@keyframes at-squat-legs {
+  0%, 100% { transform: none; }
+  45%, 55% { transform: scaleY(0.62); }
+}
+
+@keyframes at-squat-body {
+  0%, 100% { transform: none; }
+  45%, 55% { transform: translateY(5.1px); }
+}
+
+@keyframes at-floor-in {
+  to { opacity: 0.1; }
+}
+
+@keyframes at-squat-floor {
+  0%, 100% { transform: scaleX(1); opacity: 0.1; }
+  45%, 55% { transform: scaleX(1.25); opacity: 0.18; }
+}
 
 .at-splash-word {
   position: relative;
@@ -3355,7 +3471,7 @@ button.at-routine-item { cursor: pointer; }
   animation: at-splash-up 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.2) 0.42s forwards;
 }
 
-.at-splash-word h1 { font-size: 27px; font-weight: 600; letter-spacing: -0.025em; color: var(--cocoa); }
+.at-splash-word h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.025em; color: var(--cocoa); }
 
 .at-splash-word span {
   display: block;
@@ -3383,7 +3499,7 @@ button.at-routine-item { cursor: pointer; }
   inset: 0 auto 0 0;
   width: 42%;
   border-radius: inherit;
-  background: var(--clay);
+  background: var(--d-grad);
   animation: at-splash-sweep 1.25s cubic-bezier(0.65, 0, 0.35, 1) 0.7s infinite;
 }
 
@@ -3418,6 +3534,7 @@ button.at-routine-item { cursor: pointer; }
   .at-splash-word,
   .at-splash-bar,
   .at-splash-mark rect[data-piece] { animation: none; opacity: 1; }
+  .at-splash-mark::after { animation: none; opacity: 0.1; }
   /* The sweep is the only thing still saying "working", so it stays — slowed,
      and as a fade rather than travel. */
   .at-splash-glow { animation: none; opacity: 0.14; }

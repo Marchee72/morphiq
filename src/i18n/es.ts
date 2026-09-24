@@ -730,6 +730,10 @@ export const es: Translations = {
   'sync.failedTitle': 'Algunos cambios no se pudieron guardar',
   'sync.failedBody': 'El servidor rechazo {n}. Siguen en este dispositivo.',
   'sync.discard': 'Descartar',
+  'sync.discardConfirm_one': '¿Descartar {n} cambio? No va a llegar al servidor.',
+  'sync.discardConfirm_other': '¿Descartar {n} cambios? No van a llegar al servidor.',
+  'sync.saved': 'Todo guardado',
+  'sync.savedSub': 'Todo llegó al servidor.',
   'sync.needsConnection': 'Esto necesita conexion.',
 
   // -- Instalar en la pantalla de inicio -------------------------

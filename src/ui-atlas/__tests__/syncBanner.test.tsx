@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AtlasSyncBanner } from '../atlas/AtlasSyncBanner';
 import { AtlasResumeBanner } from '../atlas/AtlasResumeBanner';
 import { AtlasResumeSheet } from '../atlas/AtlasResumeSheet';
@@ -103,8 +103,39 @@ describe('AtlasSyncBanner', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Try now|Reintentar ahora/i }));
     expect(retry).toHaveBeenCalled();
+    // Discarding loses the changes, so the bin asks before it acts.
+    fireEvent.click(screen.getByRole('button', { name: /^(Discard|Descartar)$/i }));
+    expect(discard).not.toHaveBeenCalled();
+    expect(screen.getByText(/Discard 3 changes\?|¿Descartar 3 cambios\?/i)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^(Discard|Descartar)$/i }));
     expect(discard).toHaveBeenCalled();
+  });
+
+  it('can back out of discarding', async () => {
+    const offline = await import('../../data/offline');
+    const discard = vi.spyOn(offline, 'discardRefused').mockImplementation(async () => {});
+
+    setSyncState({ online: true, failed: 2 });
+    render(<AtlasSyncBanner />);
+    fireEvent.click(screen.getByRole('button', { name: /^(Discard|Descartar)$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^(Cancel|Cancelar)$/i }));
+    expect(discard).not.toHaveBeenCalled();
+    expect(screen.getByText(/could not be saved|no se pudieron guardar/i)).toBeTruthy();
+  });
+
+  it('says it is all saved once a queue drains, then goes quiet', () => {
+    vi.useFakeTimers();
+    try {
+      setSyncState({ online: true, pending: 2, flushing: true });
+      const { rerender, container } = render(<AtlasSyncBanner />);
+      setSyncState({ pending: 0, flushing: false });
+      rerender(<AtlasSyncBanner />);
+      expect(screen.getByText(/All saved|Todo guardado/i)).toBeTruthy();
+      act(() => { vi.advanceTimersByTime(2300); });
+      expect(container.firstChild).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports a failure ahead of a queue, because it is the worse news', () => {
