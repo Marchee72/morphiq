@@ -713,6 +713,7 @@ export const es: Translations = {
   'sync.retry': 'Reintentar ahora',
   'sync.failedTitle': 'Algunos cambios no se pudieron guardar',
   'sync.failedBody': 'El servidor rechazo {n}. Siguen en este dispositivo.',
+  'sync.discard': 'Descartar',
   'sync.needsConnection': 'Esto necesita conexion.',
 
   // -- Instalar en la pantalla de inicio -------------------------

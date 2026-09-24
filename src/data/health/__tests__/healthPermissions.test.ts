@@ -8,6 +8,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
  */
 
 const requestHealthPermissions = vi.fn();
+const checkHealthPermissions = vi.fn();
 const checkPermissions = vi.fn();
 const requestPermissions = vi.fn();
 
@@ -19,7 +20,7 @@ vi.mock('@capacitor/core', () => ({
 }));
 
 vi.mock('capacitor-health', () => ({
-  Health: { requestHealthPermissions },
+  Health: { requestHealthPermissions, checkHealthPermissions },
 }));
 
 vi.mock('../BodyCompositionPlugin', () => ({
@@ -52,6 +53,8 @@ const granted = (...perms: string[]) => ({
 describe('CapacitorHealthProvider.requestPermissions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Nothing granted yet unless a case says otherwise, so the dialog path runs.
+    checkHealthPermissions.mockResolvedValue({ permissions: {} });
     requestPermissions.mockResolvedValue(granted(READ_WEIGHT, READ_BODY_FAT));
   });
 
@@ -88,6 +91,31 @@ describe('CapacitorHealthProvider.requestPermissions', () => {
     await vi.advanceTimersByTimeAsync(120_000);
 
     // Steps were granted, so there is still a sync worth running.
+    await expect(settled).resolves.toBe(true);
+  });
+
+  it('does not open the dialog for permissions already granted', async () => {
+    // The plugin launches Health Connect's permission activity on every
+    // request, granted or not. Each launch paused and resumed the app, and a
+    // second request overwrote the first one's pending reply for good — the
+    // pull-to-sync spinner that never stopped.
+    checkHealthPermissions.mockResolvedValue({ permissions: {
+      READ_WORKOUTS: true, READ_STEPS: true, READ_DISTANCE: true, READ_ACTIVE_CALORIES: true, READ_HEART_RATE: true,
+    } });
+    checkPermissions.mockResolvedValue(granted(READ_WEIGHT, READ_BODY_FAT));
+
+    await expect(new CapacitorHealthProvider().requestPermissions()).resolves.toBe(true);
+    expect(requestHealthPermissions).not.toHaveBeenCalled();
+  });
+
+  it('gives up on an exercise permission dialog that never answers', async () => {
+    vi.useFakeTimers();
+    requestHealthPermissions.mockReturnValue(new Promise(() => {}));
+    checkPermissions.mockResolvedValue(granted(READ_WEIGHT));
+
+    const settled = new CapacitorHealthProvider().requestPermissions();
+    await vi.advanceTimersByTimeAsync(120_000);
+
     await expect(settled).resolves.toBe(true);
   });
 });

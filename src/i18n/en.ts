@@ -716,6 +716,7 @@ export const en = {
   'sync.retry': 'Try now',
   'sync.failedTitle': 'Some changes could not be saved',
   'sync.failedBody': 'The server refused {n} of them. They are still on this device.',
+  'sync.discard': 'Discard',
   'sync.needsConnection': 'This needs a connection.',
 
   // -- Install to the home screen --------------------------------

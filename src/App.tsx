@@ -14,6 +14,8 @@ import { AtlasSplash } from './ui-atlas/atlas/AtlasSplash';
 import { AtlasAuthGate } from './ui-atlas/atlas/AtlasAuthGate';
 import { AtlasErrorBoundary } from './ui-atlas/atlas/AtlasErrorBoundary';
 import { HEALTH_IMPORT_DAYS } from './ui-atlas/derive/bodyMetrics';
+import { markSyncOk, syncSince } from './data/health/syncWindow';
+import { getSyncState } from './data/offline';
 
 /** The splash holds for at least this long, so a fast load does not flash it. */
 const SPLASH_MIN_MS = 1100;
@@ -162,6 +164,7 @@ function App() {
 
     let cancelled = false;
     let permitted = false;
+    const profileId = String(activeProfile.id);
 
     /**
      * Steps for the last week, which Today reads today's figure out of.
@@ -190,16 +193,16 @@ function App() {
      * Re-running is cheap and idempotent: `importMeasurements` dedupes by minute
      * against what is already in Dexie, so a repeat import writes nothing.
      */
-    const readBodyComposition = async () => {
-      if (!permitted || !healthProvider.importBodyComposition) return;
+    const readBodyComposition = async (): Promise<boolean> => {
+      if (!permitted || !healthProvider.importBodyComposition) return true;
       try {
-        const since = new Date();
-        since.setDate(since.getDate() - HEALTH_IMPORT_DAYS);
+        const since = syncSince(profileId, HEALTH_IMPORT_DAYS);
         const measurements = await healthProvider.importBodyComposition(since, activeProfile);
         if (!cancelled && measurements.length > 0) {
           await useStore.getState().importMeasurements(measurements);
         }
-      } catch (err) { console.warn('Body composition sync failed', err); }
+        return true;
+      } catch (err) { console.warn('Body composition sync failed', err); return false; }
     };
 
     /**
@@ -213,14 +216,14 @@ function App() {
      * already in the database, and the merge into a manual session moves that
      * `externalId` onto the survivor so a repeat import matches it too.
      */
-    const readWorkouts = async () => {
-      if (!permitted) return;
+    const readWorkouts = async (): Promise<boolean> => {
+      if (!permitted) return true;
       try {
-        const since = new Date();
-        since.setDate(since.getDate() - WORKOUT_HISTORY_DAYS);
+        const since = syncSince(profileId, WORKOUT_HISTORY_DAYS);
         const workouts = await healthProvider.importWorkouts(since);
         if (!cancelled) await useStore.getState().importWorkouts(workouts);
-      } catch (err) { console.warn('Workout sync failed', err); }
+        return true;
+      } catch (err) { console.warn('Workout sync failed', err); return false; }
     };
 
     /**
@@ -232,24 +235,39 @@ function App() {
      * has no record type for stress, mood or soreness, so those only ever come
      * from the questionnaire.
      */
-    const readWellness = async () => {
-      if (!permitted || !healthProvider.importWellnessSignals) return;
+    const readWellness = async (): Promise<boolean> => {
+      if (!permitted || !healthProvider.importWellnessSignals) return true;
       try {
-        const since = new Date();
-        since.setDate(since.getDate() - HEALTH_IMPORT_DAYS);
+        const since = syncSince(profileId, HEALTH_IMPORT_DAYS);
         const signals = await healthProvider.importWellnessSignals(since);
         if (!cancelled) await useStore.getState().importWellnessSignals(signals);
-      } catch (err) { console.warn('Wellness sync failed', err); }
+        return true;
+      } catch (err) { console.warn('Wellness sync failed', err); return false; }
+    };
+
+    /**
+     * The three imports that stretch their window back to the last clean sync.
+     *
+     * The checkpoint only moves when all three went through and the outbox holds
+     * nothing the server refused — a refused write is data the server does not
+     * have, and moving past it is how it got lost for good.
+     */
+    const readHealthRecords = async () => {
+      const body = await readBodyComposition();
+      const workouts = await readWorkouts();
+      const wellness = await readWellness();
+      if (!cancelled && body && workouts && wellness && getSyncState().failed === 0) {
+        markSyncOk(profileId);
+      }
     };
 
     const autoSync = async () => {
       try {
         permitted = await healthProvider.requestPermissions();
         if (permitted) {
-          await readBodyComposition();
-          await readWorkouts();
+          // Steps first: the cheapest read, and the one Today shows at once.
           await readSteps();
-          await readWellness();
+          await readHealthRecords();
         }
       } catch (err) { console.error('Health sync error:', err); }
     };
@@ -262,9 +280,7 @@ function App() {
       // its settings screen did nothing until the app was killed and relaunched.
       if (!permitted) { void autoSync(); return; }
       void readSteps();
-      void readBodyComposition();
-      void readWorkouts();
-      void readWellness();
+      void readHealthRecords();
     });
     return () => {
       cancelled = true;

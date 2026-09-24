@@ -14,7 +14,9 @@ import { BACKOFF_START_MS, jitter, nextBackoff } from '../net/backoff';
 import { classifyFailure } from './errors';
 import { isOnline, reportReachable, reportUnreachable, subscribe } from './connectivity';
 import { isTempId } from './ids';
-import { fail, failedCount, lookupId, peekNext, pendingCount, resolveId, settle } from './outbox';
+import {
+  discardFailed, fail, failedCount, lookupId, peekNext, pendingCount, requeueFailed, resolveId, settle,
+} from './outbox';
 import { rekeyRow, rewriteRefs } from './snapshot';
 import { setSyncState } from './syncState';
 import type { OutboxOp, RowKind } from './types';
@@ -235,11 +237,25 @@ export function resumeAfterAuth(): void {
   void flush();
 }
 
-/** A hand-triggered retry, from the banner's "try now". */
-export function retryNow(): void {
+/**
+ * A hand-triggered retry, from the banner's "try now".
+ *
+ * Includes the refused ops. Nothing retries those on its own — that would loop
+ * against a server that will answer the same way — but a person pressing the
+ * button is the signal that something may have changed.
+ */
+export async function retryNow(): Promise<void> {
   backoff = BACKOFF_START_MS;
   if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; }
-  void flush();
+  await requeueFailed();
+  await publish();
+  await flush();
+}
+
+/** The banner's "discard": the user has been told, and lets them go. */
+export async function discardRefused(): Promise<void> {
+  await discardFailed();
+  await publish();
 }
 
 /** Test seam. */
