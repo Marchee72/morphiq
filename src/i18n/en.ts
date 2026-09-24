@@ -84,6 +84,9 @@ export const en = {
 
   // ── Body ──────────────────────────────────────────────────────
   'body.title': 'Body',
+  'body.range': 'Range',
+  'body.range1m': '1 month',
+  'body.range3m': '3 months',
   'body.lastUpdated': 'Updated',
   'body.readings_one': '{n} reading',
   'body.readings_other': '{n} readings',

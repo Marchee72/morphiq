@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Scale } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
-import { metricByKey } from '../derive/bodyMetrics';
+import { isImproving, metricByKey } from '../derive/bodyMetrics';
+import { AtlasSegment } from './AtlasField';
+import { RollingNumber } from '../kit/rolling-number';
 import { goalProgress } from '../derive/profile';
 import type { MetricPointVM } from '../types';
 import { AtlasMetricChart } from './AtlasMetricChart';
@@ -34,6 +36,13 @@ export const AtlasBody: React.FC = () => {
   const { t, tp, fmt } = useT();
 
   const [detail, setDetail] = useState<MetricPointVM | null>(null);
+  /**
+   * How far back the trend charts look. The series are weekly, so the honest
+   * windows are a month (five points) and the whole three months — a week
+   * would be two points and a line between them.
+   */
+  const [range, setRange] = useState<'1m' | '3m'>('3m');
+  const windowed = (values: number[]) => (range === '1m' ? values.slice(-5) : values);
   const now = new Date();
 
   const weight = metricByKey(body.metrics, 'weight');
@@ -96,8 +105,9 @@ export const AtlasBody: React.FC = () => {
       </div>
 
       <div className="at-bignum">
-        <b>{fmt.n(weight.value, 1)}<small> {t('unit.kg')}</small></b>
-        <span>
+        <b><RollingNumber value={weight.value} decimals={1} /><small> {t('unit.kg')}</small></b>
+        {/* Lime when the month moved the way the goal wants, tonal otherwise. */}
+        <span className="at-delta-chip" data-good={isImproving(weight) === true}>
           {weight.delta30d === null
             ? t('common.noData')
             : t('body.overMonth', { delta: fmt.signed(weight.delta30d), unit: t('unit.kg') })}
@@ -139,6 +149,12 @@ export const AtlasBody: React.FC = () => {
         <>
           <div className="at-rail-head"><h3>{t('body.trends')}</h3><button onClick={() => actions.openOverlay('logWeight')}>{t('body.newReading')}</button></div>
           <div className="at-pad" style={{ paddingBottom: 22, display: 'grid', gap: 12 }}>
+            <AtlasSegment
+              label={t('body.range')}
+              options={[{ value: '1m', label: t('body.range1m') }, { value: '3m', label: t('body.range3m') }]}
+              value={range}
+              onChange={setRange}
+            />
             {charts.map(metric => (
               <button
                 key={metric.key}
@@ -152,7 +168,12 @@ export const AtlasBody: React.FC = () => {
                     {metric.delta30d !== null && ` · ${fmt.signed(metric.delta30d, metric.decimals)}`}
                   </span>
                 </div>
-                <AtlasMetricChart series={metric.series!} decimals={metric.decimals} now={now} />
+                <AtlasMetricChart
+                  series={windowed(metric.series!)}
+                  decimals={metric.decimals}
+                  now={now}
+                  weeks={windowed(metric.series!).length}
+                />
               </button>
             ))}
           </div>

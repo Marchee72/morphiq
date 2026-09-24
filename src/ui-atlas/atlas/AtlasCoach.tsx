@@ -29,7 +29,12 @@ const RoutineCard: React.FC<{
   return (
     <div className="at-routine">
       <div className="at-routine-head">
-        <h4>{routine.title}</h4>
+        {/* The name and its copy action as one split pill: copying is about
+            the routine itself, not one of the actions below. */}
+        <div className="at-routine-pill">
+          <h4><Sparkles size={14} /> {routine.title}</h4>
+          <RoutineCopyButton routine={routine} className="at-routine-pill-copy" showLabel />
+        </div>
         {onDismiss && (
           <button className="at-routine-dismiss" onClick={onDismiss} aria-label={t('coach.dismissRoutine')}>
             <X size={15} />
@@ -63,7 +68,6 @@ const RoutineCard: React.FC<{
         <button className="at-btn" data-ghost="true" onClick={onSave}>
           {t('coach.saveRoutine')}
         </button>
-        <RoutineCopyButton routine={routine} />
       </div>
     </div>
   );

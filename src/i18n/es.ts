@@ -82,6 +82,9 @@ export const es: Translations = {
 
   // ── Cuerpo ────────────────────────────────────────────────────
   'body.title': 'Cuerpo',
+  'body.range': 'Rango',
+  'body.range1m': '1 mes',
+  'body.range3m': '3 meses',
   'body.lastUpdated': 'Actualizado el',
   'body.readings_one': '{n} medición',
   'body.readings_other': '{n} mediciones',
