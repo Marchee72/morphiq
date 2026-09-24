@@ -566,6 +566,7 @@ export const en = {
   'settings.reset': 'Reset data',
   'settings.resetSub': 'Deletes measurements, meals and workouts for this profile.',
   'settings.resetConfirm': 'This permanently deletes every record on the active profile and cannot be undone.',
+  'settings.undoReset': 'Undo · everything goes',
   'settings.export': 'Export JSON',
   'settings.import': 'Import JSON',
   'settings.exported': 'Backup downloaded',

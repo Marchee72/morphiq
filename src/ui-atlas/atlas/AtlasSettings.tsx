@@ -8,7 +8,8 @@ import { LANGUAGES, MODES } from '../../presentation/state/preferences';
 import { MAX_HEIGHT_CM, MIN_HEIGHT_CM, parseHeightCm } from '../../core/entities/UserProfile';
 import { useHealthSync } from '../data/useHealthSync';
 import { AtlasSheet } from './AtlasSheet';
-import { AtlasInput, AtlasChoice, AtlasSwitch } from './AtlasField';
+import { AtlasInput, AtlasSegment, AtlasSwitch } from './AtlasField';
+import { UndoAction } from '../kit/time-undo-action';
 import { isBackgroundSyncOn, setBackgroundSync } from '../../data/health/BodyCompositionPlugin';
 import { AppMark } from './AppMark';
 import { AtlasInstallCard } from './AtlasInstallCard';
@@ -152,7 +153,7 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
         {/* Appearance */}
         <div className="at-card at-settings-stack">
-          <AtlasChoice
+          <AtlasSegment
             label={t('settings.mode')}
             value={theme}
             onChange={setTheme}
@@ -162,7 +163,7 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               icon: mode === 'system' ? <Monitor size={14} /> : mode === 'dark' ? <Moon size={14} /> : <Sun size={14} />,
             }))}
           />
-          <AtlasChoice
+          <AtlasSegment
             label={t('settings.language')}
             value={language}
             onChange={setLanguage}
@@ -343,7 +344,6 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     onClearDemo: () => Promise<void>;
   }) {
     const [message, setMessage] = useState<string | null>(null);
-    const [confirming, setConfirming] = useState(false);
 
     const download = async () => {
       const json = await onExport();
@@ -390,27 +390,21 @@ export const AtlasSettings: React.FC<{ onClose: () => void }> = ({ onClose }) =>
           </div>
         </div>
 
-        {/* Destructive, so it asks first and never sits next to a save button. */}
+        {/* Destructive, so it counts down with an undo before anything goes,
+            and never sits next to a save button. */}
         <div className="at-danger">
           <div>
             <b><Trash2 size={14} /> {t('settings.reset')}</b>
             <small>{t('settings.resetSub')}</small>
           </div>
-          {confirming ? (
-            <>
-              <p>{t('settings.resetConfirm')}</p>
-              <div className="at-choice">
-                <button className="at-chip" onClick={() => setConfirming(false)}>{t('common.cancel')}</button>
-                <button className="at-chip" data-danger="true" onClick={async () => { await onClear(); setConfirming(false); close(); }}>
-                  {t('common.delete')}
-                </button>
-              </div>
-            </>
-          ) : (
-            <button className="at-chip" data-danger="true" onClick={() => setConfirming(true)}>
-              {t('settings.reset')}
-            </button>
-          )}
+          <p>{t('settings.resetConfirm')}</p>
+          <UndoAction
+            icon={<Trash2 size={14} />}
+            label={t('settings.reset')}
+            undoLabel={t('settings.undoReset')}
+            seconds={10}
+            onCommit={() => { void onClear().then(close); }}
+          />
         </div>
 
         {message && <span className="at-settings-status">{message}</span>}

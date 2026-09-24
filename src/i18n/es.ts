@@ -563,6 +563,7 @@ export const es: Translations = {
   'settings.reset': 'Restablecer datos',
   'settings.resetSub': 'Borra mediciones, comidas y entrenamientos de este perfil.',
   'settings.resetConfirm': 'Esto elimina permanentemente todos los registros del perfil activo y no se puede deshacer.',
+  'settings.undoReset': 'Deshacer · se borra todo',
   'settings.export': 'Exportar JSON',
   'settings.import': 'Importar JSON',
   'settings.exported': 'Respaldo descargado',
