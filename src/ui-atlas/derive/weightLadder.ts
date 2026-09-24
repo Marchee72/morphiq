@@ -20,24 +20,6 @@ export const WEIGHT_DECIMALS = [0, 0.125, 0.5, 0.75] as const;
 export const WEIGHT_PRECISION = 3;
 
 /**
- * Every selectable weight from 0 to `max`, ascending.
- *
- * Built by whole kilo and offset rather than by repeated addition, because
- * accumulating 0.125 a thousand times drifts off binary floating point and the
- * dial would stop matching the values it snaps to.
- */
-export function weightLadder(max: number): number[] {
-  const values: number[] = [];
-  for (let kg = 0; kg <= max; kg++) {
-    for (const decimal of WEIGHT_DECIMALS) {
-      const value = kg + decimal;
-      if (value <= max) values.push(value);
-    }
-  }
-  return values;
-}
-
-/**
  * The nearest allowed weight to whatever was typed.
  *
  * Ties go up, which matters more than it sounds: it makes the function stable

@@ -1,5 +1,5 @@
-import { describe, expect, it, beforeEach } from 'vitest';
-import { screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { describe, expect, it, afterEach, beforeEach, vi } from 'vitest';
+import { act, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { useStore } from '../../presentation/state/store';
 import { useSessionSummary } from '../state/sessionSummary';
 import { db } from '../../data/database/LocalDatabase';
@@ -9,6 +9,9 @@ const initialState = useStore.getState();
 
 /** The log button, whatever set number it currently names. */
 const logButton = () => screen.getAllByRole('button', { name: /complete set|^log /i })[0];
+/** The action bar's primary — the one action that is not a ghost. */
+const primaryAction = () =>
+  document.querySelector('.at-train-actions .at-btn:not([data-ghost])')?.textContent ?? '';
 const text = () => document.body.textContent?.replace(/\s+/g, ' ') ?? '';
 
 // The summary outlives the session it describes by design, so it also outlives
@@ -135,8 +138,33 @@ describe('Train', () => {
       .queryByRole('button', { name: /pick the next exercise/i })).toBeNull();
   });
 
-  it('promotes finishing to the primary action once every set is logged', async () => {
+  it('promotes finishing to the primary action once every exercise is logged', async () => {
     renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [
+          { id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 1 },
+          { id: 'e2', exerciseName: 'Barbell Row', targetSets: 1 },
+        ],
+        sets: [
+          { exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+          { exerciseName: 'Barbell Row', setNumber: 1, weight: 60, reps: 10, isCompleted: true },
+        ],
+      },
+    });
+
+    await waitFor(() => expect(primaryAction()).toMatch(/finish session/i));
+  });
+
+  /**
+   * `sessionComplete` is true the moment one exercise's sets are all in, so the
+   * bar used to offer Finish after a single lift — the accident its own comment
+   * says it exists to prevent. It offers the picker instead, which is also why
+   * the completion card holds its own button back here: the card's copy asks
+   * you to pick what is next or finish, and the bar below is both.
+   */
+  describe('when the one exercise you have done is finished', () => {
+    const soloDone = () => renderScreen('train', {
       data: 'rich',
       session: {
         exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 1 }],
@@ -144,9 +172,28 @@ describe('Train', () => {
       },
     });
 
-    await waitFor(() =>
-      expect(document.querySelector('.at-train-actions')?.textContent).toMatch(/finish session/i),
-    );
+    it('keeps adding an exercise as the primary action, not finishing', async () => {
+      soloDone();
+      await waitFor(() => expect(primaryAction()).toMatch(/add exercise/i));
+      expect(primaryAction()).not.toMatch(/finish session/i);
+    });
+
+    it('leaves finishing one tap away, as a ghost under it', async () => {
+      soloDone();
+      await waitFor(() => expect(primaryAction()).toMatch(/add exercise/i));
+      const ghost = document.querySelector('.at-train-actions .at-btn[data-ghost]');
+      expect(ghost?.textContent).toMatch(/finish session/i);
+    });
+
+    it('does not repeat on the card the picker the bar is already offering', async () => {
+      // The card's own button was un-guarded to fix the case below, which left
+      // it showing here too — where the bar under it is already "add exercise"
+      // and a third route to the same picker sits further down the scroll.
+      soloDone();
+      await waitFor(() => expect(document.querySelector('.at-done')).toBeTruthy());
+      expect(within(document.querySelector('.at-done') as HTMLElement)
+        .queryByRole('button', { name: /pick the next exercise/i })).toBeNull();
+    });
   });
 
   it('offers discarding the session, which had no surface at all before', async () => {
@@ -155,6 +202,136 @@ describe('Train', () => {
     await waitFor(() =>
       expect(screen.getAllByRole('button', { name: /discard session/i }).length).toBeGreaterThan(0),
     );
+  });
+
+  /**
+   * Removing an exercise takes its logged sets with it (`dropSetsFor`), which
+   * is the one thing in this list that cannot be undone. It has to ask — but
+   * only when there is something to lose.
+   */
+  describe('removing an exercise', () => {
+    const twoExercises = {
+      exercises: [
+        { id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 3 },
+        { id: 'e2', exerciseName: 'Barbell Row', targetSets: 3 },
+      ],
+      sets: [
+        { exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+        { exerciseName: 'Barbell Bench Press', setNumber: 2, weight: 80, reps: 8, isCompleted: true },
+      ],
+    };
+
+    /** The trash icons, one per row, in row order. */
+    const trashButtons = () => screen.getAllByRole('button', { name: /^(remove|quitar)$/i });
+
+    const openList = async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: /edit session/i })[0]);
+      await waitFor(() => expect(trashButtons().length).toBe(2));
+    };
+
+    const names = () =>
+      (useStore.getState().activeSession?.routineExercises ?? []).map(e => e.exerciseName);
+
+    it('asks before dropping an exercise that has sets logged against it', async () => {
+      renderScreen('train', { data: 'rich', session: twoExercises });
+      await openList();
+
+      fireEvent.click(trashButtons()[0]);
+
+      // The count is the point: the confirmation has to name what goes.
+      await waitFor(() => expect(text()).toMatch(/2 logged sets|2 series hechas/i));
+      expect(names()).toContain('Barbell Bench Press');
+    });
+
+    it('keeps the exercise, and its sets, when the question is declined', async () => {
+      renderScreen('train', { data: 'rich', session: twoExercises });
+      await openList();
+
+      fireEvent.click(trashButtons()[0]);
+      await waitFor(() => expect(screen.getByRole('button', { name: /^(cancel|cancelar)$/i })).toBeTruthy());
+      fireEvent.click(screen.getByRole('button', { name: /^(cancel|cancelar)$/i }));
+
+      await waitFor(() => expect(trashButtons().length).toBe(2));
+      expect(names()).toContain('Barbell Bench Press');
+      expect(useStore.getState().activeSession?.sets).toHaveLength(2);
+    });
+
+    it('drops it once the question is answered', async () => {
+      renderScreen('train', { data: 'rich', session: twoExercises });
+      await openList();
+
+      fireEvent.click(trashButtons()[0]);
+      // Only the confirm button carries the label now — the icon it replaced is gone.
+      await waitFor(() => expect(screen.getAllByRole('button', { name: /^(remove|quitar)$/i })).toHaveLength(2));
+      fireEvent.click(screen.getAllByRole('button', { name: /^(remove|quitar)$/i })[0]);
+
+      await waitFor(() => expect(names()).toEqual(['Barbell Row']));
+    });
+
+    it('does not ask about an exercise with nothing logged against it', async () => {
+      // Friction over nothing is friction paid for nothing: the row goes on the tap.
+      renderScreen('train', { data: 'rich', session: twoExercises });
+      await openList();
+
+      fireEvent.click(trashButtons()[1]);
+
+      await waitFor(() => expect(names()).toEqual(['Barbell Bench Press']));
+      expect(text()).not.toMatch(/logged sets? go|series hechas|serie hecha/i);
+    });
+
+    it('forgets the question when the panel is closed', async () => {
+      // Closing with the X reads as "cancel". The panel used to stay mounted
+      // behind an `if (!open) return null`, so the answer stayed armed and
+      // reopening the list put an exercise and its sets one tap from gone.
+      renderScreen('train', { data: 'rich', session: twoExercises });
+      await openList();
+
+      fireEvent.click(trashButtons()[0]);
+      await waitFor(() => expect(text()).toMatch(/2 logged sets|2 series hechas/i));
+
+      fireEvent.click(screen.getByRole('button', { name: /^(close|cerrar)$/i }));
+      await waitFor(() => expect(document.querySelector('.at-editor')).toBeNull());
+      await openList();
+
+      expect(document.querySelector('.at-confirm')).toBeNull();
+      expect(text()).not.toMatch(/2 logged sets|2 series hechas/i);
+      expect(names()).toContain('Barbell Bench Press');
+    });
+
+    /**
+     * Sets are keyed by exercise *name* everywhere — `dropSetsFor` and
+     * `buildSessionExercises` both — so with the same lift on two rows,
+     * removing one used to empty the other.
+     */
+    describe('with the same exercise on two rows', () => {
+      const twinRows = {
+        exercises: [
+          { id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 3 },
+          { id: 'e2', exerciseName: 'Barbell Bench Press', targetSets: 3 },
+        ],
+        sets: twoExercises.sets,
+      };
+
+      it('leaves the sets with the row that stays', async () => {
+        renderScreen('train', { data: 'rich', session: twinRows });
+        await openList();
+
+        fireEvent.click(trashButtons()[0]);
+
+        await waitFor(() => expect(names()).toEqual(['Barbell Bench Press']));
+        expect(useStore.getState().activeSession?.sets).toHaveLength(2);
+      });
+
+      it('does not warn about sets that are not going anywhere', async () => {
+        renderScreen('train', { data: 'rich', session: twinRows });
+        await openList();
+
+        fireEvent.click(trashButtons()[0]);
+
+        await waitFor(() => expect(names()).toHaveLength(1));
+        expect(text()).not.toMatch(/2 logged sets|2 series hechas/i);
+      });
+    });
   });
 });
 
@@ -946,5 +1123,154 @@ describe('Train — the exercise list', () => {
 
     await waitFor(() => expect(document.querySelector('.at-editor')).toBeNull());
     expect(text()).toMatch(/2 (of|de) 2/);
+  });
+});
+
+/**
+ * An exercise with no history opens on 0 kg (`useSetDraft`), and the generic
+ * label meant "Complete set 1" quietly wrote `0 kg × 10`: the pill went green,
+ * the volume added nothing, and nothing on screen had said so. 0 kg is a real
+ * answer — it is most of calisthenics — so the button names it instead of
+ * refusing it.
+ */
+describe('Train — logging a set with no weight on the bar', () => {
+  beforeEach(() => {
+    useStore.setState(initialState, true);
+  });
+
+  it('says what it is about to write when the weight is zero', () => {
+    renderScreen('train', {
+      data: 'empty',
+      session: { exercises: [{ id: 'e1', exerciseName: 'Pull Up', targetSets: 3 }] },
+    });
+
+    expect(logButton().textContent).toMatch(/log without weight/i);
+  });
+
+  it('still writes the set, rather than blocking it', async () => {
+    renderScreen('train', {
+      data: 'empty',
+      session: { exercises: [{ id: 'e1', exerciseName: 'Pull Up', targetSets: 3 }] },
+    });
+
+    fireEvent.click(logButton());
+    await waitFor(() => {
+      const sets = useStore.getState().activeSession?.sets ?? [];
+      expect(sets).toHaveLength(1);
+      expect(sets[0]).toMatchObject({ weight: 0, isCompleted: true });
+    });
+  });
+
+  it('goes back to the ordinary label as soon as there is weight on it', () => {
+    // The rich fixture's bench press has history, so the draft opens on it.
+    renderScreen('train', { data: 'rich', session: {} });
+    expect(logButton().textContent).toMatch(/complete set/i);
+    expect(logButton().textContent).not.toMatch(/without weight/i);
+  });
+});
+
+/**
+ * The rest between sets was the one number the screen could not answer: the
+ * header's clock times the whole session, so anyone resting to a schedule was
+ * doing it in another app.
+ */
+describe('Train — rest between sets', () => {
+  const rest = () => document.querySelector('.at-rest')?.textContent ?? '';
+
+  beforeEach(() => {
+    useStore.setState(initialState, true);
+    // Installed before the render: `useTicker`'s interval has to be the faked
+    // one, or advancing the clock never reaches it.
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    // Drain first: the screen's data layer reads IndexedDB, and fake-indexeddb
+    // schedules its callbacks on timers. Dropping the fake clock with those
+    // still queued leaves the connection mid-transaction, and the next test's
+    // `db.clear()` waits on it forever.
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it('says nothing until there is a set to rest from', () => {
+    renderScreen('train', { data: 'rich', session: {} });
+    expect(document.querySelector('.at-rest')).toBeNull();
+  });
+
+  it('counts up from the set just logged, and starts over on the next one', async () => {
+    renderScreen('train', { data: 'rich', session: {} });
+    // No `waitFor` here: the moment is local state set by the click, so it is
+    // on screen in the same commit — and a poll would never resolve against a
+    // clock this test owns.
+    fireEvent.click(logButton());
+    expect(rest()).toMatch(/0:00/);
+
+    await act(async () => { vi.advanceTimersByTime(65_000); });
+    expect(rest()).toMatch(/1:05/);
+
+    // The rest is from the *last* set, so logging the next one starts it again.
+    fireEvent.click(logButton());
+    await act(async () => { vi.advanceTimersByTime(1_000); });
+    expect(rest()).toMatch(/0:01/);
+  });
+
+  it('does not carry the rest into the next session', async () => {
+    // Train never unmounts between sessions, so the moment has to be cleared by
+    // the session changing — otherwise tomorrow's workout opens with a rest
+    // already running from yesterday's last set.
+    renderScreen('train', { data: 'rich', session: {} });
+    fireEvent.click(logButton());
+    expect(rest()).toMatch(/0:00/);
+
+    await act(async () => {
+      useStore.setState({
+        activeSession: {
+          startTime: new Date(2030, 0, 1, 9, 0),
+          workoutType: 'Pull A',
+          routineSource: 'manual',
+          routineExercises: [{ id: 'n1', exerciseName: 'Barbell Row', targetSets: 3 }],
+          sets: [],
+        },
+      });
+    });
+
+    expect(document.querySelector('.at-rest')).toBeNull();
+  });
+});
+
+/**
+ * The completion card's "pick the next exercise" and the action bar's "add
+ * exercise" open the same picker, and the screen already carries a third route
+ * to it further down. The card's button exists for the one moment the bar is
+ * not offering it: a session with everything logged, where the bar is Finish.
+ * The solo case — where the bar offers the picker itself — is above.
+ */
+describe('Train — the picker on the completion card', () => {
+  beforeEach(() => {
+    useStore.setState(initialState, true);
+  });
+
+  const card = () => document.querySelector('.at-done') as HTMLElement;
+  const bar = () => document.querySelector('.at-train-actions')?.textContent ?? '';
+
+  it('appears when the bar has become Finish, which offers no way to pick', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [
+          { id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 1 },
+          { id: 'e2', exerciseName: 'Barbell Row', targetSets: 1 },
+        ],
+        sets: [
+          { exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true },
+          { exerciseName: 'Barbell Row', setNumber: 1, weight: 60, reps: 10, isCompleted: true },
+        ],
+      },
+    });
+
+    await waitFor(() => expect(card()).toBeTruthy());
+    expect(bar()).toMatch(/finish/i);
+    expect(within(card()).getByRole('button', { name: /pick the next|elegir el siguiente/i })).toBeTruthy();
   });
 });

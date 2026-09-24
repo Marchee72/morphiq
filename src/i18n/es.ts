@@ -231,6 +231,7 @@ export const es: Translations = {
   'train.logged': 'registrada',
   'train.elapsed': '{time} transcurrido',
   'train.completeSet': 'Completar serie {n}',
+  'train.completeSetBodyweight': 'Registrar sin peso · serie {n}',
   'train.log': 'Registrar {volume} kg',
   'train.lastTime': 'La ultima vez {weight} kg x {reps}',
   'train.personalRecord': 'record personal',
@@ -251,6 +252,8 @@ export const es: Translations = {
   'train.editSession': 'Editar sesion',
   'train.swap': 'Cambiar',
   'train.remove': 'Quitar',
+  'train.removeConfirm_one': '¿Quitarlo? Se borra también la serie hecha.',
+  'train.removeConfirm_other': '¿Quitarlo? Se borran también sus {n} series hechas.',
 
   // -- Gimnasio (Entrenar sin sesion activa) ---------------------
   'gym.routines': 'Tus rutinas',
@@ -270,6 +273,8 @@ export const es: Translations = {
   'resume.resume': 'Retomar',
   'resume.finish': 'Terminar ya',
   'resume.discard': 'Descartar',
+  'resume.bannerTitle': 'Tenés una sesión sin cerrar',
+  'resume.bannerSub': 'Tocá para retomarla, terminarla o descartarla',
 
   // -- Empezar una sesion ----------------------------------------
   'start.title': 'Con que arrancamos?',
@@ -460,6 +465,9 @@ export const es: Translations = {
   'train.estimated1rm': '≈{weight} kg 1RM',
   'train.increase': 'Subir {label}',
   'train.decrease': 'Bajar {label}',
+  'train.rest': 'Descanso',
+  'train.fractions': 'Fracción de kilo',
+  'train.fraction': 'Fracción {value}',
   'train.swipeHint': 'Desliza para cambiar de ejercicio',
   'train.addSlotTitle': 'Anadir otro ejercicio',
   'train.addSlotSub': 'Has llegado al final de la sesion.',

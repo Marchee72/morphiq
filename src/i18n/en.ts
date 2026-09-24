@@ -233,6 +233,7 @@ export const en = {
   'train.logged': 'logged',
   'train.elapsed': '{time} elapsed',
   'train.completeSet': 'Complete set {n}',
+  'train.completeSetBodyweight': 'Log without weight · set {n}',
   'train.log': 'Log {volume} kg',
   'train.lastTime': 'Last time {weight} kg x {reps}',
   'train.personalRecord': 'personal record',
@@ -253,6 +254,8 @@ export const en = {
   'train.editSession': 'Edit session',
   'train.swap': 'Swap',
   'train.remove': 'Remove',
+  'train.removeConfirm_one': 'Remove it? Its logged set goes too.',
+  'train.removeConfirm_other': 'Remove it? Its {n} logged sets go too.',
 
   // -- Gym hub (Train with no session running) -------------------
   'gym.routines': 'Your routines',
@@ -272,6 +275,8 @@ export const en = {
   'resume.resume': 'Resume',
   'resume.finish': 'Finish now',
   'resume.discard': 'Discard it',
+  'resume.bannerTitle': 'You have an unfinished workout',
+  'resume.bannerSub': 'Tap to pick it up, finish it, or drop it',
 
   // -- Starting a session ----------------------------------------
   'start.title': 'What are we starting?',
@@ -463,6 +468,9 @@ export const en = {
   'train.estimated1rm': '≈{weight} kg 1RM',
   'train.increase': 'Increase {label}',
   'train.decrease': 'Decrease {label}',
+  'train.rest': 'Rest',
+  'train.fractions': 'Fraction of a kilo',
+  'train.fraction': 'Fraction {value}',
   'train.swipeHint': 'Swipe to change exercise',
   'train.addSlotTitle': 'Add another exercise',
   'train.addSlotSub': 'You have reached the end of the session.',

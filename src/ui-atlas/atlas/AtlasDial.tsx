@@ -14,12 +14,18 @@ import { useT } from '../../i18n';
  * full row to hit rather than a sliver of a finger-high track. It also leaves the
  * horizontal axis free for the Train screen's swipe-between-exercises.
  *
- * Only a window of values around the current one is rendered — the full weight
- * range is 240 items, and mounting all of them made the wheel stutter in the
- * Android WebView.
+ * Only a window of values around the current one is rendered — mounting the
+ * full 240-item weight range made the wheel stutter in the Android WebView.
  */
-/** How many values either side of the current one to mount. */
-const WINDOW = 12;
+/**
+ * How many values either side of the current one to mount.
+ *
+ * This is also the ceiling on how far one gesture can travel, because momentum
+ * stops where the mounted DOM stops. At 12 — with four rungs to the kilo — a
+ * flick could not move three kilos, and loading 60 kg measured twenty of them.
+ * 40 is 81 rows, a third of the 240 that stuttered, and one flick is 40 kg.
+ */
+const WINDOW = 40;
 
 /** Must match `.at-dial-tick`'s height in atlas.css — the snap maths depends on it. */
 const ROW_PX = 40;
@@ -42,6 +48,16 @@ export interface AtlasDialProps {
    * which is what reps still does.
    */
   values?: number[];
+  /**
+   * Fractional parts offered as a chip row under the wheel, for a dial whose
+   * wheel walks whole units.
+   *
+   * Weight uses this. With the fractions folded into the wheel the ladder had
+   * four rungs per kilo, so the wheel spent all its travel inside three kilos;
+   * split out, the wheel does the kilos and a 44 px chip does the tail. What
+   * the dial emits is the sum. Reps has no fractions and leaves it out.
+   */
+  fractions?: number[];
   /** Decimals to show. Weight uses 1 (so 32.5 reads correctly), reps 0. */
   decimals?: number;
   suffix?: string;
@@ -49,7 +65,8 @@ export interface AtlasDialProps {
 }
 
 export const AtlasDial: React.FC<AtlasDialProps> = ({
-  label, value, onChange, min, max, step, values: ladderProp, decimals = 0, suffix, formatValue,
+  label, value, onChange, min, max, step, values: ladderProp, fractions,
+  decimals = 0, suffix, formatValue,
 }) => {
   const { t } = useT();
   const listRef = useRef<HTMLDivElement>(null);
@@ -74,6 +91,25 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
     [ladderProp, min, max, step],
   );
 
+  /**
+   * The part of the value the wheel is responsible for.
+   *
+   * With chips the wheel holds whole units and the tail lives below it, so 60.5
+   * is the wheel on 60 with the `,5` chip lit. Without chips the wheel is the
+   * whole story, which is what reps has always been.
+   */
+  const wheelValue = fractions ? Math.floor(value) : value;
+
+  /** Which chip is lit — nearest, because a value can arrive off the ladder. */
+  const fraction = useMemo(() => {
+    if (!fractions?.length) return 0;
+    const tail = value - Math.floor(value);
+    return fractions.reduce(
+      (best, f) => (Math.abs(f - tail) < Math.abs(best - tail) ? f : best),
+      fractions[0],
+    );
+  }, [fractions, value]);
+
   // Nearest rather than exact: a value can arrive from a logged set, a routine's
   // suggestion or an older build, and none of those are obliged to sit on the
   // ladder. Landing on the closest rung beats falling back to index 0.
@@ -81,18 +117,27 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
     let best = 0;
     let bestDistance = Infinity;
     for (let i = 0; i < ladder.length; i++) {
-      const distance = Math.abs(ladder[i] - value);
+      const distance = Math.abs(ladder[i] - wheelValue);
       if (distance < bestDistance) { best = i; bestDistance = distance; }
     }
     return best;
-  }, [ladder, value]);
+  }, [ladder, wheelValue]);
 
   const total = ladder.length;
 
+  /**
+   * The mounted slice: always the same number of rows, centred on the value
+   * except near the ends of the ladder, where the window slides instead of
+   * shrinking.
+   *
+   * Clamping both edges independently is what it used to do, and it halved the
+   * dial at 0 kg — the window was [0, 40], so 0 → 60 kg took two flicks where
+   * 20 → 80 took one. Sliding costs nothing: it is the same 81 rows either way.
+   */
   const values = useMemo(() => {
-    const from = Math.max(0, index - WINDOW);
-    const to = Math.min(total - 1, index + WINDOW);
-    return ladder.slice(from, to + 1);
+    const span = Math.min(total - 1, WINDOW * 2);
+    const from = Math.min(Math.max(0, index - WINDOW), total - 1 - span);
+    return ladder.slice(from, from + span + 1);
   }, [ladder, index, total]);
 
   const show = useCallback(
@@ -100,10 +145,33 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
     [formatValue, decimals],
   );
 
+  /**
+   * A chip reads as its tail alone — `,5` — because the whole kilo is right
+   * above it on the wheel. The separator is read off a formatted number instead
+   * of assumed, so the chips follow the locale like every other figure here.
+   */
+  const tail = useCallback((f: number) => {
+    const mark = show(0.5).replace(/\d/g, '') || '.';
+    return `${mark}${show(f).split(/[.,]/)[1] ?? '0'}`;
+  }, [show]);
+
   /** The value at an index, held inside the ladder. */
   const at = useCallback(
     (i: number) => ladder[Math.min(ladder.length - 1, Math.max(0, i))],
     [ladder],
+  );
+
+  /**
+   * A wheel rung carrying the chosen chip — what the dial emits.
+   *
+   * Kept as whole + fraction rather than accumulated: adding 0.125 over and over
+   * drifts off binary floating point and the dial stops matching the values it
+   * snaps to. The top rung keeps its bare self when the chip would push it past
+   * `max`.
+   */
+  const compose = useCallback(
+    (rung: number, f = fraction) => (rung + f <= max ? rung + f : rung),
+    [fraction, max],
   );
 
   /** Whatever was typed, moved to the nearest rung the dial actually has. */
@@ -111,12 +179,19 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
     const bounded = Math.min(max, Math.max(min, v));
     let best = ladder[0];
     let bestDistance = Infinity;
-    for (const candidate of ladder) {
+    const consider = (candidate: number) => {
+      if (candidate > max) return;
       const distance = Math.abs(candidate - bounded);
       if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+    };
+    for (const rung of ladder) {
+      consider(rung);
+      // Typing is the fast lane for the odd numbers, so it has to reach every
+      // rung the chips add: 22,5 has to stay 22,5, not round to a whole kilo.
+      if (fractions) for (const f of fractions) consider(rung + f);
     }
     return best;
-  }, [ladder, max, min]);
+  }, [ladder, max, min, fractions]);
 
   // Keep the wheel centred on the value, including when it changes from outside
   // (moving to another set re-seeds it).
@@ -132,7 +207,7 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
     else list.scrollTop = top;
     const id = setTimeout(() => { settling.current = false; }, 60);
     return () => clearTimeout(id);
-  }, [value, editing]);
+  }, [wheelValue, editing]);
 
   useEffect(() => () => window.clearTimeout(commitTimer.current), []);
 
@@ -148,11 +223,11 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
       if (!Number.isFinite(v)) continue;
       if (!closest || distance < closest.distance) closest = { value: v, distance };
     }
-    if (!closest || closest.value === value) return;
+    if (!closest || closest.value === wheelValue) return;
 
     // Debounced: mid-flick every frame would otherwise write a different weight,
     // and the centring effect above would fight the momentum scroll doing it.
-    const next = closest.value;
+    const next = compose(closest.value);
     window.clearTimeout(commitTimer.current);
     commitTimer.current = window.setTimeout(() => onChange(next), SETTLE_MS);
   };
@@ -166,17 +241,17 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
 
   const nudge = (direction: 1 | -1) => {
     const next = index + direction;
-    if (next >= 0 && next < ladder.length) onChange(ladder[next]);
+    if (next >= 0 && next < ladder.length) onChange(compose(ladder[next]));
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const jump = (steps: number) => { e.preventDefault(); onChange(at(index + steps)); };
+    const jump = (steps: number) => { e.preventDefault(); onChange(compose(at(index + steps))); };
     if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); nudge(1); }
     if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); nudge(-1); }
     if (e.key === 'PageUp') jump(10);
     if (e.key === 'PageDown') jump(-10);
-    if (e.key === 'Home') { e.preventDefault(); onChange(at(0)); }
-    if (e.key === 'End') { e.preventDefault(); onChange(at(ladder.length - 1)); }
+    if (e.key === 'Home') { e.preventDefault(); onChange(compose(at(0))); }
+    if (e.key === 'End') { e.preventDefault(); onChange(compose(at(ladder.length - 1))); }
   };
 
   return (
@@ -216,7 +291,9 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
             <button
               className="at-dial-nudge"
               onClick={() => nudge(-1)}
-              disabled={value <= min}
+              // By rung, not by value: with a chip on, 0,5 sits on the bottom
+              // rung and the button would look live while having nowhere to go.
+              disabled={index <= 0}
               aria-label={t('train.decrease', { label })}
             >
               <Minus size={15} />
@@ -240,8 +317,8 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
                   key={v}
                   className="at-dial-tick"
                   data-value={v}
-                  data-active={v === value}
-                  onClick={() => onChange(v)}
+                  data-active={v === wheelValue}
+                  onClick={() => onChange(compose(v))}
                 >
                   {show(v)}
                 </span>
@@ -251,12 +328,31 @@ export const AtlasDial: React.FC<AtlasDialProps> = ({
             <button
               className="at-dial-nudge"
               onClick={() => nudge(1)}
-              disabled={value >= max}
+              disabled={index >= ladder.length - 1}
               aria-label={t('train.increase', { label })}
             >
               <Plus size={15} />
             </button>
           </div>
+
+          {/* The half kilo the wheel no longer stops on. One tap, and it sticks
+              across sets, so the flick only ever has to find the kilo. */}
+          {fractions && (
+            <div className="at-dial-fractions" role="group" aria-label={t('train.fractions')}>
+              {fractions.map(f => (
+                <button
+                  key={f}
+                  className="at-dial-fraction"
+                  data-active={f === fraction}
+                  aria-pressed={f === fraction}
+                  onClick={() => onChange(compose(at(index), f))}
+                  aria-label={t('train.fraction', { value: show(f) })}
+                >
+                  {tail(f)}
+                </button>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

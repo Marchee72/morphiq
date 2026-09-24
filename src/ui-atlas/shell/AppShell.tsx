@@ -19,6 +19,7 @@ import { AtlasSkeleton } from '../atlas/AtlasStates';
 
 import { AtlasTopInstallBanner } from '../atlas/AtlasTopInstallBanner';
 import { AtlasSyncBanner } from '../atlas/AtlasSyncBanner';
+import { AtlasResumeBanner } from '../atlas/AtlasResumeBanner';
 
 import './app-base.css';
 import '../atlas/atlas.css';
@@ -116,6 +117,10 @@ export const AppShell: React.FC = () => {
       {/* Above the scroll region: "the server cannot be reached" is a fact
           about the app, not about the screen you happen to be on. */}
       <AtlasSyncBanner />
+      {/* Same slot, for the same reason: closing the resume sheet without
+          answering it leaves a workout stored and unreachable, and the way back
+          to it belongs above the screens rather than on one of them. */}
+      <AtlasResumeBanner />
       {/* Keyed on the tab so switching screens resets scroll. */}
       <div className="app-scroll" key={screen} ref={scrollRef} data-pullable={canPull}>
         <AtlasPullRefresh state={pull.state} message={syncNote} />

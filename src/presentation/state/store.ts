@@ -174,9 +174,29 @@ export interface ActiveSession {
 /** Sets an exercise starts with when added by hand. Trimming one is a tap; adding one is a tap. */
 export const DEFAULT_TARGET_SETS = 4;
 
-/** Every set except the ones belonging to `exerciseName`. Keys the same way the derive layer does. */
-function dropSetsFor(sets: DraftSet[], exerciseName: string): DraftSet[] {
+/**
+ * Every set except the ones belonging to `exerciseName`. Keys the same way the
+ * derive layer does.
+ *
+ * Nothing is dropped while a row in `keeping` still carries that name. A set
+ * belongs to a name rather than to a row — `buildSessionExercises` groups them
+ * by `normalizeName` too — so with the same exercise on two rows, dropping one
+ * row emptied the other: it asked about one exercise's sets and deleted two
+ * rows' worth.
+ *
+ * ponytail: the ceiling is that the twin rows go on sharing one set list, so
+ * logging into either shows in both. Giving a row sets of its own means putting
+ * the row id on `DraftSet` and threading it through the derive layer, the
+ * persisted session and the history write — worth doing the day someone wants
+ * the same lift twice in a session, not to close a delete bug.
+ */
+function dropSetsFor(
+  sets: DraftSet[],
+  exerciseName: string,
+  keeping: ActiveSessionExercise[],
+): DraftSet[] {
   const key = normalizeName(exerciseName);
+  if (keeping.some(e => normalizeName(e.exerciseName) === key)) return sets;
   return sets.filter(s => normalizeName(s.exerciseName) !== key);
 }
 
@@ -558,7 +578,7 @@ export const useStore = create<StoreState>((set, get) => ({
       // A set row with no `isCompleted` is what nudging the dial leaves behind,
       // so dropping it alongside its exercise costs nothing.
       for (const dropped of current) {
-        if (!kept.includes(dropped)) sets = dropSetsFor(sets, dropped.exerciseName);
+        if (!kept.includes(dropped)) sets = dropSetsFor(sets, dropped.exerciseName, kept);
       }
     }
 
@@ -609,7 +629,7 @@ export const useStore = create<StoreState>((set, get) => ({
       activeSession: {
         ...session,
         routineExercises: list,
-        sets: dropSetsFor(session.sets, replaced.exerciseName),
+        sets: dropSetsFor(session.sets, replaced.exerciseName, list),
       },
     });
   },
@@ -642,7 +662,7 @@ export const useStore = create<StoreState>((set, get) => ({
       activeSession: {
         ...session,
         routineExercises: list,
-        sets: dropSetsFor(session.sets, removed.exerciseName),
+        sets: dropSetsFor(session.sets, removed.exerciseName, list),
       },
     });
   },
