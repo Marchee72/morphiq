@@ -18,17 +18,21 @@ export type WellnessItemKey = 'energy' | 'soreness' | 'stress' | 'mood';
 export interface WellnessItemSpec {
   key: WellnessItemKey;
   labelKey: StaticKey;
-  /** What a 1 means, and what a 5 means. Higher is better throughout. */
-  lowKey: StaticKey;
-  highKey: StaticKey;
+  /**
+   * A word for every step, 1 to 5, so a 2 is never ambiguous on the slider.
+   * Higher is better throughout.
+   */
+  levelKeys: readonly [StaticKey, StaticKey, StaticKey, StaticKey, StaticKey];
+  /** The item asked as a question, for the one-at-a-time check-in. */
+  questionKey: StaticKey;
 }
 
 /** Fixed order: the sheet renders these top to bottom exactly as listed. */
 export const WELLNESS_ITEMS: readonly WellnessItemSpec[] = [
-  { key: 'energy', labelKey: 'wellness.energy', lowKey: 'wellness.energy.low', highKey: 'wellness.energy.high' },
-  { key: 'soreness', labelKey: 'wellness.soreness', lowKey: 'wellness.soreness.low', highKey: 'wellness.soreness.high' },
-  { key: 'stress', labelKey: 'wellness.stress', lowKey: 'wellness.stress.low', highKey: 'wellness.stress.high' },
-  { key: 'mood', labelKey: 'wellness.mood', lowKey: 'wellness.mood.low', highKey: 'wellness.mood.high' },
+  { key: 'energy', labelKey: 'wellness.energy', levelKeys: ['wellness.energy.low', 'wellness.energy.l2', 'wellness.energy.l3', 'wellness.energy.l4', 'wellness.energy.high'], questionKey: 'wellness.q.energy' },
+  { key: 'soreness', labelKey: 'wellness.soreness', levelKeys: ['wellness.soreness.low', 'wellness.soreness.l2', 'wellness.soreness.l3', 'wellness.soreness.l4', 'wellness.soreness.high'], questionKey: 'wellness.q.soreness' },
+  { key: 'stress', labelKey: 'wellness.stress', levelKeys: ['wellness.stress.low', 'wellness.stress.l2', 'wellness.stress.l3', 'wellness.stress.l4', 'wellness.stress.high'], questionKey: 'wellness.q.stress' },
+  { key: 'mood', labelKey: 'wellness.mood', levelKeys: ['wellness.mood.low', 'wellness.mood.l2', 'wellness.mood.l3', 'wellness.mood.l4', 'wellness.mood.high'], questionKey: 'wellness.q.mood' },
 ] as const;
 
 /** Sleep worth a full score. Below it the component scales down proportionally. */
@@ -63,6 +67,11 @@ const WEIGHTS: Record<string, number> = {
   energy: 1, soreness: 1, stress: 1, mood: 1, sleep: 1.5, restingHr: 0.75,
 };
 
+/** One day of the Energy Score, oldest first. Null where Samsung sent none. */
+export interface EnergyDayVM { day: string; score: number | null }
+/** One night, keyed by the day you woke up. Null minutes where none was recorded. */
+export interface NightVM { day: string; minutes: number | null }
+
 export interface WellnessTodayVM {
   day: string;
   log: WellnessLog | null;
@@ -72,6 +81,13 @@ export interface WellnessTodayVM {
   readiness: number | null;
   /** Resting HR against its own baseline. Null without a baseline to compare to. */
   restingHrDelta: number | null;
+  /** Today's Energy Score, and the mean of the seven days before it. */
+  energy: number | null;
+  energyAvg7: number | null;
+  /** The last fourteen days of Energy Score, today last. */
+  energyDays: EnergyDayVM[];
+  /** The last seven nights, last night last. */
+  nights: NightVM[];
 }
 
 export interface WellnessTrendVM {
@@ -146,11 +162,25 @@ export function isAnswered(log: WellnessLog | null | undefined): boolean {
   return WELLNESS_ITEMS.some(item => typeof log[item.key] === 'number');
 }
 
+/** The `count` calendar days ending today, oldest first, as day keys. */
+function lastDays(now: Date, count: number): string[] {
+  return Array.from({ length: count }, (_, i) =>
+    wellnessDayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (count - 1 - i))));
+}
+
 export function buildWellnessToday(logs: readonly WellnessLog[], now: Date): WellnessTodayVM {
   const day = wellnessDayKey(now);
   const sorted = [...logs].sort((a, b) => a.day.localeCompare(b.day));
   const log = sorted.find(entry => entry.day === day) ?? null;
   const baseline = restingHrBaseline(sorted, day);
+  const byDay = new Map(sorted.map(entry => [entry.day, entry]));
+
+  const energyDays = lastDays(now, 14).map(key => {
+    const score = byDay.get(key)?.energyScore;
+    return { day: key, score: typeof score === 'number' && score > 0 ? score : null };
+  });
+  // The week before today, so today's score is compared with, not part of, it.
+  const prior = energyDays.slice(-8, -1).map(d => d.score).filter((s): s is number => s !== null);
 
   return {
     day,
@@ -160,6 +190,13 @@ export function buildWellnessToday(logs: readonly WellnessLog[], now: Date): Wel
     restingHrDelta: baseline !== null && typeof log?.restingHr === 'number'
       ? +(log.restingHr - baseline).toFixed(1)
       : null,
+    energy: energyDays[energyDays.length - 1].score,
+    energyAvg7: prior.length > 0 ? Math.round(prior.reduce((a, b) => a + b, 0) / prior.length) : null,
+    energyDays,
+    nights: lastDays(now, 7).map(key => {
+      const minutes = byDay.get(key)?.sleepMinutes;
+      return { day: key, minutes: typeof minutes === 'number' && minutes > 0 ? minutes : null };
+    }),
   };
 }
 

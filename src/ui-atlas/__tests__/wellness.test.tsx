@@ -15,8 +15,23 @@ const text = () => document.body.textContent?.replace(/\s+/g, ' ') ?? '';
  */
 const today = wellnessDayKey(TEST_NOW);
 
-/** The scales inside the open sheet — Today has radiogroups of its own. */
+/** The four questions inside the open sheet, one radiogroup each. */
 const scales = () => within(screen.getByRole('dialog')).getAllByRole('radiogroup');
+/** A choice's name: the number, then its word ("4Charged"). */
+const choice = (n: number) => new RegExp(`^${n}\\D`);
+/** Picks `n` in a question. */
+const pick = (group: HTMLElement, n: number) =>
+  fireEvent.click(within(group).getByRole('radio', { name: choice(n) }));
+
+/**
+ * Opens the check-in on a day that is already answered. The Energy cell is the
+ * way in when there is no Energy Score; waiting for its prompt to go first makes
+ * sure the seeded day has loaded, or the sheet would open on an empty one.
+ */
+async function openAnswered() {
+  await waitFor(() => expect(text()).not.toMatch(/how are you today/i));
+  fireEvent.click(screen.getByRole('button', { name: /^energy/i }));
+}
 
 /**
  * Seeded through Dexie rather than the store: `AppDataProvider` calls
@@ -50,10 +65,12 @@ describe('the wellness questionnaire', () => {
     fireEvent.click(await screen.findByRole('button', { name: /how are you today/i }));
 
     await waitFor(() => expect(scales().length).toBe(4));
-    for (const group of scales()) {
-      fireEvent.click(within(group).getByRole('radio', { name: '4' }));
+    // One at a time: each answer moves the sheet on, the last to the summary.
+    for (const [i, group] of scales().entries()) {
+      pick(group, 4);
+      if (i < 3) await waitFor(() => expect(screen.getByText(new RegExp(`question ${i + 2} of 4`, 'i'))).toBeInTheDocument());
     }
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^save$/i }));
 
     await waitFor(async () => {
       const rows = await db.wellnessLogs.toArray();
@@ -66,10 +83,12 @@ describe('the wellness questionnaire', () => {
     await seedDay({ energy: 2, soreness: 2, stress: 2, mood: 2 });
     renderScreen('today', { data: 'rich', now: TEST_NOW });
 
-    fireEvent.click(await screen.findByRole('button', { name: /readiness/i }));
-    await waitFor(() => expect(scales().length).toBe(4));
-    fireEvent.click(within(scales()[0]).getByRole('radio', { name: '5' }));
-    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await openAnswered();
+    // An answered day opens on its summary; a row there reopens its question,
+    // and answering it goes straight back to the summary.
+    fireEvent.click(await within(await screen.findByRole('dialog')).findByRole('button', { name: /^energy/i }));
+    pick(scales()[0], 5);
+    fireEvent.click(await screen.findByRole('button', { name: /^save$/i }));
 
     await waitFor(async () => {
       const rows = await db.wellnessLogs.toArray();
@@ -85,26 +104,25 @@ describe('the wellness questionnaire', () => {
     renderScreen('today', { data: 'rich', now: TEST_NOW });
 
     const open = async () => {
-      fireEvent.click(await screen.findByRole('button', { name: /readiness/i }));
+      await openAnswered();
       await waitFor(() => expect(scales().length).toBe(4));
     };
 
     await open();
-    fireEvent.click(within(scales()[0]).getByRole('radio', { name: '1' }));
+    pick(scales()[0], 1);
     // Dismissed without saving.
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
 
     await open();
-    expect(within(scales()[0]).getByRole('radio', { name: '5' }))
-      .toHaveAttribute('aria-checked', 'true');
+    expect(within(scales()[0]).getByRole('radio', { name: choice(5) })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('shows what the watch filled in as a reading, not as a question', async () => {
     await seedDay({ energy: 4, sleepMinutes: 450, restingHr: 52, sleepSource: 'health-connect' });
     renderScreen('today', { data: 'rich', now: TEST_NOW });
 
-    fireEvent.click(await screen.findByRole('button', { name: /readiness/i }));
-    await waitFor(() => expect(text()).toMatch(/read from health connect/i));
+    await openAnswered();
+    await waitFor(() => expect(text()).toMatch(/read from your watch/i));
     // Read, so it is not offered as an editable field.
     expect(screen.queryByLabelText(/hours slept/i)).toBeNull();
   });
@@ -113,9 +131,20 @@ describe('the wellness questionnaire', () => {
     await seedDay({ energy: 4 });
     renderScreen('today', { data: 'rich', now: TEST_NOW });
 
-    fireEvent.click(await screen.findByRole('button', { name: /readiness/i }));
+    await openAnswered();
     await waitFor(() => expect(scales().length).toBe(4));
     expect(text()).toMatch(/hours slept last night/i);
-    expect(text()).not.toMatch(/read from health connect/i);
+    expect(text()).not.toMatch(/read from your watch/i);
+  });
+
+  it('shows the Samsung Energy Score in the Energy cell and opens its sheet', async () => {
+    await seedDay({ energyScore: 76, sleepMinutes: 418, sleepSource: 'health-connect' });
+    renderScreen('today', { data: 'rich', now: TEST_NOW });
+
+    // The cell is Samsung's number as it comes, and opens its sheet.
+    fireEvent.click(await screen.findByRole('button', { name: /energy\s*76/i }));
+    await waitFor(() => expect(text()).toMatch(/what it is/i));
+    // The check-in is reached from there now.
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /how are you today/i })).toBeInTheDocument();
   });
 });

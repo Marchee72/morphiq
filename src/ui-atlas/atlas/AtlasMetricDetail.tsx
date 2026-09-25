@@ -3,7 +3,7 @@ import { Scale } from 'lucide-react';
 import { useT } from '../../i18n';
 import type { StaticKey } from '../../i18n/types';
 import { useAppActions } from '../data/useAppData';
-import { isImproving, isMeasured } from '../derive/bodyMetrics';
+import { isImproving, isMeasured, metricColor } from '../derive/bodyMetrics';
 import type { MetricPointVM } from '../types';
 import { AtlasMetricChart } from './AtlasMetricChart';
 import { AtlasSheet } from './AtlasSheet';
@@ -78,7 +78,7 @@ export const AtlasMetricDetail: React.FC<{
 
       {series ? (
         <div className="at-card" style={{ padding: '18px 16px 12px' }}>
-          <AtlasMetricChart series={series} decimals={metric.decimals} height={140} now={now} />
+          <AtlasMetricChart series={series} decimals={metric.decimals} height={140} now={now} color={metricColor(metric.key)} />
         </div>
       ) : (
         <p className="at-summary-empty">{t('common.noData')}</p>

@@ -1,5 +1,6 @@
 apply plugin: 'com.android.application'
 apply plugin: 'org.jetbrains.kotlin.android'
+apply plugin: 'kotlin-parcelize' // the Samsung Health Data SDK needs it
 
 android {
     namespace = "com.morphiq.app"
@@ -32,6 +33,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    // Samsung Health Data SDK: not on any Maven repo, downloaded by hand from
+    // developer.samsung.com into app/libs. Without it the plugin that needs it
+    // is simply left out of the build (see SamsungHealthPlugin.kt).
+    if (!fileTree(dir: 'libs', include: ['samsung-health-data-api*.aar']).isEmpty()) {
+        sourceSets.main.java.srcDirs += 'src/samsung/java'
+    }
 }
 
 repositories {
@@ -53,6 +60,8 @@ dependencies {
     implementation 'androidx.health.connect:connect-client:1.2.0-alpha01'
     implementation 'androidx.media:media:1.6.0'
     implementation 'androidx.work:work-runtime-ktx:2.10.0'
+    implementation fileTree(include: ['samsung-health-data-api*.aar'], dir: 'libs')
+    implementation 'com.google.code.gson:gson:2.13.1' // required by the Samsung SDK
 }
 
 apply from: 'capacitor.build.gradle'

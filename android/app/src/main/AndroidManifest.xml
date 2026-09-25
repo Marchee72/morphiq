@@ -3,6 +3,7 @@
     <!-- Package Queries for Health Connect (Android 11+) -->
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
+        <package android:name="com.sec.android.app.shealth" />
     </queries>
 
     <!-- Health Connect Read Permissions -->

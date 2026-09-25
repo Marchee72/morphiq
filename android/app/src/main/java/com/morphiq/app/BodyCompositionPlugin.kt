@@ -186,6 +186,22 @@ class BodyCompositionPlugin : Plugin() {
         call.resolve()
     }
 
+    /**
+     * Opens Samsung Health. It only hands the watch's readings to Health
+     * Connect after pulling them from the watch, and opening it is one of the
+     * few things that makes it pull.
+     */
+    @PluginMethod
+    fun openSamsungHealth(call: PluginCall) {
+        val launch = context.packageManager.getLaunchIntentForPackage("com.sec.android.app.shealth")
+        if (launch == null) {
+            call.resolve(JSObject().put("opened", false))
+            return
+        }
+        activity.startActivity(launch)
+        call.resolve(JSObject().put("opened", true))
+    }
+
     @PluginMethod
     fun disableBackgroundSync(call: PluginCall) {
         HealthSyncWorker.disable(context)

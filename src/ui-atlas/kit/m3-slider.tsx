@@ -91,7 +91,9 @@ export function M3Slider({ label, value, onChange, min, max, step = 1, valueText
         <span
           aria-hidden="true"
           className={cn('absolute -top-[18px] -ml-6 flex h-8 w-12 items-center justify-center rounded-2xl bg-[var(--cocoa)] text-[15px] font-extrabold text-[var(--sand)]', ease)}
-          style={{ left: `${pct}%`, opacity: held ? 1 : 0 }}
+          // Clamped so the bubble never reaches past either end: at the top of
+          // the scale it overflowed by half its width and scrolled the page sideways.
+          style={{ left: `clamp(24px, ${pct}%, calc(100% - 24px))`, opacity: held ? 1 : 0 }}
         >
           {value}
         </span>

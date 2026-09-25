@@ -72,11 +72,15 @@ describe('screens', () => {
       expect(visibleText()).toContain('78.7');
     });
 
-    it('names the composition metrics it has data for', () => {
+    it('charts weight, muscle and fat in kilos, and breaks the weight down', () => {
       renderScreen('body', { data: 'rich' });
       const text = visibleText();
+      // No skeletal muscle in the fixture (it only comes from Samsung Health),
+      // so the muscle lane falls back to muscle mass.
       expect(text).toContain('Muscle mass');
-      expect(text).toContain('Body fat');
+      expect(text).toContain('Fat mass');
+      expect(text).toMatch(/What your [\d.]+ kg is made of/);
+      expect(text).toContain('Recent weigh-ins');
     });
 
     it('invites a first reading instead of rendering an empty chart', () => {

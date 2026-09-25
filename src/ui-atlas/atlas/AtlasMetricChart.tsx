@@ -28,7 +28,13 @@ export const AtlasMetricChart: React.FC<{
    * exercise stats let you pick the window.
    */
   weeks?: number;
-}> = ({ series, decimals = 1, height = 90, now = new Date(), weeks = SERIES_WEEKS }) => {
+  /** False drops the month and min/max rows, for charts stacked over one shared axis. */
+  axis?: boolean;
+  /** Line colour; one per series when several share a card. */
+  color?: string;
+  /** Time between points, for the tooltip's dates. A week unless the series is daily. */
+  stepMs?: number;
+}> = ({ series, decimals = 1, height = 90, now = new Date(), weeks = SERIES_WEEKS, axis = true, color = 'var(--ember)', stepMs = WEEK_MS }) => {
   // `useId` rather than a literal: a fixed id collides the moment two charts render at once.
   const fillId = useId();
   const { t, fmt } = useT();
@@ -62,7 +68,7 @@ export const AtlasMetricChart: React.FC<{
   };
   const at = hover != null ? point(hover) : null;
   /** The week a point stands for: the last one is this week. */
-  const weekOf = (i: number) => new Date(now.getTime() - (series.length - 1 - i) * WEEK_MS);
+  const weekOf = (i: number) => new Date(now.getTime() - (series.length - 1 - i) * stepMs);
 
   return (
     <>
@@ -87,8 +93,8 @@ export const AtlasMetricChart: React.FC<{
         <svg viewBox={`0 0 ${CHART_W} ${height}`} width="100%" height={height} preserveAspectRatio="none">
           <defs>
             <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--ember)" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="var(--ember)" stopOpacity="0" />
+              <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
             </linearGradient>
           </defs>
           <path className="at-chart-area" d={sparkArea(series, CHART_W, height, CHART_PAD)} fill={`url(#${fillId})`} />
@@ -96,14 +102,14 @@ export const AtlasMetricChart: React.FC<{
             className="at-chart-line"
             d={sparkPath(series, CHART_W, height, CHART_PAD)}
             pathLength={1}
-            fill="none" stroke="var(--ember)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+            fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
           />
           {at && (
             <line x1={at.x} x2={at.x} y1={0} y2={height} stroke="var(--muted)" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
           )}
           {/* Anchors "now" at the right edge, so the line has a head and not just a shape. */}
-          <circle cx={last.x} cy={last.y} r="3.5" fill="var(--ember)" vectorEffect="non-scaling-stroke" />
+          <circle cx={last.x} cy={last.y} r="3.5" fill={color} vectorEffect="non-scaling-stroke" />
         </svg>
         {at && hover != null && (
           <>
@@ -120,15 +126,15 @@ export const AtlasMetricChart: React.FC<{
         )}
       </div>
 
-      <div className="at-chart-axis">
+      {axis && <div className="at-chart-axis">
         {[weeks - 1, Math.floor((weeks - 1) / 2), 0].map(weeksAgo => (
           <span key={weeksAgo}>
             {fmt.monthShort(new Date(now.getTime() - weeksAgo * WEEK_MS))}
           </span>
         ))}
-      </div>
+      </div>}
       {/* A flat series has nothing to bracket — one number twice reads as a bug. */}
-      {min !== max && (
+      {axis && min !== max && (
         <div className="at-chart-axis">
           <span>{t('body.min')} {fmt.n(min, decimals)}</span>
           <span>{t('body.max')} {fmt.n(max, decimals)}</span>

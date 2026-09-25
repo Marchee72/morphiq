@@ -1,5 +1,7 @@
 import React from 'react';
 import { ArrowRight } from 'lucide-react';
+import { fillGaps } from '../derive/buckets';
+import { ScoreRing } from './AtlasYourDay';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { metricByKey } from '../derive/bodyMetrics';
@@ -20,6 +22,22 @@ import { AtlasSessionRow } from './AtlasSessionRow';
  * list, a way through) and splitting them would be five files of the same frame.
  */
 
+/** Sleep's blues, darkest for the deepest stage — the same as the Today panel. */
+const SLEEP_BLUE = { deep: '#1E3A8A', rem: '#3B82F6', light: '#93C5FD' };
+
+/** Six blues, darker for a longer night. */
+const NIGHT_SHADES = ['#BFDBFE', '#93C5FD', '#60A5FA', '#3B82F6', '#1D4ED8', '#1E3A8A'];
+const nightShade = (minutes: number) =>
+  NIGHT_SHADES[[300, 360, 390, 420, 450].filter(limit => minutes >= limit).length];
+
+const hm = (minutes: number) => `${Math.floor(minutes / 60)} h ${String(Math.round(minutes % 60)).padStart(2, '0')}`;
+
+/** A `YYYY-MM-DD` day key as local noon, clear of any midnight edge. */
+const dateOfDay = (day: string) => {
+  const [y, m, d] = day.split('-').map(Number);
+  return new Date(y, m - 1, d, 12);
+};
+
 export type TodayDetail =
   | { kind: 'weight' }
   | { kind: 'nutrition'; macro: 'protein' | 'calories' }
@@ -27,7 +45,9 @@ export type TodayDetail =
   | { kind: 'steps' }
   | { kind: 'day'; date: Date }
   | { kind: 'muscle'; group: MuscleGroupId }
-  | { kind: 'wellness' };
+  | { kind: 'wellness' }
+  | { kind: 'sleep' }
+  | { kind: 'energy' };
 
 export const AtlasTodayDetail: React.FC<{
   detail: TodayDetail | null;
@@ -224,6 +244,117 @@ export const AtlasTodayDetail: React.FC<{
           <p className="at-summary-empty">{t('today.stepsNoSourceSub')}</p>
         )}
       </>,
+    );
+  }
+
+  if (detail.kind === 'sleep') {
+    const log = wellness.today.log;
+    const total = log?.sleepMinutes ?? 0;
+    const deep = Math.min(total, log?.sleepDeepMinutes ?? 0);
+    const rem = Math.min(total - deep, log?.sleepRemMinutes ?? 0);
+    const stages = [
+      { key: 'deep', label: t('wellness.deep'), min: deep, tint: SLEEP_BLUE.deep },
+      { key: 'rem', label: t('wellness.rem'), min: rem, tint: SLEEP_BLUE.rem },
+      { key: 'light', label: t('wellness.light'), min: total - deep - rem, tint: SLEEP_BLUE.light },
+    ];
+    const start = log?.sleepStart ? new Date(log.sleepStart) : null;
+    const end = log?.sleepEnd ? new Date(log.sleepEnd) : null;
+    const nights = wellness.today.nights;
+    const most = Math.max(1, ...nights.map(n => n.minutes ?? 0));
+    const recorded = nights.filter(n => n.minutes !== null);
+    const avg = recorded.length > 0 ? recorded.reduce((s, n) => s + (n.minutes ?? 0), 0) / recorded.length : null;
+
+    return sheet(
+      t('wellness.sleep'),
+      t('sleep.lastNight'),
+      <>
+        <div className="at-card at-sleep-head">
+          <div>
+            <b>{total > 0 ? hm(total) : '—'}</b>
+            {start && end && <small>{fmt.clock(start)} → {fmt.clock(end)}</small>}
+          </div>
+          {log?.sleepScore != null && (
+            <ScoreRing score={log.sleepScore} tint={SLEEP_BLUE.rem} size={84} label={`${t('sleep.score')} ${log.sleepScore}`} />
+          )}
+        </div>
+
+        {total > 0 && deep + rem > 0 && (
+          <div className="at-card at-sleep-stages">
+            <b>{t('sleep.stages')}</b>
+            <span className="at-panel-stages" aria-hidden="true">
+              {stages.map(s => <i key={s.key} style={{ flexGrow: s.min, background: s.tint }} />)}
+            </span>
+            <div>
+              {stages.map(s => (
+                <span key={s.key}>
+                  <small><i style={{ background: s.tint }} />{s.label}</small>
+                  <b>{hm(s.min)}</b>
+                  <small>{fmt.n((s.min / total) * 100)} %</small>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="at-card at-sleep-nights">
+          <span><b>{t('sleep.nights')}</b>{avg !== null && <small>{t('sleep.avg', { time: hm(avg) })}</small>}</span>
+          <div aria-hidden="true">
+            {nights.map((n, i) => (
+              <span key={n.day}>
+                <i style={{ height: `${Math.max(4, ((n.minutes ?? 0) / most) * 88)}px`, background: n.minutes ? nightShade(n.minutes) : undefined }} />
+                <small data-today={i === nights.length - 1}>{fmt.weekdayShort(dateOfDay(n.day)).slice(0, 1).toUpperCase()}</small>
+              </span>
+            ))}
+          </div>
+          <small>{t('sleep.shadeHint')}</small>
+        </div>
+
+        <p className="at-metric-source">{log?.sleepScore != null ? t('sleep.fromSamsung') : t('wellness.fromHealthConnect')}</p>
+      </>,
+    );
+  }
+
+  if (detail.kind === 'energy') {
+    const { energy, energyAvg7, energyDays } = wellness.today;
+    const series = fillGaps(energyDays.map(d => d.score));
+    const delta = energy != null && energyAvg7 != null ? energy - energyAvg7 : null;
+
+    return sheet(
+      t('energy.title'),
+      fmt.relativeDay(now, now),
+      <>
+        <div className="at-card at-energy-head">
+          {energy != null
+            ? <ScoreRing score={energy} tint="var(--sage)" size={132} label={`${t('energy.title')} ${energy}`} />
+            : <b>—</b>}
+          {delta !== null && (
+            <span className="at-delta-chip" data-good={delta > 0}>{t('energy.vsAvg7', { delta: fmt.signed(delta, 0) })}</span>
+          )}
+        </div>
+
+        {series && (
+          <div className="at-card" style={{ padding: '18px 16px 12px' }}>
+            <div className="at-goal-row" style={{ marginBottom: 8 }}>
+              <b>{t('energy.last14')}</b>
+              {energyAvg7 != null && <span>{t('energy.avg7', { n: energyAvg7 })}</span>}
+            </div>
+            <AtlasMetricChart series={series} decimals={0} height={110} now={now} color="var(--sage)" axis={false} stepMs={86_400_000} />
+            <div className="at-chart-axis">
+              <span>{fmt.shortDate(dateOfDay(energyDays[0].day))}</span>
+              <span>{fmt.relativeDay(now, now)}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="at-card at-energy-about">
+          <b>{t('energy.whatTitle')}</b>
+          <p>{t('energy.what')}</p>
+        </div>
+      </>,
+      // The check-in lives here now that the cell it hung off shows the score.
+      <button className="at-btn" data-block="true" onClick={() => { onClose(); actions.openOverlay('wellness'); }}>
+        {wellness.today.answered ? t('wellness.edit') : t('wellness.ask')}
+      </button>,
     );
   }
 

@@ -165,6 +165,9 @@ function App() {
     let cancelled = false;
     let permitted = false;
     const profileId = String(activeProfile.id);
+    /** Only a real Health Connect has a sync state worth showing. */
+    const native = healthProvider === provider;
+    const { setHealthSync } = useStore.getState();
 
     /**
      * Steps for the last week, which Today reads today's figure out of.
@@ -256,23 +259,32 @@ function App() {
      * have, and moving past it is how it got lost for good.
      */
     const readHealthRecords = async () => {
+      if (!native) return;
+      setHealthSync({ status: 'syncing' });
       const body = await readBodyComposition();
       const workouts = await readWorkouts();
       const wellness = await readWellness();
-      if (!cancelled && body && workouts && wellness && getSyncState().failed === 0) {
+      if (cancelled) return;
+      setHealthSync({ status: 'idle', checkedAt: new Date() });
+      if (body && workouts && wellness && getSyncState().failed === 0) {
         markSyncOk(profileId);
       }
     };
 
     const autoSync = async () => {
       try {
+        if (native) setHealthSync({ status: 'syncing' });
         permitted = await healthProvider.requestPermissions();
+        if (native && !permitted) setHealthSync({ status: 'denied' });
         if (permitted) {
           // Steps first: the cheapest read, and the one Today shows at once.
           await readSteps();
           await readHealthRecords();
         }
-      } catch (err) { console.error('Health sync error:', err); }
+      } catch (err) {
+        console.error('Health sync error:', err);
+        if (native) setHealthSync({ status: 'idle' });
+      }
     };
     autoSync();
 

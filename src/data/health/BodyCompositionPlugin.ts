@@ -35,6 +35,8 @@ export interface BodyCompositionPluginInterface {
   requestBackgroundPermission(): Promise<PermissionStatus>;
   enableBackgroundSync(): Promise<void>;
   disableBackgroundSync(): Promise<void>;
+  /** `opened: false` when Samsung Health is not installed. */
+  openSamsungHealth(): Promise<{ opened: boolean }>;
 }
 
 export const BodyComposition = registerPlugin<BodyCompositionPluginInterface>('BodyComposition');

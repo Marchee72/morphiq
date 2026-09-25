@@ -176,3 +176,20 @@ describe('buildWellnessTrend', () => {
     expect(trend.itemSeries[0].series?.at(-1)).toBe(5);
   });
 });
+
+describe('energy and nights for Today', () => {
+  it('compares today\'s Energy Score with the week before it', () => {
+    const logs = [
+      log({ daysAgo: 0, energyScore: 76 }),
+      ...[1, 2, 3, 4, 5, 6, 7].map(d => log({ daysAgo: d, energyScore: 70 })),
+      log({ daysAgo: 8, energyScore: 10 }), // outside the week: ignored
+      log({ daysAgo: 1, sleepMinutes: 418 }),
+    ];
+    const today = buildWellnessToday(logs, NOW);
+    expect(today.energy).toBe(76);
+    expect(today.energyAvg7).toBe(70);
+    expect(today.energyDays).toHaveLength(14);
+    expect(today.nights).toHaveLength(7);
+    expect(today.nights.at(-1)).toEqual({ day: day(0), minutes: null });
+  });
+});

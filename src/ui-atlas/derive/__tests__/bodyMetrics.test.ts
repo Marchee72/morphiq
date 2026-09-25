@@ -31,7 +31,7 @@ describe('METRIC_SPECS', () => {
       // Visceral fat, metabolic age and protein used to sit in this list.
       // Health Connect has no record for any of them, so nothing measured them
       // — they were scale formulas over height/weight/age/sex. See `Measurement`.
-      'weight', 'bodyFat', 'muscleMass', 'muscleMassPct', 'ffmi', 'bmi', 'bodyWater', 'bmr',
+      'weight', 'bodyFat', 'fatMass', 'muscleMass', 'skeletalMuscle', 'muscleMassPct', 'ffmi', 'bmi', 'bodyWater', 'bmr',
     ]);
   });
 

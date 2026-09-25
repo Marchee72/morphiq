@@ -34,7 +34,7 @@ export interface ProfileVM {
 }
 
 export type MetricKey =
-  | 'weight' | 'bodyFat' | 'muscleMass' | 'muscleMassPct' | 'ffmi' | 'bmi' | 'bodyWater' | 'bmr';
+  | 'weight' | 'bodyFat' | 'fatMass' | 'muscleMass' | 'skeletalMuscle' | 'muscleMassPct' | 'ffmi' | 'bmi' | 'bodyWater' | 'bmr';
 
 export interface MetricPointVM {
   key: MetricKey;
@@ -57,6 +57,26 @@ export interface BodyVM {
   latestAt: Date | null;
   readingCount: number;
   hasData: boolean;
+  /** Every reading's time, for the sync strip's "do you weigh in most days". */
+  readingTimes: Date[];
+  /** The last three weigh-ins, newest first. */
+  recent: { at: Date; weight: number; bodyFat: number }[];
+  /** What the latest weigh-in with body composition is made of, in kg. */
+  composition: BodyCompositionVM | null;
+}
+
+export interface BodyCompositionVM {
+  weight: number;
+  fat: number;
+  /** Skeletal muscle when Samsung Health supplied it, muscle mass otherwise. */
+  muscle: number;
+  muscleKey: 'skeletalMuscle' | 'muscleMass';
+  /**
+   * Everything else — water, organs, bone — never below zero. Bone is not split
+   * out: neither Samsung Health nor Health Connect measures it, so the only
+   * figure there is is a scale formula over height, age and lean mass.
+   */
+  rest: number;
 }
 
 export type MuscleGroupId =

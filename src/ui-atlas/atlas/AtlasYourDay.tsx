@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Bike, ChevronRight, Droplet, Dumbbell, Flame, Footprints, HeartPulse, Moon, Plus, Timer,
+  Bike, ChevronRight, Droplet, Dumbbell, Flame, Footprints, Moon, Plus, Timer, Zap,
 } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
@@ -10,7 +10,11 @@ import { RollingNumber } from '../kit/rolling-number';
 import type { TodayDetail } from './AtlasTodayDetail';
 
 /** Each ring's colour, kept everywhere that number appears. */
-const TINT = { steps: '#FF6A2B', active: '#FFB020', kcal: '#FF8A5B', ready: '#7FB63A', deep: '#9A2C12', rem: '#FF8A5B', light: '#FFB020' };
+// Sleep is blue throughout, darkest for the deepest stage; energy is sage.
+const TINT = {
+  steps: '#FF6A2B', active: '#FFB020', kcal: '#FF8A5B', ready: '#7FB63A',
+  deep: '#1E3A8A', rem: '#3B82F6', light: '#93C5FD', sleep: '#3B82F6', energy: 'var(--sage)',
+};
 /**
  * What each ring fills against. Not the weekly steps average: it includes today,
  * so a ring against it would always read close to full.
@@ -48,6 +52,20 @@ const Rings: React.FC<{ rings: { key: string; tint: string; pct: number }[] }> =
     </svg>
   );
 };
+
+/** A full ring with the score inside it, for Samsung's Energy Score. */
+export const ScoreRing: React.FC<{ score: number; tint: string; size?: number; label: string }> = ({ score, tint, size = 72, label }) => (
+  <svg className="at-score-ring" width={size} height={size} viewBox="0 0 100 100" role="img" aria-label={label}>
+    <circle cx="50" cy="50" r="42" style={{ stroke: `color-mix(in srgb, ${tint} 20%, transparent)` }} />
+    <circle
+      cx="50" cy="50" r="42" transform="rotate(-90 50 50)"
+      strokeDasharray="263.9"
+      strokeDashoffset={263.9 * (1 - Math.min(1, Math.max(0, score / 100)))}
+      style={{ stroke: tint }}
+    />
+    <text x="50" y="50" dominantBaseline="central" textAnchor="middle">{Math.round(score)}</text>
+  </svg>
+);
 
 /** A half-circle meter, for a score out of 100. */
 const Gauge: React.FC<{ pct: number; tint: string }> = ({ pct, tint }) => (
@@ -122,9 +140,9 @@ export const AtlasYourDay: React.FC<{
     .reduce((total, entry) => total + entry.volumeKg, 0));
   const maxDay = Math.max(1, ...perDay);
 
-  const readiness = wellness.today.readiness;
   const log = wellness.today.log;
-  const readyLine = log?.restingHr ? `${t('wellness.restingHr')} ${log.restingHr}` : '';
+  // Samsung's Energy Score, as it comes — nothing of ours mixed in.
+  const energy = wellness.today.energy;
 
   // Last night, as Samsung Health splits it. Light is what the stages leave.
   const sleep = log?.sleepMinutes ?? 0;
@@ -220,14 +238,16 @@ export const AtlasYourDay: React.FC<{
           })}
 
           <div className="at-panel-grid">
-            <button className="at-panel-cell" onClick={() => actions.openOverlay('wellness')}
-              aria-label={readiness == null ? t('wellness.ask') : undefined}>
-              <Head icon={<HeartPulse size={14} />} tint={TINT.ready}>{t('wellness.readiness')}</Head>
+            {/* Without a score (no Samsung read, the web build) the cell is the
+                way into the check-in instead of into a sheet with nothing in it. */}
+            <button className="at-panel-cell"
+              onClick={() => (energy != null ? onDetail({ kind: 'energy' }) : actions.openOverlay('wellness'))}>
+              <Head icon={<Zap size={14} />} tint={TINT.energy}>{t('energy.title')}</Head>
               <span className="at-panel-row">
-                <b className="at-panel-big">{readiness ?? '?'}{readiness != null && <small> /100</small>}</b>
-                <Gauge pct={(readiness ?? 0) / 100} tint={TINT.ready} />
+                <b className="at-panel-big">{energy ?? '—'}{energy != null && <small> /100</small>}</b>
+                <Gauge pct={(energy ?? 0) / 100} tint={TINT.energy} />
               </span>
-              <small className="at-panel-sub">{readiness == null ? t('wellness.ask') : readyLine || ' '}</small>
+              <small className="at-panel-sub">{wellness.today.answered ? ' ' : t('wellness.ask')}</small>
             </button>
 
             <button className="at-panel-cell" onClick={() => onDetail({ kind: 'volume' })}>
@@ -280,9 +300,9 @@ export const AtlasYourDay: React.FC<{
 
           {/* Last night's sleep: from the watch through Health Connect, so it is
               filled without anyone typing it. */}
-          <button className="at-panel-sleep" onClick={() => actions.openOverlay('wellness')}>
+          <button className="at-panel-sleep" onClick={() => onDetail({ kind: 'sleep' })}>
             <span className="at-panel-row">
-              <Head icon={<Moon size={14} />} tint={TINT.rem}>{t('wellness.sleep')}</Head>
+              <Head icon={<Moon size={14} />} tint={TINT.sleep}>{t('wellness.sleep')}</Head>
               <b className="at-panel-big">{sleep > 0 ? hm(sleep) : '—'}</b>
             </span>
             {stages.length > 0 ? (

@@ -845,6 +845,42 @@
   .at-panel-gauge path + path, .at-panel-bars i, .at-panel-stages i { animation: none; transition: none; }
 }
 
+/* A score in a ring: Samsung's Energy Score, and the sleep score on its sheet. */
+.at-score-ring { flex-shrink: 0; }
+.at-score-ring circle { fill: none; stroke-width: 10; stroke-linecap: round; }
+.at-score-ring circle + circle { transition: stroke-dashoffset 1s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.at-score-ring text { fill: var(--cocoa); font-size: 28px; font-weight: 800; font-family: 'Urbanist', system-ui, sans-serif; }
+
+
+/* The sleep and energy sheets. */
+.at-sleep-head { display: flex; align-items: center; justify-content: space-between; padding: 18px; }
+.at-sleep-head b { display: block; font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+.at-sleep-head small { display: block; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+
+.at-sleep-stages { padding: 16px; display: grid; gap: 12px; }
+.at-sleep-stages > b { font-size: 15px; font-weight: 800; }
+.at-sleep-stages > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.at-sleep-stages > div > span { display: flex; flex-direction: column; gap: 2px; }
+.at-sleep-stages small { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.at-sleep-stages i { width: 8px; height: 8px; border-radius: 2px; }
+.at-sleep-stages > div b { font-size: 16px; font-weight: 800; }
+
+.at-sleep-nights { padding: 16px; display: grid; gap: 12px; }
+.at-sleep-nights > span { display: flex; justify-content: space-between; align-items: baseline; }
+.at-sleep-nights > span b { font-size: 15px; font-weight: 800; }
+.at-sleep-nights small { font-size: 12px; font-weight: 700; color: var(--muted); }
+.at-sleep-nights > div { display: flex; align-items: flex-end; gap: 10px; height: 110px; }
+.at-sleep-nights > div > span { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; height: 100%; }
+.at-sleep-nights > div i { width: 100%; border-radius: 8px; background: var(--at-tonal); }
+.at-sleep-nights > div small[data-today='true'] { color: var(--cocoa); font-weight: 800; }
+
+.at-energy-head { padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.at-energy-head .at-delta-chip { margin: 0; }
+.at-energy-head > b { font-size: 44px; font-weight: 800; }
+.at-energy-about { padding: 16px; display: grid; gap: 8px; }
+.at-energy-about b { font-size: 15px; font-weight: 800; }
+.at-energy-about p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+
 /* ---------- train tab, no session ----------
    Led by the suggestion: an ember card saying what is due and the lifts to do
    it with, then three quick ways in, routines, records and history. */
@@ -2205,32 +2241,106 @@
 
 /* ---------- body screen ---------- */
 
-.at-figure-wrap {
-  position: relative;
-  margin: 8px 18px 0;
-  background: var(--card);
-  border-radius: 30px;
-  padding: 18px 14px 10px;
+/* The strip under the title: what the last sync saw, and when. */
+.at-sync {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 16px;
+  background: var(--d-tonal);
+  box-shadow: var(--d-soft);
+  color: var(--cocoa);
+  font-size: 13.5px;
+  font-weight: 600;
 }
-
-.at-callout {
-  position: absolute;
-  font-size: 11px;
-  line-height: 1.3;
-}
-
-.at-callout b {
-  display: block;
-  font-family: 'Urbanist', system-ui, sans-serif;
-  font-size: 17px;
+.at-sync > span { flex: 1; }
+.at-sync[data-tone='good'] { background: var(--lime-bg); color: var(--sage); box-shadow: none; }
+.at-sync-action {
+  appearance: none;
+  border: 0;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--d-pill);
+  color: var(--clay);
+  font: inherit;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  cursor: pointer;
 }
 
-.at-callout span { color: var(--muted); font-weight: 600; }
-.at-callout[data-side='left'] { text-align: right; }
+.at-sync-wait { padding: 16px; display: grid; gap: 12px; }
+.at-sync-wait-head { display: flex; gap: 12px; align-items: flex-start; }
+.at-sync-wait-head b { font-size: 15px; font-weight: 800; }
+.at-sync-wait-head p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.at-sync-wait-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--amber);
+  color: #221a14;
+}
+.at-sync-wait-actions { display: flex; gap: 10px; }
+.at-sync-wait-actions .at-btn:first-child { flex: 1; justify-content: center; padding: 6px 18px; }
+.at-sync-wait-actions .at-btn[data-ghost='true'] { width: 44px; padding: 0; justify-content: center; }
+.at-sync-wait-foot { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--muted); }
+.at-sync-wait-foot button {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 10px 0;
+  color: var(--clay);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* The hero: weight, the three kilo lanes, the goal, and what the kilos are made of. */
+.at-body-hero { padding: 20px 18px 18px; display: grid; gap: 14px; }
+.at-body-hero-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.at-body-hero-head .at-delta-chip { margin-top: 22px; }
+.at-body-weight {
+  display: block;
+  font-size: 54px;
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+.at-body-weight small { font-size: 20px; letter-spacing: 0; color: var(--muted); }
+
+.at-lanes { display: grid; gap: 6px; }
+.at-lane {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.at-lane + .at-lane { border-top: 1px solid var(--hair); padding-top: 8px; }
+.at-lane-head { display: flex; justify-content: space-between; font-size: 12.5px; margin-bottom: 2px; }
+.at-lane-head b { font-weight: 800; }
+.at-lane-head span { font-weight: 700; color: var(--muted); }
+.at-lane-head span[data-good='true'] { color: var(--sage); }
+
+.at-makeup { display: grid; gap: 12px; padding-top: 14px; border-top: 1px solid var(--hair); }
+.at-makeup > b { font-size: 15px; font-weight: 800; }
+.at-makeup-bar { display: flex; gap: 3px; height: 16px; border-radius: 8px; overflow: hidden; }
+.at-makeup-bar span { min-width: 4px; }
+.at-makeup-legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.at-makeup-legend span { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.at-makeup-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.at-makeup-legend b { font-size: 16px; font-weight: 800; }
+.at-makeup-legend small { font-size: 12px; font-weight: 600; color: var(--muted); }
+
+.at-body-more { width: 100%; padding: 12px 18px; }
+.at-body-when::first-letter { text-transform: uppercase; }
 
 .at-bignum {
   text-align: center;
@@ -2259,23 +2369,6 @@
 }
 
 .at-delta-chip[data-good='true'] { background: var(--lime-bg); color: var(--sage); }
-
-/* A trend card is a button: `.at-card` was written for divs, so the UA styles
-   a button brings — centred text, its own font, a border — have to be undone. */
-.at-trend-card {
-  width: 100%;
-  display: block;
-  text-align: left;
-  appearance: none;
-  border: none;
-  font: inherit;
-  color: inherit;
-  padding: 16px 16px 10px;
-  cursor: pointer;
-  transition: transform 0.12s ease-out;
-}
-
-.at-trend-card:active { transform: scale(0.99); }
 
 /* The chart reads under a finger: touch or drag for a guide, a point and the week's value. */
 .at-chart { position: relative; touch-action: pan-y; cursor: crosshair; }
@@ -3551,13 +3644,72 @@ button.at-routine-item { cursor: pointer; }
 
 /* The 1-5 segments are bare numbers; these say which end is which. Without
    them a 2 for soreness is genuinely ambiguous. */
-.at-scale-ends {
+/* The check-in, one question at a time: back, progress, and a clipped window
+   the questions slide through — clipped, so nothing can scroll the page sideways. */
+.at-steps-head { display: flex; align-items: center; gap: 12px; }
+.at-steps-head .at-round:disabled { opacity: 0.35; }
+.at-steps-head > span { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.at-steps-head i { height: 6px; border-radius: 3px; background: var(--at-tonal); transition: background-color 0.3s ease; }
+.at-steps-head i[data-on='true'] { background: var(--clay); }
+.at-steps-window { overflow: hidden; margin: 0 -18px; }
+.at-steps-track { display: flex; }
+.at-step { flex: 0 0 100%; min-width: 0; box-sizing: border-box; padding: 0 18px; display: flex; flex-direction: column; gap: 14px; }
+.at-step-options { display: flex; flex-direction: column; gap: 8px; }
+.at-step-options button {
+  appearance: none;
+  border: 0;
+  min-height: 54px;
+  padding: 0 16px;
+  border-radius: 16px;
   display: flex;
-  justify-content: space-between;
-  margin: -6px 2px 12px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--muted);
+  align-items: center;
+  gap: 14px;
+  background: var(--d-tonal);
+  box-shadow: var(--d-soft);
+  color: var(--cocoa);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.25s ease, color 0.25s ease, transform 0.15s ease;
+}
+.at-step-options button:active { transform: scale(0.98); }
+.at-step-options b {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 800;
+  background: var(--at-tonal);
+}
+.at-step-options button[data-on='true'] { background: var(--d-grad); box-shadow: var(--d-hi); color: var(--at-on-clay); }
+.at-step-options button[data-on='true'] b { background: rgba(255, 255, 255, 0.22); }
+.at-step-summary { padding: 2px 16px; display: flex; flex-direction: column; }
+.at-step-summary button {
+  appearance: none;
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  background: none;
+  min-height: 52px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cocoa);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.at-step-summary button:last-child { border-bottom: 0; }
+.at-step-summary span { flex: 1; font-size: 15px; font-weight: 700; }
+.at-step-summary b { font-size: 15px; font-weight: 800; color: var(--clay); }
+.at-step-summary svg { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .at-steps-head i, .at-step-options button { transition: none; }
 }
 
 .at-wellness-read {

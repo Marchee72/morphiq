@@ -15,6 +15,13 @@ describe('isStrengthActivity', () => {
     }
   });
 
+  it('accepts Samsung Health\'s per-lift exercise types', () => {
+    for (const type of ['WEIGHT_MACHINE', 'BENCH_PRESS', 'DEADLIFTS', 'LAT_PULLDOWNS', 'LEG_PRESSES', 'ARM_CURLS']) {
+      expect(isStrengthActivity(type), type).toBe(true);
+    }
+    expect(isStrengthActivity('STATIONARY_BIKING')).toBe(false);
+  });
+
   it('rejects the activity that swallowed a gym session', () => {
     expect(isStrengthActivity('WALKING')).toBe(false);
   });

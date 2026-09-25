@@ -25,6 +25,8 @@ export interface SleepSessionRecord {
   remMinutes: number;
   lightMinutes: number;
   awakeMinutes: number;
+  /** Samsung Health's sleep score; only the Samsung read carries it. */
+  score?: number;
 }
 
 export interface DailyBpm { day: string; bpm: number }

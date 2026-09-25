@@ -17,6 +17,10 @@ export interface WellnessSignals {
   sleepRemMinutes?: number;
   restingHr?: number;
   hrvMs?: number;
+  sleepScore?: number;
+  sleepStart?: string;
+  sleepEnd?: string;
+  energyScore?: number;
 }
 
 export interface IHealthProvider {

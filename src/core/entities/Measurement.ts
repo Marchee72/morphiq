@@ -25,4 +25,10 @@ export interface Measurement {
   bodyWater: number;   // in %
   boneMass: number;    // in kg
   muscleMass: number;  // in kg
+  /**
+   * Skeletal muscle in kg, as the Galaxy Watch measures it. Only Samsung Health
+   * has it — Health Connect has no record type for it — so it is absent on every
+   * reading that did not come through the Samsung Health Data SDK.
+   */
+  skeletalMuscle?: number;
 }
