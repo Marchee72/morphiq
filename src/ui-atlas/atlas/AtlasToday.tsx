@@ -1,20 +1,17 @@
 import React, { useState } from 'react';
-import {
-  ArrowRight, Bike, Check, Dumbbell, Flame, Footprints, Heart, HeartPulse, Scale, Sparkles,
-  Trophy, UtensilsCrossed,
-} from 'lucide-react';
+import { ArrowRight, Dumbbell, Footprints, Sparkles, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { useElapsedSeconds } from '../components/useTicker';
-import { ExerciseThumb } from '../components/ExerciseThumb';
-import { metricByKey } from '../derive/bodyMetrics';
 import { daypart } from '../derive/profile';
+import { nextMuscleFocus } from '../derive/todayTraining';
+import { AtlasTodayHeader } from './AtlasTodayHeader';
 import { AtlasStates } from './AtlasStates';
 import { AtlasSessionDetail } from './AtlasSessionDetail';
 import { AtlasTodayDetail, type TodayDetail } from './AtlasTodayDetail';
 import { AtlasHeatMap } from './AtlasHeatMap';
 import { AtlasBuddyStrip } from './AtlasBuddyStrip';
-import { AtlasSessionRow } from './AtlasSessionRow';
+import { AtlasYourDay } from './AtlasYourDay';
 
 /**
  * Today — the screen that answers "what do I need to know right now".
@@ -24,33 +21,14 @@ import { AtlasSessionRow } from './AtlasSessionRow';
  * What changed is that every number is real, and every previously-dead button
  * now goes somewhere.
  */
-/**
- * How far along a chip's number is against its target.
- *
- * Protein, calories and steps all have one, but the rail only ever said so in
- * words — "38 g left" makes you do the arithmetic to know whether that is
- * nearly done or barely started. Clamped at 100% so going over target fills the
- * bar rather than overflowing the card; the text still says by how much.
- */
-const MomentBar: React.FC<{ value: number; target: number }> = ({ value, target }) => {
-  if (!target || target <= 0) return null;
-  const pct = Math.min(100, Math.max(0, (value / target) * 100));
-  return (
-    <span className="at-moment-bar" aria-hidden="true">
-      <i style={{ width: `${pct}%` }} />
-    </span>
-  );
-};
-
 export const AtlasToday: React.FC = () => {
   const {
-    profile, body, session, sessionExercises, sessionTotals, nutrition, training, steps, wellness,
+    profile, body, session, sessionExercises, sessionTotals, training,
   } = useAppData();
   const actions = useAppActions();
   const { t, tp, fmt } = useT();
 
   const now = new Date();
-  const weight = metricByKey(body.metrics, 'weight');
   const elapsed = useElapsedSeconds(session?.startedAt);
   const setsLeft = Math.max(0, sessionTotals.setsPlanned - sessionTotals.setsDone);
 
@@ -59,38 +37,27 @@ export const AtlasToday: React.FC = () => {
     .flatMap(ex => ex.sets.map(set => ({ ex, set })))
     .find(({ set }) => !set.done);
 
-  const heroImage = sessionExercises[0]?.image;
-  const heroName = sessionExercises[0]?.name ?? session?.title ?? '';
-
   /**
-   * A session with nothing in it yet has no lift to show.
-   *
-   * The disc is a photo frame, and `ExerciseThumb` falls back to initials when
-   * it has no picture — so an empty session put the two letters of "Push A" in a
-   * circle cropped half off the edge of the hero, which reads as a failed image
-   * rather than as a session waiting to be filled. No lift, no frame.
+   * The running session in one line of the header: how long, and what is left
+   * — "0 sets left" is not what an empty session has left, so that one says it
+   * is waiting for its first exercise instead.
    */
-  const showDisc = Boolean(heroImage);
+  const live = session
+    ? [
+        `${session.title} · ${t('today.inProgress')} · ${fmt.duration(elapsed)}`,
+        sessionExercises.length === 0 ? t('today.sessionEmpty') : tp('today.setsLeft', setsLeft),
+        next ? t('today.nextIs', { name: next.ex.name, weight: fmt.n(next.set.lastWeightKg ?? next.set.weightKg, 1) }) : null,
+      ].filter(Boolean).join(' · ')
+    : undefined;
+
+  /** The group furthest behind this week — the header's "up next". */
+  const focus = nextMuscleFocus(training.muscleLoad.rows);
 
   // Tapping a card explains its number before it offers the tab that owns it.
   const [detail, setDetail] = useState<TodayDetail | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
-  /**
-   * The volume card read `0.0 t` on every rest day, because it only ever showed
-   * the live session. With nothing running the week is the honest number.
-   */
-  const volumeKg = session ? sessionTotals.volumeKg : training.weeklyStats.volumeKg;
 
-  /**
-   * The week against its goal. Clamped at 100% so a fifth session on a goal of
-   * four fills the bar rather than overflowing the card — the count above it
-   * still says five.
-   */
-  const sessionsToGo = Math.max(0, training.streak.weekGoal - training.streak.weekDone);
-  const weekPct = training.streak.weekGoal > 0
-    ? Math.min(100, (training.streak.weekDone / training.streak.weekGoal) * 100)
-    : 0;
 
   /**
    * The fold-level answer: what today has been, or — when it has been nothing
@@ -109,215 +76,29 @@ export const AtlasToday: React.FC = () => {
    */
   const cardioOnly = trainedToday && doneToday.cardioSessions.length === doneToday.sessions.length;
 
-  /**
-   * The rail, as a list rather than five hand-written cards.
-   *
-   * A chip with nothing behind it is worse than no chip: "— kg" and "0 g" read
-   * as a broken reading rather than as "you have not logged this today", and
-   * four of them pushed the one number that mattered off the edge of the
-   * screen. Each entry is pushed only when it has something to say, so the rail
-   * is exactly as long as the day has been.
-   *
-   * The wellness chip is the one exception, and it is not really one: it is a
-   * question rather than a reading, so it is never waiting on data. See below.
-   *
-   * Order is by immediacy: what you did, then what your body did without you,
-   * then what you logged.
-   */
-  const moments: {
-    key: string;
-    icon: React.ReactNode;
-    value: string;
-    unit?: string;
-    label: React.ReactNode;
-    bar?: { value: number; target: number };
-    onClick: () => void;
-    ariaLabel?: string;
-  }[] = [];
-
-  // What you actually did today leads the rail — until now a run appeared
-  // nowhere on this screen.
-  for (const entry of doneToday.cardioSessions) {
-    const rate = entry.cardio?.readout === 'speed'
-      ? fmt.speed(entry.cardio.distanceKm, entry.durationMin)
-      : fmt.pace(entry.cardio?.distanceKm, entry.durationMin);
-    const hasDistance = entry.cardio?.distanceKm != null;
-    moments.push({
-      key: `activity-${entry.id}`,
-      icon: entry.cardio?.readout === 'speed' ? <Bike size={17} /> : <Footprints size={17} />,
-      value: hasDistance ? fmt.n(entry.cardio!.distanceKm!, 2) : String(entry.durationMin),
-      unit: hasDistance ? t('unit.km') : 'min',
-      label: <>{entry.title}{rate && ` · ${rate}`}</>,
-      onClick: () => setSessionId(entry.id),
-    });
-  }
-
-  /**
-   * Readiness, or the invitation to say how the day is going.
-   *
-   * The only entry in the rail that is pushed unconditionally, and deliberately
-   * so: every other chip is a reading that either exists or does not, while this
-   * one is a question. An unanswered day is not "no data" — it is the one thing
-   * on this screen you can still do something about, and hiding it until it is
-   * answered means it never gets answered.
-   */
-  moments.push(wellness.today.readiness !== null
-    ? {
-        key: 'wellness',
-        icon: <HeartPulse size={17} />,
-        value: String(wellness.today.readiness),
-        unit: '/100',
-        label: (
-          <>
-            {t('wellness.readiness')}
-            {wellness.today.log?.sleepMinutes
-              ? ` · ${t('wellness.sleep')} ${fmt.duration(wellness.today.log.sleepMinutes * 60)}`
-              : ''}
-          </>
-        ),
-        onClick: () => actions.openOverlay('wellness'),
-      }
-    : {
-        key: 'wellness',
-        icon: <HeartPulse size={17} />,
-        value: '?',
-        label: t('wellness.ask'),
-        onClick: () => actions.openOverlay('wellness'),
-        ariaLabel: t('wellness.ask'),
-      });
-
-  if (body.hasData && weight?.value != null) {
-    moments.push({
-      key: 'weight',
-      icon: <Scale size={17} />,
-      value: fmt.n(weight.value, 1),
-      unit: t('unit.kg'),
-      label: (
-        <>
-          {t('today.weight')}
-          {weight.delta7d != null && ` · ${fmt.signed(weight.delta7d)} ${t('unit.kg')} / ${t('today.change7d')}`}
-          {weight.delta7d == null && weight.delta30d != null
-            && ` · ${t('body.overMonth', { delta: fmt.signed(weight.delta30d), unit: t('unit.kg') })}`}
-        </>
-      ),
-      onClick: () => setDetail({ kind: 'weight' }),
-    });
-  }
-
-  // Null is "the phone has not answered", which is not the same as not walking.
-  if (steps.today != null) {
-    moments.push({
-      key: 'steps',
-      icon: <Footprints size={17} />,
-      value: fmt.n(steps.today),
-      unit: t('unit.steps'),
-      // The weekly average is the only target steps have, and the one people
-      // compare today against.
-      bar: steps.weeklyAvg != null ? { value: steps.today, target: steps.weeklyAvg } : undefined,
-      label: (
-        <>
-          {t('today.steps')}
-          {steps.weeklyAvg != null && ` · ${t('today.stepsAvg', { n: fmt.n(steps.weeklyAvg) })}`}
-        </>
-      ),
-      onClick: () => setDetail({ kind: 'steps' }),
-      ariaLabel: t('today.stepsDetail'),
-    });
-  }
-
-  if (nutrition.protein.eaten > 0) {
-    moments.push({
-      key: 'protein',
-      icon: <UtensilsCrossed size={17} />,
-      value: fmt.n(nutrition.protein.eaten),
-      unit: t('unit.g'),
-      bar: { value: nutrition.protein.eaten, target: nutrition.protein.target },
-      label: `${t('today.protein')} · ${fmt.n(Math.max(0, nutrition.protein.target - nutrition.protein.eaten))} ${t('unit.g')}`,
-      onClick: () => setDetail({ kind: 'nutrition', macro: 'protein' }),
-    });
-  }
-
-  if (volumeKg > 0) {
-    moments.push({
-      key: 'volume',
-      icon: <Dumbbell size={17} />,
-      value: fmt.n(volumeKg / 1000, 1),
-      unit: t('unit.tonnes'),
-      label: (
-        <>
-          {session ? t('today.sessionVolume') : t('today.weekVolume')}
-          {session
-            ? sessionTotals.prs > 0 ? ` · ${sessionTotals.prs} PR` : ''
-            : ` · ${tp('history.sessions', training.weeklyStats.workouts)}`}
-        </>
-      ),
-      onClick: () => setDetail({ kind: 'volume' }),
-    });
-  }
-
-  if (nutrition.calories.eaten > 0) {
-    moments.push({
-      key: 'calories',
-      icon: <Heart size={17} />,
-      value: fmt.n(nutrition.calories.eaten),
-      unit: t('unit.kcal'),
-      bar: { value: nutrition.calories.eaten, target: nutrition.calories.target },
-      label: `${t('today.calories')} · ${fmt.n(nutrition.calories.target)}`,
-      onClick: () => setDetail({ kind: 'nutrition', macro: 'calories' }),
-    });
-  }
-  
-
   return (
     <>
-      <div className="at-greet">
-        <div>
-          <small>{fmt.weekdayShort(now)}, {fmt.shortDate(now)}</small>
-          <h1>{t(`today.greeting.${daypart(now)}`, { name: profile.name })}</h1>
-        </div>
-        <button className="at-avatar" onClick={() => actions.openOverlay('settings')} aria-label={t('nav.settings')}>
-          {profile.name.charAt(0).toUpperCase() || '·'}
-        </button>
-      </div>
+      <AtlasTodayHeader
+        now={now}
+        greeting={t(`today.greeting.${daypart(now)}`, { name: profile.name })}
+        initial={profile.name.charAt(0).toUpperCase() || '·'}
+        onSettings={() => actions.openOverlay('settings')}
+        week={training.streak.week}
+        done={training.streak.weekDone}
+        goal={training.streak.weekGoal}
+        streak={training.streak.current}
+        volumeKg={training.weeklyStats.volumeKg}
+        minutes={training.weeklyStats.minutes}
+        workouts={training.weeklyStats.workouts}
+        live={live}
+        ctaLabel={session
+          ? (sessionExercises.length === 0 ? t('today.pickFirst') : t('today.continueSession'))
+          : t('today.startSession')}
+        onCta={() => (session ? actions.navigate('train') : actions.beginSession())}
+        upNext={focus ? t(focus.labelKey) : undefined}
+        onDay={date => setDetail({ kind: 'day', date })}
+      />
 
-      {session ? (
-        <div className="at-hero" data-nodisc={!showDisc}>
-          {showDisc && (
-            <div className="at-hero-disc">
-              <ExerciseThumb name={heroName} image={heroImage} />
-            </div>
-          )}
-          <span className="at-hero-tag">● {t('today.inProgress')} · {fmt.duration(elapsed)}</span>
-          <h2>{session.title}</h2>
-          <p>
-            {/* "0 sets left" is not what an empty session has left to do — it is
-                what it has not been given yet. */}
-            {sessionExercises.length === 0 ? t('today.sessionEmpty') : (
-              <>
-                {tp('today.setsLeft', setsLeft)}
-                {next && ` · ${t('today.nextIs', { name: next.ex.name, weight: fmt.n(next.set.lastWeightKg ?? next.set.weightKg, 1) })}`}
-              </>
-            )}
-          </p>
-          <button className="at-btn" onClick={() => actions.navigate('train')}>
-            {sessionExercises.length === 0 ? t('today.pickFirst') : t('today.continueSession')}
-            <i><ArrowRight size={16} /></i>
-          </button>
-        </div>
-      ) : (
-        <div className="at-hero" data-idle="true">
-          <span className="at-hero-tag">{t('today.noSession')}</span>
-          <h2>{t('today.startSession')}</h2>
-          <p>{t('today.noSessionSub')}</p>
-          <button className="at-btn" onClick={() => actions.beginSession()}>
-            {t('common.start')} <i><ArrowRight size={16} /></i>
-          </button>
-        </div>
-      )}
-
-      {/* A partner training right now, if any — renders nothing otherwise, so it
-          costs nothing on the common path. */}
-      <AtlasBuddyStrip />
 
       {/* Directly under the hero, because it is the first thing you want and the
           hero cannot carry it: once a session is finished the hero goes back to
@@ -328,7 +109,7 @@ export const AtlasToday: React.FC = () => {
           over the top of a live workout. */}
       {(trainedToday || !session) && (
       <div className="at-pad" style={{ paddingTop: 16 }}>
-        <div className="at-card at-todaytrain" data-trained={trainedToday}>
+        <div className="at-todaytrain" data-trained={trainedToday}>
           <div className="at-todaytrain-head">
             <span className="at-todaytrain-icon">
               {cardioOnly ? <Footprints size={16} /> : <Dumbbell size={16} />}
@@ -427,131 +208,12 @@ export const AtlasToday: React.FC = () => {
       </div>
       )}
 
-      {moments.length > 0 && (
-      <>
-      <div className="at-rail-head">
-        <h3>{t('today.yourDay')}</h3>
-        {/* Was the Body tab, which covers two of the five chips. The day sheet
-            already covers all of them. */}
-        <button onClick={() => setDetail({ kind: 'day', date: now })}>{t('common.seeAll')}</button>
-      </div>
-      <div className="at-rail">
-        {moments.map((moment, i) => (
-          <button
-            key={moment.key}
-            className="at-moment"
-            onClick={moment.onClick}
-            aria-label={moment.ariaLabel}
-            // Staggered entrance: the rail assembles left to right instead of
-            // appearing all at once, which is what makes the order readable.
-            style={{ animationDelay: `${Math.min(i, 6) * 45}ms` }}
-          >
-            <span className="at-moment-icon">{moment.icon}</span>
-            <b>{moment.value}{moment.unit && <small>{moment.unit}</small>}</b>
-            {moment.bar && <MomentBar value={moment.bar.value} target={moment.bar.target} />}
-            <span>{moment.label}</span>
-          </button>
-        ))}
-      </div>
-      </>
-      )}
+      <AtlasYourDay now={now} onDetail={setDetail} onSession={setSessionId} />
 
-      {/* No link beside the heading any more. It used to carry "2/4 · 3-day
-          streak" — the only place either number appeared — and clicking it went
-          to Train, which is neither what the label said nor where the goal
-          lives. Both numbers are in the card now, where the days they describe
-          are. */}
-      <div className="at-rail-head">
-        <h3>{t('today.thisWeek')}</h3>
-      </div>
-      <div className="at-pad" style={{ paddingBottom: 22 }}>
-        <div className="at-card at-weekcard">
-          {/* The week used to be seven rings and nothing else: no goal, no
-              streak, no totals — the heading's "2/4" was doing all the work from
-              outside the card, where nothing connected it to the dots below.
-              Everything the week amounts to now lives on the one surface. */}
-          <div className="at-weekcard-head">
-            <div className="at-weekcard-count">
-              <b>{training.streak.weekDone}</b>
-              <span>/{training.streak.weekGoal}</span>
-            </div>
-            <div className="at-weekcard-goal">
-              <small>{t('today.weekSessions')}</small>
-              <p>
-                {sessionsToGo > 0
-                  ? tp('today.weekToGo', sessionsToGo)
-                  : t('today.weekGoalMet')}
-              </p>
-            </div>
-            {/* Earned, so it is stated rather than tucked into the heading link
-                where it read as part of the goal it is not. */}
-            {training.streak.current > 0 && (
-              <span className="at-weekcard-streak">
-                <Flame size={13} /> {training.streak.current}
-              </span>
-            )}
-          </div>
+      {/* Your gymbros: who is training now, and who has written. */}
+      <AtlasBuddyStrip />
 
-          <div
-            className="at-weekcard-track"
-            role="progressbar"
-            aria-valuenow={training.streak.weekDone}
-            aria-valuemin={0}
-            aria-valuemax={training.streak.weekGoal}
-            aria-label={t('today.weeklyGoal', {
-              done: training.streak.weekDone,
-              goal: training.streak.weekGoal,
-            })}
-          >
-            <i style={{ width: `${weekPct}%` }} />
-          </div>
-
-          <div className="at-week">
-            {training.streak.week.map(day => (
-              // A day is a tap target now: the ring says whether you trained,
-              // the sheet says what you did. The date sits inside the ring on
-              // the days you did not — a row of empty circles told you which
-              // weekday it was and never which date.
-              <button
-                key={day.date.toISOString()}
-                className="at-day"
-                onClick={() => setDetail({ kind: 'day', date: day.date })}
-                aria-label={t('today.openDay', { date: fmt.shortDate(day.date) })}
-              >
-                <span className="at-day-name">
-                  {fmt.weekdayShort(day.date).charAt(0).toUpperCase()}
-                </span>
-                <div className="at-day-ring" data-done={day.done} data-today={day.isToday}>
-                  {day.done ? <Check size={14} strokeWidth={3} /> : day.date.getDate()}
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* What the week actually weighed. Suppressed rather than shown as
-              three zeroes on a week that has not started. */}
-          {training.weeklyStats.workouts > 0 ? (
-            <div className="at-weekcard-stats">
-              <div>
-                <b>{fmt.n(training.weeklyStats.volumeKg / 1000, 1)}<i>{t('unit.tonnes')}</i></b>
-                <small>{t('today.volume')}</small>
-              </div>
-              <div>
-                <b>{training.weeklyStats.minutes}<i>min</i></b>
-                <small>{t('summary.duration')}</small>
-              </div>
-              <div>
-                <b>{training.weeklyStats.workouts}</b>
-                <small>{t('gym.workouts')}</small>
-              </div>
-            </div>
-          ) : (
-            <p className="at-weekcard-empty">{t('today.weekNothing')}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="at-pad" style={{ paddingBottom: 22 }}>
+      <div className="at-pad at-enter" style={{ paddingTop: 22, paddingBottom: 22, animationDelay: '180ms' }}>
         <AtlasHeatMap onPickRegion={(group) => setDetail({ kind: 'muscle', group })} />
       </div>
 
@@ -561,19 +223,28 @@ export const AtlasToday: React.FC = () => {
             <h3>{t('today.recent')}</h3>
             <button onClick={() => actions.openOverlay('history')}>{t('common.seeAll')}</button>
           </div>
-          <div className="at-pad" style={{ paddingBottom: 22 }}>
-            <div className="at-card" style={{ padding: '8px 20px' }}>
-              {training.history.slice(0, 3).map((entry, i) => (
-                <AtlasSessionRow
-                  key={entry.id}
-                  entry={entry}
-                  time={fmt.relativeDay(entry.at, now)}
-                  onClick={() => setSessionId(entry.id)}
-                  first={i === 0}
-                />
-              ))}
-            </div>
-          </div>
+          {/* A row of cards that slides sideways: when, what, how much — the
+              dot is ember for lifting, amber for a run, lime for a record. */}
+          <ol className="at-recent at-enter" style={{ animationDelay: '240ms' }}>
+            {training.history.slice(0, 5).map(entry => (
+              <li key={entry.id} data-kind={entry.prs > 0 ? 'pr' : entry.cardio ? 'cardio' : 'lift'}>
+                <button onClick={() => setSessionId(entry.id)} aria-label={t('history.openSession', { name: entry.title })}>
+                  <small><i aria-hidden="true" />{fmt.relativeDay(entry.at, now)}</small>
+                  <b>{entry.title}</b>
+                  <span>
+                    {entry.cardio
+                      ? `${entry.durationMin} min`
+                      : [
+                          `${entry.durationMin} min`,
+                          `${fmt.n(entry.volumeKg / 1000, 1)} ${t('unit.tonnes')}`,
+                          tp('unit.sets', entry.sets),
+                          entry.prs > 0 ? `${entry.prs} PR` : null,
+                        ].filter(Boolean).join(' · ')}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
         </>
       )}
 

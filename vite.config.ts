@@ -1,13 +1,19 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+import { fileURLToPath } from 'node:url'
 
 // Note: We disabled `@vitejs/plugin-basic-ssl` to work around a regression in Node.js v22.21.0
 // that causes crashes with "TypeError: server.shouldUpgradeCallback is not a function".
 // Since modern browsers treat http://localhost as a secure context, Web Bluetooth still works
 // perfectly on http://localhost:5173 without HTTPS!
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    // `@/` is what shadcn-registry components (Watermelon) import through.
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   server: {
     host: true,
   },

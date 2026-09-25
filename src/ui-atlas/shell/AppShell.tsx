@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { MotionConfig, motion } from 'motion/react';
 import { useStore } from '../../presentation/state/store';
 import { resolveMode, SURFACE } from '../../presentation/state/preferences';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { useHealthSync } from '../data/useHealthSync';
 import { usePullToRefresh } from '../components/usePullToRefresh';
-import type { ScreenId } from '../types';
+import { SCREENS as ORDER, type ScreenId } from '../types';
 import { AppOverlays } from './AppOverlays';
 import { AtlasPullRefresh } from '../atlas/AtlasPullRefresh';
 
@@ -15,13 +16,22 @@ import { AtlasBody } from '../atlas/AtlasBody';
 import { AtlasCoach } from '../atlas/AtlasCoach';
 import { AtlasBuddies } from '../atlas/AtlasBuddies';
 import { AtlasNav } from '../atlas/AtlasNav';
-import { AtlasSkeleton } from '../atlas/AtlasStates';
+import { AtlasSkeleton, type SkeletonShape } from '../atlas/AtlasStates';
+import { RefreshCw } from 'lucide-react';
+import { useT } from '../../i18n';
 
 import { AtlasTopInstallBanner } from '../atlas/AtlasTopInstallBanner';
 import { AtlasSyncBanner } from '../atlas/AtlasSyncBanner';
+import { AtlasResumeBanner } from '../atlas/AtlasResumeBanner';
 
 import './app-base.css';
+import '../tw.css';
 import '../atlas/atlas.css';
+
+/** The skeleton each screen shows before the first data arrives. */
+const SKELETON: Record<ScreenId, SkeletonShape> = {
+  today: 'today', train: 'train', library: 'library', body: 'body', coach: 'coach', buddies: 'buddies',
+};
 
 const SCREENS: Record<ScreenId, React.FC> = {
   today: AtlasToday,
@@ -37,11 +47,23 @@ export const AppShell: React.FC = () => {
   const activeTab = useStore(s => s.activeTab);
   const setActiveTab = useStore(s => s.setActiveTab);
   const { ready } = useAppData();
+  const { t } = useT();
   const actions = useAppActions();
 
   const screen: ScreenId = activeTab === 'settings' ? 'today' : activeTab;
   const Screen = SCREENS[screen];
   const resolved = resolveMode(mode);
+
+  /**
+   * Which way the last tab change went, so the new screen slides in from that
+   * side. Kept as state updated during render (React's "store information
+   * from previous renders"), not a ref, so it is right on the very render
+   * that mounts the new screen.
+   */
+  const index = ORDER.findIndex(s => s.id === screen);
+  const [nav, setNav] = useState({ index, dir: 0 });
+  if (nav.index !== index) setNav({ index, dir: Math.sign(index - nav.index) });
+
 
   // `color-scheme` on the root still drives native form controls, the on-screen
   // keyboard and scrollbars, so the resolved mode is mirrored there even though
@@ -110,19 +132,48 @@ export const AppShell: React.FC = () => {
   }, [syncNote]);
 
   return (
-    <div className="app at" data-mode={resolved}>
+    // `reducedMotion="user"`: every motion component follows the OS setting,
+    // so no animation has to check it on its own.
+    <MotionConfig reducedMotion="user">
+    <div className="app at" data-mode={resolved} data-screen={screen}>
       <div className="app-statusbar" />
-      <AtlasTopInstallBanner />
-      {/* Above the scroll region: "the server cannot be reached" is a fact
-          about the app, not about the screen you happen to be on. */}
-      <AtlasSyncBanner />
-      {/* Keyed on the tab so switching screens resets scroll. */}
-      <div className="app-scroll" key={screen} ref={scrollRef} data-pullable={canPull}>
-        <AtlasPullRefresh state={pull.state} message={syncNote} />
-        {ready ? <Screen /> : <AtlasSkeleton />}
+      {/* Notifications float as pills over the top of every screen, outside
+          the scroll region: "the server cannot be reached" is a fact about the
+          app, not about the screen you happen to be on, and it must not
+          flicker when you switch tabs. */}
+      <div className="at-notices">
+        <AtlasTopInstallBanner />
+        <AtlasSyncBanner />
+        {/* Closing the resume sheet without answering it leaves a workout
+            stored and unreachable; this is the way back to it. */}
+        <AtlasResumeBanner />
       </div>
+      {/* Keyed on the tab so switching screens resets scroll, and slides in
+          from the side the tab change went. Only on a change: the first
+          screen of a launch just appears. The transform ends at none, so a
+          sheet opened from a screen is never trapped inside it. Changing tab
+          by sliding is the dock's (AtlasNav), not the page's: here a sideways
+          drag belongs to whatever is on screen. */}
+      <motion.div
+        className="app-scroll"
+        key={screen}
+        ref={scrollRef}
+        data-pullable={canPull}
+        initial={nav.dir === 0 ? false : { x: nav.dir * 48, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ x: { type: 'spring', stiffness: 380, damping: 36 }, opacity: { duration: 0.18 } }}
+      >
+        <AtlasPullRefresh state={pull.state} message={syncNote} />
+        {!ready && (
+          <span className="at-syncing-pill" role="status">
+            <RefreshCw size={13} className="at-spin" /> {t('sync.syncing')}
+          </span>
+        )}
+        {ready ? <Screen /> : <AtlasSkeleton shape={SKELETON[screen]} />}
+      </motion.div>
       <AtlasNav active={screen} onNavigate={setActiveTab} />
       <AppOverlays onClose={actions.closeOverlay} />
     </div>
+    </MotionConfig>
   );
 };

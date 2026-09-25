@@ -65,3 +65,14 @@ describe('buildSteps', () => {
     expect(steps.weeklyAvg).toBe(10000);
   });
 });
+
+describe('buildSteps — active calories', () => {
+  it("reads today's active calories and nothing else", () => {
+    const steps = buildSteps([], NOW, 7, [
+      { date: '2026-07-28', kcal: 410 },
+      { date: `${NOW.getFullYear()}-${`${NOW.getMonth() + 1}`.padStart(2, '0')}-${`${NOW.getDate()}`.padStart(2, '0')}`, kcal: 386 },
+    ]);
+    expect(steps.activeKcal).toBe(386);
+    expect(buildSteps([], NOW).activeKcal).toBeNull();
+  });
+});

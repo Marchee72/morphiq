@@ -41,6 +41,13 @@ vi.mock('../WellnessPlugin', () => ({
   SLEEP_READ_PERMISSIONS: ['android.permission.health.READ_SLEEP'],
 }));
 
+/** Same reason again; a build without the Samsung SDK, which is what these cover. */
+vi.mock('../SamsungHealthPlugin', () => ({
+  SamsungHealth: {},
+  isSamsungHealthBuilt: () => false,
+  withSamsungReadings: vi.fn(),
+}));
+
 const { CapacitorHealthProvider } = await import('../CapacitorHealthProvider');
 
 const READ_WEIGHT = 'android.permission.health.READ_WEIGHT';

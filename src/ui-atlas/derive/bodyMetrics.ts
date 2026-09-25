@@ -1,7 +1,7 @@
 import type { Measurement } from '../../core/entities/Measurement';
 import type { UserProfile } from '../../core/entities/UserProfile';
 import type { StaticKey } from '../../i18n/types';
-import type { BodyVM, MetricKey, MetricPointVM } from '../types';
+import type { BodyCompositionVM, BodyVM, MetricKey, MetricPointVM } from '../types';
 import { fillGaps, meanOf, weeklyBuckets, MS_PER_DAY } from './buckets';
 
 export const SERIES_WEEKS = 12;
@@ -70,6 +70,9 @@ const ffmiRead = (heightCm?: number): MetricRead => m => {
   return (m.weight * (1 - m.bodyFat / 100)) / (heightM * heightM);
 };
 
+/** Kilos of fat: body fat % of the weight. Zero, "no reading", without a body fat reading. */
+const fatMassRead: MetricRead = m => (m.weight > 0 && m.bodyFat > 0 ? (m.weight * m.bodyFat) / 100 : 0);
+
 /**
  * Fixed order: the Body screen renders these top to bottom exactly as listed.
  *
@@ -82,7 +85,11 @@ export function metricSpecs(heightCm?: number): readonly MetricSpec[] {
   return [
     { key: 'weight', read: field('weight'), labelKey: 'body.metric.weight', unitKey: 'unit.kg', decimals: 1, lowerIsBetter: 'goal' },
     { key: 'bodyFat', read: field('bodyFat'), labelKey: 'body.metric.bodyFat', unitKey: 'unit.pct', decimals: 1, lowerIsBetter: true },
+    { key: 'fatMass', read: fatMassRead, labelKey: 'body.metric.fatMass', unitKey: 'unit.kg', decimals: 1, lowerIsBetter: true },
     { key: 'muscleMass', read: field('muscleMass'), labelKey: 'body.metric.muscleMass', unitKey: 'unit.kg', decimals: 1, lowerIsBetter: false },
+    // Galaxy Watch only (Samsung Health SDK). Every other reading leaves it
+    // unset, which `field` reads as NaN, i.e. "not recorded".
+    { key: 'skeletalMuscle', read: field('skeletalMuscle'), labelKey: 'body.metric.skeletalMuscle', unitKey: 'unit.kg', decimals: 1, lowerIsBetter: false },
     {
       key: 'muscleMassPct',
       // Zero when either operand is missing, because zero is what the rest of this
@@ -101,6 +108,19 @@ export function metricSpecs(heightCm?: number): readonly MetricSpec[] {
 export const METRIC_SPECS: readonly MetricSpec[] = metricSpecs();
 
 /**
+ * The line colour a metric is drawn in, wherever it is drawn: Body's lanes, its
+ * composition bar and the detail sheet agree, so tapping a lane opens the same
+ * colour. Everything not listed keeps ember.
+ */
+const METRIC_COLORS: Partial<Record<MetricKey, string>> = {
+  skeletalMuscle: 'var(--sage)',
+  muscleMass: 'var(--sage)',
+  fatMass: 'var(--amber)',
+};
+export const metricColor = (key: MetricKey): string => METRIC_COLORS[key] ?? 'var(--ember)';
+
+
+/**
  * Which metrics a scale actually measures.
  *
  * Health Connect carries weight, body fat, lean mass, bone mass and body water
@@ -114,7 +134,7 @@ export const METRIC_SPECS: readonly MetricSpec[] = metricSpecs();
  * Labelling them "derived" was not enough when the underlying reading did not
  * exist at all, so they were removed. See `Measurement`.
  */
-const MEASURED_KEYS = new Set<MetricKey>(['weight', 'bodyFat', 'muscleMass', 'muscleMassPct', 'bodyWater']);
+const MEASURED_KEYS = new Set<MetricKey>(['weight', 'bodyFat', 'fatMass', 'muscleMass', 'skeletalMuscle', 'muscleMassPct', 'bodyWater']);
 
 export function isMeasured(key: MetricKey): boolean {
   return MEASURED_KEYS.has(key);
@@ -210,6 +230,22 @@ export function buildMetricPoint(
   };
 }
 
+/** The latest reading that carries body fat, split into what the weight is made of. */
+export function buildComposition(sorted: Measurement[]): BodyCompositionVM | null {
+  const m = sorted.findLast(r => r.weight > 0 && r.bodyFat > 0);
+  if (!m) return null;
+  const fat = fatMassRead(m);
+  const skeletal = m.skeletalMuscle != null && m.skeletalMuscle > 0;
+  const muscle = skeletal ? m.skeletalMuscle! : Math.max(0, m.muscleMass);
+  return {
+    weight: m.weight,
+    fat,
+    muscle,
+    muscleKey: skeletal ? 'skeletalMuscle' : 'muscleMass',
+    rest: Math.max(0, m.weight - fat - muscle),
+  };
+}
+
 export function buildBody(
   measurements: Measurement[],
   profile: UserProfile | null,
@@ -223,6 +259,9 @@ export function buildBody(
     latestAt: latest ? new Date(latest.timestamp) : null,
     readingCount: sorted.length,
     hasData: sorted.length > 0,
+    readingTimes: sorted.map(m => new Date(m.timestamp)),
+    recent: sorted.slice(-3).reverse().map(m => ({ at: new Date(m.timestamp), weight: m.weight, bodyFat: m.bodyFat })),
+    composition: buildComposition(sorted),
   };
 }
 

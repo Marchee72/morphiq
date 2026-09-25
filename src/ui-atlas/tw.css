@@ -1,0 +1,56 @@
+/* Tailwind v4, next to atlas.css rather than instead of it.
+
+   No preflight: atlas.css and index.css already own the reset, and preflight
+   would restyle every existing screen. Only the theme variables and the
+   utilities are pulled in, each in its layer; the layer order is declared
+   here and in index.css so the global reset sits below the utilities. atlas.css stays unlayered, so where an `.at-*` rule and a utility
+   meet on the same element the `.at-*` rule wins — kit components use
+   utilities, existing screens keep their classes.
+
+   The shadcn tokens Watermelon components are written against map onto the
+   atlas palette, so a component pulled from the registry lands in the app's
+   colours with no edits to its classes. */
+
+/* The same order index.css declares — whichever file the bundle emits first
+   fixes it, and the reset must land below the utilities either way. */
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* The shell writes the resolved mode on `.at` as `data-mode`. */
+@custom-variant dark (&:where([data-mode='dark'], [data-mode='dark'] *));
+
+@theme inline {
+  --font-sans: 'Urbanist', system-ui, sans-serif;
+
+  --color-background: var(--sand);
+  --color-foreground: var(--cocoa);
+  --color-card: var(--card);
+  --color-card-foreground: var(--cocoa);
+  --color-popover: var(--card);
+  --color-popover-foreground: var(--cocoa);
+  --color-primary: var(--clay);
+  --color-primary-foreground: var(--at-on-clay);
+  --color-secondary: var(--at-tonal);
+  --color-secondary-foreground: var(--cocoa);
+  --color-muted: var(--at-tonal);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--at-tonal);
+  --color-accent-foreground: var(--cocoa);
+  --color-destructive: #c24a2f;
+  --color-border: var(--hair);
+  --color-input: var(--hair);
+  --color-ring: var(--ember);
+
+  --color-ember: var(--ember);
+  --color-coral: var(--coral);
+  --color-amber: var(--amber);
+  --color-lime: var(--lime);
+  --color-lime-ink: var(--lime-ink);
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+}

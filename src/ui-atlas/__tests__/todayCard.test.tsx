@@ -104,10 +104,10 @@ describe("Today — what you have trained", () => {
   });
 
   it('stays out of the way of a live session that has logged nothing yet', async () => {
-    // The hero already says a session is running; this card saying "not trained
+    // The header already says a session is running; this card saying "not trained
     // yet" over the top of it is the one reading that would be wrong.
     renderScreen('today', { data: 'empty', now: new Date(), session: {} });
-    await waitFor(() => expect(document.querySelector('.at-hero')).toBeTruthy());
+    await waitFor(() => expect(document.querySelector('.at-today-live')).toBeTruthy());
     expect(card()).toBeNull();
   });
 
@@ -141,12 +141,13 @@ describe('Today — steps', () => {
   const dayString = (date: Date) =>
     `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}-${`${date.getDate()}`.padStart(2, '0')}`;
 
-  it('shows no chip at all when the phone has reported nothing', () => {
-    // Was an em-dash, on the reasoning that a zero would read as "you did not
-    // move". A dash reads as a broken sensor, which is no better — a chip with
-    // no number behind it now simply does not render.
+  it('reads as a dash, not a zero, when the phone has reported nothing', async () => {
+    // The steps ring is always there; with no reading it stays empty, and the
+    // number is a dash because a zero would say "you did not move".
     render();
-    expect(screen.queryByRole('button', { name: /steps this week|pasos de la semana/i })).toBeNull();
+    const steps = await screen.findByRole('button', { name: /steps this week|pasos de la semana/i });
+    expect(steps.textContent).toContain('—');
+    expect(steps.textContent).not.toMatch(/\b0\b/);
   });
 
   it("shows today's steps once the health source has answered", async () => {

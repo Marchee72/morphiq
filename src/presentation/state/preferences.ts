@@ -21,8 +21,8 @@ export type Mode = (typeof MODES)[number];
 
 /** The page background per resolved mode. Kept in step with the palettes in `atlas.css`. */
 export const SURFACE: Record<'light' | 'dark', string> = {
-  light: '#f3ece2',
-  dark: '#1a1512',
+  light: '#fbf4ea',
+  dark: '#140f0c',
 };
 
 /** Reads a preference, falling back whenever storage is empty, unreadable or holds a stale value. */

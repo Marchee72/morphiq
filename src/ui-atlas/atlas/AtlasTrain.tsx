@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { Check, Flag, Gauge, Plus, Trash2, Trophy } from 'lucide-react';
+import { Check, Flag, Gauge, Plus, Timer, Trash2, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
 import { borgLabelKey } from '../derive/borg';
-import { weightLadder, WEIGHT_PRECISION } from '../derive/weightLadder';
+import { e1rm } from '../derive/records';
 import { useStore } from '../../presentation/state/store';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { useLiveSession } from '../data/useLiveSession';
 import { useSetDraft } from '../components/useSetDraft';
 import { useFocusOnAdd } from '../components/useFocusOnAdd';
+import { useElapsedSeconds } from '../components/useTicker';
 import { useSessionSummary } from '../state/sessionSummary';
 import { buildSessionSummary } from '../derive/summary';
 import type { FeelingId, SessionCursor, SessionSetVM } from '../types';
@@ -16,7 +17,9 @@ import { AtlasGymHub } from './AtlasGymHub';
 import { AtlasSessionEditor } from './AtlasSessionEditor';
 import { AtlasSessionStart } from './AtlasSessionStart';
 import { AtlasRpeSheet } from './AtlasRpeSheet';
-import { AtlasDial } from './AtlasDial';
+import { WeightWheel } from '../kit/weight-wheel';
+import { Stepper } from '../kit/stepper';
+import { SlideToConfirm } from '../kit/slide-to-confirm';
 import { AtlasSetList } from './AtlasSetList';
 import { AtlasSharedStrip } from './AtlasSharedStrip';
 import { AtlasTrainHeader } from './AtlasTrainHeader';
@@ -25,9 +28,42 @@ import { AtlasFinishSheet } from './AtlasFinishSheet';
 import { AtlasExerciseDetail } from './AtlasExerciseDetail';
 
 const MAX_WEIGHT_KG = 300;
-/** Built once: 1200-odd values, and rebuilding it per render churned the dial. */
-const WEIGHT_LADDER = weightLadder(MAX_WEIGHT_KG);
 const MAX_REPS = 50;
+
+/**
+ * How long since the last set went in.
+ *
+ * It is the number a gym looks at most between sets, and until now the app had
+ * nothing to say about it — the header's clock times the whole session, so
+ * anyone resting to a schedule was doing it in another app.
+ *
+ * Its own component for the same reason the header's clock is: `useElapsedSeconds`
+ * re-renders whoever calls it, and called from `AtlasTrain` that would repaint
+ * the disc, both wheels and every pill once a second for a line under the pills.
+ *
+ * Counting up rather than down, and no configurable target: what a rest timer
+ * has to answer first is "how long have I been standing here".
+ *
+ * ponytail: the moment lives in `AtlasTrain`'s state rather than on the set,
+ * because `DraftSet` has no timestamp (store.ts:154). The ceiling that buys is
+ * that leaving Train and coming back restarts the rest from nothing — which a
+ * reload would do anyway, so migrating the stored model for it can wait until
+ * someone asks for a rest that survives one.
+ */
+const AtlasRestTimer: React.FC<{ since: Date }> = ({ since }) => {
+  const { t, fmt } = useT();
+  const elapsed = useElapsedSeconds(since);
+
+  // Deliberately not a live region: a value that changes every second would
+  // have a screen reader talking over the set being logged.
+  return (
+    <div className="at-rest">
+      <Timer size={13} />
+      <span>{t('train.rest')}</span>
+      <b>{fmt.duration(elapsed)}</b>
+    </div>
+  );
+};
 
 /**
  * Train — one exercise at a time, oversized circular controls.
@@ -51,6 +87,8 @@ export const AtlasTrain: React.FC = () => {
   /** The clock, stopped at the moment finish was pressed. Null means not finishing. */
   const [finishingAt, setFinishingAt] = useState<Date | null>(null);
   const [detail, setDetail] = useState<Exercise | null>(null);
+  /** When the last set was logged, which is what the rest timer counts from. */
+  const [lastSetAt, setLastSetAt] = useState<Date | null>(null);
   const live = useLiveSession(cursor, setCursor);
   useFocusOnAdd(sessionExercises, setCursor);
 
@@ -118,6 +156,22 @@ export const AtlasTrain: React.FC = () => {
     setEditRow(null);
     setViewSet(null);
     setAsk(null);
+  }
+
+  /**
+   * The rest belongs to the session that logged the set, and this screen never
+   * unmounts between sessions — so without this, opening tomorrow's workout
+   * showed a rest timer already running from yesterday's last set.
+   *
+   * Keyed on the session's start, not on the exercise: moving between exercises
+   * does not interrupt the rest, and the same session resumed after a reload is
+   * still the same session.
+   */
+  const startedAt = session?.startedAt.getTime();
+  const [restFor, setRestFor] = useState(startedAt);
+  if (restFor !== startedAt) {
+    setRestFor(startedAt);
+    setLastSetAt(null);
   }
 
   if (!session) return <AtlasGymHub />;
@@ -224,16 +278,17 @@ export const AtlasTrain: React.FC = () => {
   const exerciseComplete = done === exercise.sets.length && exercise.sets.length > 0;
 
   /**
-   * Most exercises end by logging the last set, not by pressing "finish
-   * exercise" — so asking only from that button would leave nearly everything
-   * unrated. Raised here, during render, rather than from an effect: the sheet
-   * belongs to the same paint as the completion card behind it, and an effect
-   * would show the card unasked for a frame first.
+   * Whether this exercise has been closed — rated, or the question put and
+   * waved away. Until then a finished last set is not the end of the exercise:
+   * sets are added on demand, so the screen offers the next one and "Finish
+   * exercise", which is what asks how hard it was. Raising the question on its
+   * own after every last set would fire after the first set of every exercise.
    */
-  if (exerciseComplete && exercise.rpe === undefined && ask === null && !asked.includes(exercise.name)) {
-    setAsked([...asked, exercise.name]);
+  const closed = exercise.rpe !== undefined || asked.includes(exercise.name);
+  const closeExercise = () => {
+    if (!asked.includes(exercise.name)) setAsked([...asked, exercise.name]);
     setAsk('rate');
-  }
+  };
 
   /**
    * The earliest set still to log. Sets happen in order, so it is also the only
@@ -249,6 +304,19 @@ export const AtlasTrain: React.FC = () => {
    * getting you out of that view.
    */
   const canFinishExercise = done > 0 && done < exercise.sets.length && viewing === undefined;
+
+  /**
+   * One exercise, all of it logged — which is not the same thing as a session
+   * you meant to end.
+   *
+   * `sessionComplete` turns true the moment a single exercise's sets are in, so
+   * promoting Finish there is precisely the accident the bar below says it is
+   * built to avoid. With more than one exercise behind you, finishing is a
+   * deliberate answer and takes the slot back.
+   */
+  const soloExerciseDone = sessionComplete && exerciseComplete && closed && sessionExercises.length === 1;
+  /** The action bar's Finish branch — see the two places below that read it. */
+  const barIsFinish = sessionComplete && closed && !soloExerciseDone;
   const exerciseVolume = exercise.sets.reduce((sum, s) => (s.done ? sum + s.weightKg * s.reps : sum), 0);
 
   /**
@@ -260,6 +328,11 @@ export const AtlasTrain: React.FC = () => {
     (ex, i) => i !== live.cursor.exerciseIdx && ex.sets.some(s => !s.done),
   );
   const nextExercise = nextUnfinished === -1 ? undefined : sessionExercises[nextUnfinished];
+
+  /** What the set on the wheels is worth as a one-rep max, and whether it beats the best. */
+  const best = exercise.best?.e1rm ?? 0;
+  const projected = e1rm(draft.weight, draft.reps);
+  const record = best > 0 && projected > best + 0.05;
 
   const openDetail = () => {
     const full = exercise.exerciseId ? catalog.byId(exercise.exerciseId) : undefined;
@@ -283,6 +356,13 @@ export const AtlasTrain: React.FC = () => {
               {exercise.target && ` · ${exercise.target}`}
               {exercise.equipment && ` · ${exercise.equipment}`}
             </div>
+            {!exerciseComplete && viewSet == null && projected > 0 && (
+              <span className="at-e1rm-chip" data-record={record}>
+                {record
+                  ? t('train.newE1rm', { weight: fmt.upTo(projected, 1) })
+                  : t('train.thisSet', { weight: fmt.upTo(projected, 1) })}
+              </span>
+            )}
           </>
         }
         onNext={() => {
@@ -371,6 +451,10 @@ export const AtlasTrain: React.FC = () => {
         </button>
       </div>
 
+      {/* Beside the pills, because that is where "how far through am I" already
+          lives and resting is the other half of the same question. */}
+      {lastSetAt && <AtlasRestTimer since={lastSetAt} />}
+
       {/* Read-only on purpose. The wheels are the one control that writes
           without confirming, so they never point at a set that is already in the
           book — the list below is where a logged set gets corrected. */}
@@ -394,7 +478,12 @@ export const AtlasTrain: React.FC = () => {
                 what belongs here is the answer — or, if the sheet was waved
                 away, the way back to it. Two chances at a question that costs
                 one tap, and no third. */}
-            {exercise.rpe === undefined ? (
+            {!closed && (
+              <button className="at-addset" onClick={live.addSet}>
+                <Plus size={18} strokeWidth={2.6} /> {t('train.addSetN', { n: exercise.sets.length + 1 })}
+              </button>
+            )}
+            {!closed ? null : exercise.rpe === undefined ? (
               <button
                 className="at-btn at-rpe-reopen"
                 data-ghost="true"
@@ -408,9 +497,13 @@ export const AtlasTrain: React.FC = () => {
               </p>
             )}
 
-            {/* Only offered when the sticky bar is not already showing the way
-                on — two buttons for the same decision is worse than one. */}
-            {!nextExercise && !sessionComplete && (
+            {/* Only when the bar below is not already a way to the picker.
+                With no next exercise the bar offers "add exercise" itself, so
+                showing this too put three routes to one picker on one screen;
+                the one moment it does not is a complete session, where the bar
+                is Finish and this card would otherwise say "pick the next one"
+                with no way to pick. */}
+            {barIsFinish && (
               <button
                 className="at-btn"
                 style={{ justifyContent: 'center', width: '100%' }}
@@ -423,30 +516,25 @@ export const AtlasTrain: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="at-dials">
-            <AtlasDial
+        <div className="at-pad">
+          <div className="at-card at-dials">
+            <WeightWheel
               label={t('train.weight')}
               value={draft.weight}
               onChange={draft.setWeight}
-              min={0}
+              best={exercise.best?.e1rm}
               max={MAX_WEIGHT_KG}
-              // Unused when `values` is given, but the prop is required and the
-              // whole-kilo rung is what the ladder is built around.
-              step={1}
-              values={WEIGHT_LADDER}
-              suffix={t('unit.kg')}
-              // Three decimals, not the default two: 80.125 renders as 80.13 at
-              // two and the dial would disagree with the value it holds.
-              formatValue={v => fmt.upTo(v, WEIGHT_PRECISION)}
             />
-            <AtlasDial
-              label={t('train.reps')}
+            <Stepper
               value={draft.reps}
               onChange={draft.setReps}
               min={1}
               max={MAX_REPS}
-              step={1}
+              unit={t('train.reps').toLowerCase()}
+              decLabel={t('train.decrease', { label: t('train.reps') })}
+              incLabel={t('train.increase', { label: t('train.reps') })}
             />
+          </div>
         </div>
       )}
 
@@ -492,7 +580,12 @@ export const AtlasTrain: React.FC = () => {
 
       {/* Room for the fixed action bar, so the last row is never trapped under
           it — two rows' worth when the bar is carrying both actions. */}
-      <div className="at-train-spacer" data-stacked={canFinishExercise} />
+      <div
+        className="at-train-spacer"
+        // `soloExerciseDone` stacks Finish under "add exercise" — but not while a
+        // logged set is being read back, where the bar is the single way out.
+        data-stacked={canFinishExercise || (soloExerciseDone && viewing === undefined)}
+      />
 
       {/* One primary action, always the thing you would do next. Finish only
           takes the slot once there is genuinely nothing left to log — offering it
@@ -508,15 +601,19 @@ export const AtlasTrain: React.FC = () => {
           >
             {t('train.backToSet', { n: live.setIdx + 1 })}
           </button>
-        ) : sessionComplete ? (
-          <button
-            className="at-btn"
-            data-block="true"
-            disabled={finishing}
-            onClick={() => setFinishingAt(new Date())}
-          >
-            <Flag size={16} /> {finishing ? t('train.finishing') : t('train.finish')}
+        ) : exerciseComplete && !closed ? (
+          <button className="at-btn" data-block="true" onClick={closeExercise}>
+            <Flag size={16} /> {t('train.finishExercise')}
           </button>
+        ) : barIsFinish ? (
+          // A slide rather than a tap: ending the session is the one action
+          // here a stray thumb must not trigger. It opens the finish sheet.
+          <SlideToConfirm
+            key={finishingAt ? 'open' : 'idle'}
+            label={finishing ? t('train.finishing') : t('train.slideToFinish')}
+            disabled={finishing}
+            onConfirm={() => setFinishingAt(new Date())}
+          />
         ) : exerciseComplete && nextExercise ? (
           <button
             className="at-btn"
@@ -526,21 +623,46 @@ export const AtlasTrain: React.FC = () => {
             {t('train.nextNamed', { name: nextExercise.name })}
           </button>
         ) : exerciseComplete ? (
-          <button
-            className="at-btn"
-            data-block="true"
-            onClick={() => actions.openOverlay('exercisePicker')}
-          >
-            <Plus size={16} /> {t('train.addExercise')}
-          </button>
+          <>
+            <button
+              className="at-btn"
+              data-block="true"
+              onClick={() => actions.openOverlay('exercisePicker')}
+            >
+              <Plus size={16} /> {t('train.addExercise')}
+            </button>
+            {/* Still one tap away, just not the thing under your thumb — the
+                same arrangement "finish exercise" gets below. */}
+            {soloExerciseDone && (
+              <button
+                className="at-btn"
+                data-block="true"
+                data-ghost="true"
+                disabled={finishing}
+                onClick={() => setFinishingAt(new Date())}
+              >
+                <Flag size={15} /> {finishing ? t('train.finishing') : t('train.finish')}
+              </button>
+            )}
+          </>
         ) : (
           <>
             <button
               className="at-btn"
               data-block="true"
-              onClick={() => live.logSet(draft.weight, draft.reps)}
+              onClick={() => {
+                live.logSet(draft.weight, draft.reps);
+                setLastSetAt(new Date());
+              }}
             >
-              <Check size={17} strokeWidth={3} /> {t('train.completeSet', { n: live.setIdx + 1 })}
+              <Check size={17} strokeWidth={3} />{' '}
+              {/* An exercise with no history opens on 0 kg (`useSetDraft`), and
+                  "Complete set 1" would then write `0 kg × 10` with nothing on
+                  screen saying so. 0 kg is legitimate — it is most of
+                  calisthenics — so this names it rather than blocking it. */}
+              {draft.weight === 0
+                ? t('train.completeSetBodyweight', { n: live.setIdx + 1 })
+                : t('train.completeSet', { n: live.setIdx + 1 })}
             </button>
             {/* Ending the exercise sits beside logging into it, because that is
                 where the decision is actually made — you finish an exercise

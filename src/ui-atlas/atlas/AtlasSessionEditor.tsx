@@ -1,10 +1,31 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ArrowDown, ArrowUp, Flag, Plus, Repeat, Trash2, X } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppActions } from '../data/useAppData';
+import { normalizeName } from '../derive/records';
 import { ExerciseThumb } from '../components/ExerciseThumb';
 import { useDismissOnBack } from '../components/useDismissOnBack';
 import type { LiveSession } from '../data/useLiveSession';
+import { UndoAction } from '../kit/time-undo-action';
+
+interface SessionListProps {
+  onClose: () => void;
+  live: LiveSession;
+  currentIdx: number;
+  onGoTo: (index: number) => void;
+  onFinish: () => void;
+}
+
+/**
+ * The panel, mounted only while it is open.
+ *
+ * The gate is a wrapper rather than an `if (!open) return null` inside, because
+ * that early return keeps the component mounted and its state alive. Here that
+ * state is a running undo countdown: closing the panel with the X unmounts it,
+ * which cancels the countdown — the X reads as "cancel", so it means it.
+ */
+export const AtlasSessionEditor: React.FC<SessionListProps & { open: boolean }> = ({ open, ...rest }) =>
+  open ? <SessionList {...rest} /> : null;
 
 /**
  * The session's exercise list: where you are, where else you could be, and what
@@ -19,21 +40,10 @@ import type { LiveSession } from '../data/useLiveSession';
  * than set-scoped ones, and neither belongs next to the button you press forty
  * times an hour.
  */
-export const AtlasSessionEditor: React.FC<{
-  open: boolean;
-  onClose: () => void;
-  live: LiveSession;
-  currentIdx: number;
-  onGoTo: (index: number) => void;
-  onFinish: () => void;
-}> = ({ open, onClose, live, currentIdx, onGoTo, onFinish }) => {
-  const { t } = useT();
+const SessionList: React.FC<SessionListProps> = ({ onClose, live, currentIdx, onGoTo, onFinish }) => {
+  const { t, tp } = useT();
   const actions = useAppActions();
-  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
-
-  useDismissOnBack(open, onClose, 'editor');
-
-  if (!open) return null;
+  useDismissOnBack(true, onClose, 'editor');
 
   const jump = (index: number) => { onGoTo(index); onClose(); };
 
@@ -70,7 +80,22 @@ export const AtlasSessionEditor: React.FC<{
       </div>
 
       <div className="at-pad">
-        {live.exercises.map((exercise, i) => (
+        {live.exercises.map((exercise, i) => {
+          const logged = exercise.sets.filter(s => s.done).length;
+          /**
+           * Whether removing this row actually costs anything.
+           *
+           * Sets belong to an exercise *name*, not to a row — `dropSetsFor` and
+           * `buildSessionExercises` both key that way — so with the same
+           * exercise on two rows the sets stay with the row that remains and
+           * this removal loses nothing. Asking anyway would put a scary count
+           * on a free action.
+           */
+          const twin = live.exercises.some(
+            (other, j) => j !== i && normalizeName(other.name) === normalizeName(exercise.name),
+          );
+          const losesSets = logged > 0 && !twin;
+          return (
           <div key={exercise.key} className="at-card at-editor-row" data-cur={i === currentIdx}>
             <button
               className="at-editor-jump"
@@ -118,12 +143,36 @@ export const AtlasSessionEditor: React.FC<{
               >
                 <Repeat size={15} />
               </button>
-              <button onClick={() => live.removeExercise(i)} title={t('train.remove')} aria-label={t('train.remove')} data-danger="true">
-                <Trash2 size={15} />
-              </button>
+              {/* Nothing to lose, nothing to ask: an exercise with no logged
+                  sets goes on the tap. One that takes sets with it counts down
+                  five seconds with an undo instead of asking — removed by key,
+                  so moving a row mid-countdown cannot delete a different one. */}
+              {losesSets ? (
+                <UndoAction
+                  className="at-editor-undo"
+                  label={<Trash2 size={15} />}
+                  ariaLabel={t('train.remove')}
+                  undoLabel={tp('train.undoRemove', logged)}
+                  seconds={5}
+                  onCommit={() => {
+                    const at = live.exercises.findIndex(e => e.key === exercise.key);
+                    if (at !== -1) live.removeExercise(at);
+                  }}
+                />
+              ) : (
+                <button
+                  onClick={() => live.removeExercise(i)}
+                  title={t('train.remove')}
+                  aria-label={t('train.remove')}
+                  data-danger="true"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
 
         <button
           className="at-btn"
@@ -143,29 +192,16 @@ export const AtlasSessionEditor: React.FC<{
             <Flag size={15} /> {t('train.finish')}
           </button>
 
-          {confirmingDiscard ? (
-            <div className="at-confirm">
-              <p>{t('train.discardConfirm')}</p>
-              <div className="at-confirm-actions">
-                <button className="at-btn" data-ghost="true" onClick={() => setConfirmingDiscard(false)}>
-                  {t('common.cancel')}
-                </button>
-                <button className="at-btn" data-danger="true" onClick={() => { onClose(); live.discard(); }}>
-                  {t('train.discard')}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              className="at-btn"
-              data-ghost="true"
-              data-danger="true"
-              style={{ width: '100%', justifyContent: 'center' }}
-              onClick={() => setConfirmingDiscard(true)}
-            >
-              <Trash2 size={15} /> {t('train.discard')}
-            </button>
-          )}
+          {/* Ten seconds to take it back instead of a question: the undo is
+              right where the finger is. */}
+          <UndoAction
+            className="at-editor-discard"
+            icon={<Trash2 size={15} />}
+            label={t('train.discard')}
+            undoLabel={t('train.undoDiscard')}
+            seconds={10}
+            onCommit={() => { onClose(); live.discard(); }}
+          />
         </div>
       </div>
       </div>

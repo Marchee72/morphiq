@@ -247,7 +247,7 @@ describe('history entry points', () => {
   it('opens a past session straight from Today', async () => {
     renderScreen('today', { data: 'empty' });
 
-    // By label rather than by position: the muscle-load rows share the row class.
+    // "Recent" is a timeline; each session in it is a button.
     const row = await waitFor(
       () => screen.getAllByRole('button', { name: /open push a/i })[0],
       { timeout: 20000 },

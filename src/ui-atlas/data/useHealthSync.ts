@@ -11,6 +11,8 @@ export interface HealthSyncResult {
   ok: boolean;
   /** Workouts written. Zero is a real answer — there may simply be none new. */
   workouts: number;
+  /** Weigh-ins that were not in the app before. */
+  weighIns: number;
   /** Already translated: the caller shows it, it does not interpret it. */
   message: string;
 }
@@ -28,31 +30,36 @@ export interface HealthSyncResult {
  * importer is two things to keep agreeing about how far back to reach.
  */
 export function useHealthSync() {
-  const { t } = useT();
+  const { t, tp } = useT();
   const activeProfile = useStore(s => s.activeProfile);
   const importWorkouts = useStore(s => s.importWorkouts);
   const importMeasurements = useStore(s => s.importMeasurements);
+  const setHealthSync = useStore(s => s.setHealthSync);
 
   const [syncing, setSyncing] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   const sync = useCallback(async (): Promise<HealthSyncResult> => {
-    if (!activeProfile) return { ok: false, workouts: 0, message: '' };
+    if (!activeProfile) return { ok: false, workouts: 0, weighIns: 0, message: '' };
 
     setSyncing(true);
     setStatus(t('settings.syncing'));
 
-    const finish = (result: HealthSyncResult) => {
+    const capacitor = new CapacitorHealthProvider();
+    const native = capacitor.isAvailable();
+    if (native) setHealthSync({ status: 'syncing' });
+
+    const finish = (result: HealthSyncResult, status: 'idle' | 'denied' = 'idle') => {
       setStatus(result.message);
       setSyncing(false);
+      if (native) setHealthSync(status === 'idle' && result.ok ? { status, checkedAt: new Date() } : { status });
       return result;
     };
 
     try {
-      const capacitor = new CapacitorHealthProvider();
-      const provider = capacitor.isAvailable() ? capacitor : new WebHealthProvider();
+      const provider = native ? capacitor : new WebHealthProvider();
       if (!(await provider.requestPermissions())) {
-        return finish({ ok: false, workouts: 0, message: t('settings.syncDenied') });
+        return finish({ ok: false, workouts: 0, weighIns: 0, message: t('settings.syncDenied') }, 'denied');
       }
 
       // The same windows as the automatic sync in `App.tsx`, stretched back to
@@ -61,26 +68,30 @@ export function useHealthSync() {
       const profileId = String(activeProfile.id);
       const workouts = await provider.importWorkouts(syncSince(profileId, 30));
 
+      let weighIns = 0;
       if (provider.importBodyComposition) {
         // Reaches back further than the workouts do: the Body charts cover
         // 12 weeks, and a 30-day import leaves two thirds of every chart
         // filled by gap-filling over readings Health Connect already holds.
         const measurements = await provider.importBodyComposition(
           syncSince(profileId, HEALTH_IMPORT_DAYS), activeProfile);
-        if (measurements.length > 0) await importMeasurements(measurements);
+        if (measurements.length > 0) weighIns = await importMeasurements(measurements);
       }
 
       await importWorkouts(workouts);
       return finish({
         ok: true,
         workouts: workouts.length,
-        message: t('settings.syncOk', { n: workouts.length }),
+        weighIns,
+        // Weigh-ins first: it used to count workouts alone, so a pull on Body
+        // that brought a weight in still answered "0 workouts".
+        message: `${tp('sync.weighIns', weighIns)} · ${tp('sync.workouts', workouts.length)}`,
       });
     } catch (err) {
       console.error('Health sync error:', err);
-      return finish({ ok: false, workouts: 0, message: t('settings.syncError') });
+      return finish({ ok: false, workouts: 0, weighIns: 0, message: t('settings.syncError') });
     }
-  }, [activeProfile, importMeasurements, importWorkouts, t]);
+  }, [activeProfile, importMeasurements, importWorkouts, setHealthSync, t, tp]);
 
   return { sync, syncing, status, setStatus };
 }

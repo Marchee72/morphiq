@@ -21,6 +21,7 @@ export function buildSteps(
   raw: { date: string; steps: number }[],
   now: Date,
   days = 7,
+  activeCalories: { date: string; kcal: number }[] = [],
 ): StepsVM {
   const since = startOfDay(new Date(now.getTime() - (days - 1) * MS_PER_DAY)).getTime();
   const todayKey = dayKey(now);
@@ -43,5 +44,9 @@ export function buildSteps(
     weeklyAvg: recent.length > 0
       ? Math.round(recent.reduce((total, entry) => total + entry.steps, 0) / recent.length)
       : null,
+    activeKcal: activeCalories.find(entry => {
+      const date = fromDayString(entry.date);
+      return date !== null && dayKey(date) === todayKey;
+    })?.kcal ?? null,
   };
 }

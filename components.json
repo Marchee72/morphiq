@@ -1,0 +1,24 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "new-york",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/ui-atlas/tw.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@/ui-atlas/kit",
+    "ui": "@/ui-atlas/kit",
+    "lib": "@/ui-atlas/kit",
+    "hooks": "@/ui-atlas/kit",
+    "utils": "@/ui-atlas/kit/cn"
+  },
+  "registries": {
+    "@watermelon": "https://ui.watermelon.sh/r/{name}.json"
+  }
+}

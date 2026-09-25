@@ -171,12 +171,36 @@ export interface ActiveSession {
   bodyNotes?: string;
 }
 
-/** Sets an exercise starts with when added by hand. Trimming one is a tap; adding one is a tap. */
-export const DEFAULT_TARGET_SETS = 4;
+/**
+ * Sets an exercise starts with when added by hand: one, and the next is added
+ * on demand ("+ Add set 2", pre-filled from the last). Four blank sets up
+ * front was a plan nobody had made. Routines keep their own `targetSets`.
+ */
+export const DEFAULT_TARGET_SETS = 1;
 
-/** Every set except the ones belonging to `exerciseName`. Keys the same way the derive layer does. */
-function dropSetsFor(sets: DraftSet[], exerciseName: string): DraftSet[] {
+/**
+ * Every set except the ones belonging to `exerciseName`. Keys the same way the
+ * derive layer does.
+ *
+ * Nothing is dropped while a row in `keeping` still carries that name. A set
+ * belongs to a name rather than to a row — `buildSessionExercises` groups them
+ * by `normalizeName` too — so with the same exercise on two rows, dropping one
+ * row emptied the other: it asked about one exercise's sets and deleted two
+ * rows' worth.
+ *
+ * ponytail: the ceiling is that the twin rows go on sharing one set list, so
+ * logging into either shows in both. Giving a row sets of its own means putting
+ * the row id on `DraftSet` and threading it through the derive layer, the
+ * persisted session and the history write — worth doing the day someone wants
+ * the same lift twice in a session, not to close a delete bug.
+ */
+function dropSetsFor(
+  sets: DraftSet[],
+  exerciseName: string,
+  keeping: ActiveSessionExercise[],
+): DraftSet[] {
   const key = normalizeName(exerciseName);
+  if (keeping.some(e => normalizeName(e.exerciseName) === key)) return sets;
   return sets.filter(s => normalizeName(s.exerciseName) !== key);
 }
 
@@ -425,6 +449,15 @@ interface StoreState {
    */
   dailySteps: { date: string; steps: number }[];
   setDailySteps: (days: { date: string; steps: number }[]) => void;
+  /**
+   * Where the Health Connect import stands, for the Body screen's sync strip.
+   * `unavailable` off Android, where there is nothing to sync from.
+   */
+  healthSync: { status: 'unavailable' | 'syncing' | 'idle' | 'denied'; checkedAt: Date | null };
+  setHealthSync: (patch: Partial<StoreState['healthSync']>) => void;
+  /** Active calories per local day, cached the same way as `dailySteps`. */
+  dailyActiveCalories: { date: string; kcal: number }[];
+  setDailyActiveCalories: (days: { date: string; kcal: number }[]) => void;
   addWorkoutSet: (set: Omit<WorkoutSet, 'profileId' | 'timestamp'>) => Promise<void>;
   deleteWorkoutSet: (id: string, workoutLogId: string) => Promise<void>;
   loadExerciseStats: (exerciseName: string) => Promise<void>;
@@ -437,7 +470,8 @@ interface StoreState {
   toggleFavorite: (exerciseId: string) => Promise<void>;
   linkPendingRoutineToWorkout: (workoutLogId: string) => Promise<void>;
   clearPendingRoutine: () => Promise<void>;
-  importMeasurements: (records: Omit<Measurement, 'profileId'>[]) => Promise<void>;
+  /** Resolves with how many weigh-ins were new (completed ones are not counted). */
+  importMeasurements: (records: Omit<Measurement, 'profileId'>[]) => Promise<number>;
   analyzeWorkoutHistoryPeriod: (period: 'week' | 'month' | 'year') => Promise<string>;
   scheduleMonthlyReminder: () => Promise<void>;
   cancelMonthlyReminder: () => Promise<void>;
@@ -492,6 +526,8 @@ export const useStore = create<StoreState>((set, get) => ({
   resolvedIds: {},
   allSets: [],
   dailySteps: [],
+  healthSync: { status: 'unavailable', checkedAt: null },
+  dailyActiveCalories: [],
   exerciseStats: {},
   theme: getInitialTheme(),
   language: initialLanguage(),
@@ -508,6 +544,8 @@ export const useStore = create<StoreState>((set, get) => ({
   pendingResume: readStoredSession(),
 
   setDailySteps: (days) => set({ dailySteps: days }),
+  setHealthSync: (patch) => set(s => ({ healthSync: { ...s.healthSync, ...patch } })),
+  setDailyActiveCalories: (days) => set({ dailyActiveCalories: days }),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setBuddiesFocus: (focus) => set({ buddiesFocus: focus }),
@@ -558,7 +596,7 @@ export const useStore = create<StoreState>((set, get) => ({
       // A set row with no `isCompleted` is what nudging the dial leaves behind,
       // so dropping it alongside its exercise costs nothing.
       for (const dropped of current) {
-        if (!kept.includes(dropped)) sets = dropSetsFor(sets, dropped.exerciseName);
+        if (!kept.includes(dropped)) sets = dropSetsFor(sets, dropped.exerciseName, kept);
       }
     }
 
@@ -609,7 +647,7 @@ export const useStore = create<StoreState>((set, get) => ({
       activeSession: {
         ...session,
         routineExercises: list,
-        sets: dropSetsFor(session.sets, replaced.exerciseName),
+        sets: dropSetsFor(session.sets, replaced.exerciseName, list),
       },
     });
   },
@@ -642,7 +680,7 @@ export const useStore = create<StoreState>((set, get) => ({
       activeSession: {
         ...session,
         routineExercises: list,
-        sets: dropSetsFor(session.sets, removed.exerciseName),
+        sets: dropSetsFor(session.sets, removed.exerciseName, list),
       },
     });
   },
@@ -724,10 +762,10 @@ export const useStore = create<StoreState>((set, get) => ({
     let wrote = false;
     for (const signal of signals) {
       const existing = await wellnessRepo.getForDay(profile.id, signal.day);
-      const unchanged = existing
-        && existing.sleepMinutes === signal.sleepMinutes
-        && existing.restingHr === signal.restingHr
-        && existing.hrvMs === signal.hrvMs;
+      // Every field the import carries, so a new one (a score arriving later
+      // in the morning) is never skipped as "unchanged".
+      const unchanged = existing && (Object.keys(signal) as (keyof typeof signal)[])
+        .every(key => existing[key] === signal[key]);
       if (unchanged) continue;
 
       await wellnessRepo.save({
@@ -1510,6 +1548,22 @@ export const useStore = create<StoreState>((set, get) => ({
     console.log('MorphIQ Store: importWorkouts received logs count:', logs.length);
     console.log('MorphIQ Store: Existing external IDs in DB:', Array.from(existingExtIds));
 
+    /**
+     * The same event already stored under another source's id. Samsung Health
+     * and Health Connect hold the same watch session under different ids, so
+     * switching reads from one to the other would otherwise import every
+     * session again: a synced row starting within two minutes is the same
+     * session, and a strength session already folded into one you logged has
+     * its watch record already.
+     */
+    const SAME_START_MS = 2 * 60_000;
+    const storedElsewhere = (log: Omit<WorkoutLog, 'profileId'>) => existing.some(w =>
+      w.externalId && (
+        (w.source === 'health-connect' &&
+          Math.abs(new Date(w.timestamp).getTime() - new Date(log.timestamp).getTime()) <= SAME_START_MS) ||
+        (w.source === 'manual' && isStrengthActivity(log.type) && overlaps(w, { ...log, source: 'health-connect' }))
+      ));
+
     let addedCount = 0;
     // One record the server refuses must not cost every record behind it: the
     // loop keeps going and the first failure is rethrown once it is done, so the
@@ -1521,6 +1575,7 @@ export const useStore = create<StoreState>((set, get) => ({
           console.log('MorphIQ Store: Skipping duplicate workout:', log.externalId);
           continue;
         }
+        if (storedElsewhere(log)) continue;
         console.log('MorphIQ Store: Saving new synced workout:', log.externalId || log.timestamp);
         const newLogId = await workoutRepo.add({
           ...log,
@@ -1837,7 +1892,7 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
 
   importMeasurements: async (records) => {
     const profile = get().activeProfile;
-    if (!profile) return;
+    if (!profile) return 0;
 
     const existing = await measurementRepo.getAll(profile.id!);
     
@@ -1846,16 +1901,43 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
       return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
     };
     
-    const existingKeys = new Set(existing.map(m => toMinuteKey(m.timestamp)));
+    const existingByKey = new Map(existing.map(m => [toMinuteKey(m.timestamp), m]));
+
+    /**
+     * What a repeat of a stored reading can add to it. A source may write the
+     * weight first and the body composition minutes later, and Samsung's
+     * skeletal muscle arrives by another road entirely — skipping every repeat
+     * left those readings weight-only for good.
+     */
+    const completes = (old: Measurement, rec: Omit<Measurement, 'profileId'>) =>
+      (!(old.bodyFat > 0) && rec.bodyFat > 0) || (old.skeletalMuscle == null && rec.skeletalMuscle != null);
 
     let addedCount = 0;
+    let changed = false;
     // Same rule as `importWorkouts`: keep going past a refused record, and
     // rethrow the first failure once the rest are in.
     let firstError: unknown;
     for (const rec of records) {
       const key = toMinuteKey(rec.timestamp);
-      if (existingKeys.has(key)) {
-        console.log('MorphIQ Store: Skipping duplicate body composition measurement:', rec.timestamp);
+      const old = existingByKey.get(key);
+      if (old && !completes(old, rec)) continue;
+      if (old) {
+        // Save the completed reading before deleting the old one: a failure
+        // between the two leaves a duplicate, never a gap.
+        try {
+          const { id: _oldId, ...base } = rec.bodyFat > 0 ? { ...old, ...rec } : old;
+          await measurementRepo.save({
+            ...base,
+            skeletalMuscle: rec.skeletalMuscle ?? old.skeletalMuscle,
+            profileId: profile.id!,
+            timestamp: new Date(old.timestamp),
+          });
+          await measurementRepo.delete(old.id!);
+          changed = true;
+        } catch (err) {
+          console.warn('MorphIQ Store: Failed to complete measurement:', rec.timestamp, err);
+          firstError ??= err;
+        }
         continue;
       }
 
@@ -1867,17 +1949,19 @@ Keep the tone professional, motivating, and science-grounded. Keep the response 
           timestamp: new Date(rec.timestamp),
         });
         addedCount++;
+        changed = true;
       } catch (err) {
         console.warn('MorphIQ Store: Failed to import measurement:', rec.timestamp, err);
         firstError ??= err;
       }
     }
 
-    if (addedCount > 0) {
+    if (changed) {
       const history = await measurementRepo.getAll(profile.id!);
       set({ measurements: history });
     }
     if (firstError !== undefined) throw firstError;
+    return addedCount;
   },
 
   analyzeWorkoutHistoryPeriod: async (period) => {

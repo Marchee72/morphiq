@@ -17,6 +17,10 @@ export interface WellnessSignals {
   sleepRemMinutes?: number;
   restingHr?: number;
   hrvMs?: number;
+  sleepScore?: number;
+  sleepStart?: string;
+  sleepEnd?: string;
+  energyScore?: number;
 }
 
 export interface IHealthProvider {
@@ -26,6 +30,8 @@ export interface IHealthProvider {
   importBodyComposition?(since: Date, profile: UserProfile): Promise<Omit<Measurement, 'profileId'>[]>;
   exportBodyComposition?(measurement: Measurement): Promise<boolean>;
   getDailySteps?(since: Date): Promise<{ date: string; steps: number }[]>;
+  /** Active calories burned per local day, the way Samsung Health counts its activity ring. */
+  getDailyActiveCalories?(since: Date): Promise<{ date: string; kcal: number }[]>;
   /** One entry per day that has anything to say. Absent on web, where nothing does. */
   importWellnessSignals?(since: Date): Promise<WellnessSignals[]>;
   getStepStreak?(stepGoal?: number): Promise<{ currentSteps: number; targetGoal: number; streakDays: number; daysMetThisMonth: number; totalDaysInMonth: number }>;

@@ -9,6 +9,7 @@ import {
 } from '../derive/social';
 import { AtlasBuddies } from '../atlas/AtlasBuddies';
 import { AtlasSharedStrip } from '../atlas/AtlasSharedStrip';
+import { AtlasBuddyStrip } from '../atlas/AtlasBuddyStrip';
 import { testProfile, TEST_NOW } from '../../test/renderScreen';
 import type {
   BuddyLink, BuddyMessage, BuddyPresence, SharedRoutine, SharedSession,
@@ -52,7 +53,7 @@ function renderBuddies(
     initialCode, error = null, removeBuddy = noop, messages = {},
     sendMessage = noop2, presence = [], shared = null,
     startShared = noop, joinShared = noop, shareRoutine = noopRoutine,
-    routines = [],
+    routines = [], as = 'hub',
   }: {
     initialCode?: string;
     error?: string | null;
@@ -65,6 +66,8 @@ function renderBuddies(
     joinShared?: (sessionId: string) => Promise<void>;
     shareRoutine?: (linkId: string, routine: SharedRoutine) => Promise<void>;
     routines?: RoutineTemplate[];
+    /** Which surface: the Gymbros tab, or the section on Today. */
+    as?: 'hub' | 'today';
   } = {},
 ) {
   useStore.setState({
@@ -111,7 +114,7 @@ function renderBuddies(
       <AppActionsProvider>
         <SocialContext.Provider value={social}>
           <div className="app at">
-            <AtlasBuddies />
+            {as === 'today' ? <AtlasBuddyStrip /> : <AtlasBuddies />}
           </div>
         </SocialContext.Provider>
       </AppActionsProvider>
@@ -122,6 +125,12 @@ function renderBuddies(
 beforeEach(() => {
   useStore.setState(initialStore, true);
 });
+
+/** A partner's pause and remove actions sit behind their "manage" button. */
+async function openManage(name = 'Ana') {
+  const button = await screen.findByRole('button', { name: new RegExp(`manage ${name}`, 'i') });
+  fireEvent.click(button);
+}
 
 describe('the partners hub', () => {
   it('says whose partners these are, so a profile switch is never mysterious', async () => {
@@ -137,6 +146,14 @@ describe('the partners hub', () => {
     expect(screen.getByText(/I have a code/i)).toBeTruthy();
   });
 
+  it('says what a partner would see of you before you have one', async () => {
+    renderBuddies([]);
+    await waitFor(() => expect(text()).toContain('What they see of you'));
+    expect(text()).toContain('Your weights, body and meals: never');
+    // Privacy switches are for someone who has partners to hide from.
+    expect(text()).not.toContain('Show when I train');
+  });
+
   it('lists a partner with the date the friendship started', async () => {
     renderBuddies([link()]);
     await waitFor(() => expect(text()).toContain('Ana'));
@@ -147,12 +164,14 @@ describe('the partners hub', () => {
   it('offers resume only to the side that paused', async () => {
     // The other side seeing "resume" would promise something the server refuses.
     renderBuddies([link({ blockedByMe: true })]);
+    await openManage();
     await waitFor(() => expect(screen.getByText(/Resume/i)).toBeTruthy());
     expect(screen.queryByText(/Pause this partner/i)).toBeNull();
   });
 
   it('offers neither pause nor resume to the side that was paused', async () => {
     renderBuddies([link({ blockedByThem: true })]);
+    await openManage();
     await waitFor(() => expect(text()).toContain('Paused'));
     expect(screen.queryByText(/Resume/i)).toBeNull();
     expect(screen.queryByText(/Pause this partner/i)).toBeNull();
@@ -169,6 +188,7 @@ describe('the partners hub', () => {
     // It does not: your copy is deleted and theirs is not, and promising
     // otherwise is the one thing this dialog must never do.
     renderBuddies([link()]);
+    await openManage();
     await waitFor(() => expect(screen.getByText(/Remove partner/i)).toBeTruthy());
 
     fireEvent.click(screen.getByText(/Remove partner/i));
@@ -182,6 +202,7 @@ describe('the partners hub', () => {
     const removeBuddy = vi.fn(async () => {});
     renderBuddies([link()], { removeBuddy });
 
+    await openManage();
     await waitFor(() => expect(screen.getByText(/Remove partner/i)).toBeTruthy());
     fireEvent.click(screen.getByText(/Remove partner/i));
     await waitFor(() => expect(text()).toContain('Remove Ana?'));
@@ -193,6 +214,7 @@ describe('the partners hub', () => {
     const removeBuddy = vi.fn(async () => {});
     renderBuddies([link()], { removeBuddy });
 
+    await openManage();
     await waitFor(() => expect(screen.getByText(/Remove partner/i)).toBeTruthy());
     fireEvent.click(screen.getByText(/Remove partner/i));
     await waitFor(() => expect(screen.getByText('Remove')).toBeTruthy());
@@ -608,5 +630,23 @@ describe('the shared session strip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(leaveShared).toHaveBeenCalled();
+  });
+});
+
+describe('gymbros on Today', () => {
+  it('shows each partner as a face, and what is waiting from them', async () => {
+    renderBuddies([link({ unreadCount: 2 })], { as: 'today' });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Ana · 2 unread messages/i })).toBeTruthy());
+    expect(text()).toContain('2 unread messages');
+  });
+
+  it('says nobody is training when nobody is and nothing is waiting', async () => {
+    renderBuddies([link()], { as: 'today' });
+    await waitFor(() => expect(text()).toContain('Nobody is training right now'));
+  });
+
+  it('offers to find a partner when there is none yet', async () => {
+    renderBuddies([], { as: 'today' });
+    await waitFor(() => expect(text()).toContain('Train alongside someone'));
   });
 });

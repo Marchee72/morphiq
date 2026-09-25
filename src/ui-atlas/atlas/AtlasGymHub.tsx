@@ -1,65 +1,124 @@
-import React, { useState } from 'react';
-import { ArrowRight, Dumbbell, Play } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { ListOrdered, Play, Plus, RotateCcw, Sparkles, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
 import { RoutineCopyButton } from '../components/RoutineCopyButton';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { AtlasStates } from './AtlasStates';
 import { AtlasSessionDetail } from './AtlasSessionDetail';
 
+/** A record set in the last week is news; older ones are just the list. */
+const NEW_RECORD_MS = 7 * 86_400_000;
+
 /**
  * The Train tab when no session is running.
  *
- * The concept only ever drew the live session, but the tab has to hold
- * everything the old gym screen did — starting a session, saved routines,
- * history, records and the week's totals — or those features disappear.
+ * Led by the answer to "what do I train today": the groups rested longest,
+ * with the lifts you last did them with, one tap from starting. Below it the
+ * three other ways in — a free session, repeating the last one, a routine —
+ * then the routines themselves, records and history.
  */
 export const AtlasGymHub: React.FC = () => {
-  const { training } = useAppData();
+  const { training, sessionDetail, suggestTraining } = useAppData();
   const actions = useAppActions();
   const { t, tp, fmt } = useT();
   const now = new Date();
+  const routinesRef = useRef<HTMLDivElement>(null);
 
   // Local, as in AtlasLibrary: the sheet belongs to the list that opened it.
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [offset, setOffset] = useState(0);
+
+  const suggestion = suggestTraining(offset);
+  const names = suggestion?.groups.map(g => t(g.labelKey)) ?? [];
+  const title = names.length > 1
+    ? `${names.slice(0, -1).join(', ')} ${t('common.and')} ${names[names.length - 1].toLowerCase()}`
+    : names[0] ?? '';
+  const days = suggestion?.groups.map(g => g.daysSince) ?? [];
+  const daysLine = days.length > 1
+    ? t('train.suggestDaysMany', { days: `${days.slice(0, -1).join(', ')} ${t('common.and')} ${days[days.length - 1]}` })
+    : t('train.suggestDaysOne', { days: days[0] ?? 0 });
+
+  // The most recent session with lifts in it, repeated as it was done — same
+  // lifts, same sets. A run from the watch has nothing to repeat here.
+  const repeatable = training.history
+    .filter(entry => !entry.cardio)
+    .slice(0, 5)
+    .map(entry => sessionDetail(entry.id))
+    .find(detail => detail !== null && detail.exercises.length > 0) ?? null;
 
   return (
     <>
-      <div className="at-greet">
+      <header className="at-hub-head">
         <div>
-          <small>{t('today.thisWeek')}</small>
+          <small>{fmt.weekdayShort(now)}, {fmt.shortDate(now)}</small>
           <h1>{t('nav.train')}</h1>
         </div>
-      </div>
+        <ol className="at-hub-week" aria-label={t('today.weekSummary')}>
+          {training.streak.week.map(day => (
+            <li key={day.date.toISOString()} data-done={day.done} data-today={day.isToday}>
+              {fmt.weekdayShort(day.date).charAt(0).toUpperCase()}
+            </li>
+          ))}
+        </ol>
+      </header>
 
-      <div className="at-hero" data-idle="true">
-        <span className="at-hero-tag">{t('today.noSession')}</span>
-        <h2>{t('today.startSession')}</h2>
-        <p>{t('today.noSessionSub')}</p>
-        <button className="at-btn" onClick={() => actions.beginSession()}>
-          <Play size={15} /> {t('common.start')} <i><ArrowRight size={16} /></i>
+      {suggestion && (
+        <section className="at-hub-suggest at-enter" aria-label={t('train.suggestKicker')}>
+          <div className="at-today-glow" aria-hidden="true" />
+          <small><Sparkles size={14} /> {t('train.suggestKicker')}</small>
+          <h2>{title}</h2>
+          <p>
+            {daysLine}
+            {suggestion.routine && <> · {t('train.suggestFits')} <b>{suggestion.routine.title}</b></>}
+          </p>
+          {suggestion.exercises.length > 0 && (
+            <ol>
+              {suggestion.exercises.map(ex => (
+                <li key={ex.name}><span>{ex.name}</span><span>{ex.sets} × {ex.reps}</span></li>
+              ))}
+            </ol>
+          )}
+          <div className="at-hub-suggest-actions">
+            <button
+              className="at-today-cta"
+              onClick={() => actions.startWith(title, suggestion.exercises.map(ex => ({
+                exerciseId: ex.exerciseId ?? '',
+                exerciseName: ex.name,
+                targetSets: ex.sets,
+                targetReps: ex.reps,
+              })))}
+            >
+              <Play size={16} fill="currentColor" /> {t('train.suggestStart')}
+            </button>
+            {suggestion.options > 1 && (
+              <button className="at-hub-another" onClick={() => setOffset(o => o + 1)} aria-label={t('train.suggestAnother')}>
+                <RotateCcw size={18} />
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
+      <div className="at-hub-quick at-enter" style={{ animationDelay: '60ms' }}>
+        <button onClick={() => actions.beginSession()}>
+          <i data-tone="primary"><Plus size={18} /></i>{t('train.freeSession')}
+        </button>
+        {repeatable && (
+          <button onClick={() => actions.startWith(repeatable.title, repeatable.exercises.map(ex => ({
+            exerciseId: ex.exerciseId ?? '',
+            exerciseName: ex.name,
+            // The sets that were performed, so repeating means the same work.
+            targetSets: ex.sets.length,
+          })))}>
+            <i data-tone="amber"><RotateCcw size={18} /></i>{t('train.repeatLast')}
+          </button>
+        )}
+        <button onClick={() => routinesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+          <i data-tone="coral"><ListOrdered size={18} /></i>{t('gym.routines')}
         </button>
       </div>
 
-      <div className="at-rail-head"><h3>{t('today.thisWeek')}</h3></div>
-      <div className="at-rail">
-        <div className="at-moment">
-          <span className="at-moment-icon"><Dumbbell size={17} /></span>
-          <b>{training.weeklyStats.workouts}</b>
-          <span>{t('gym.workouts')}</span>
-        </div>
-        <div className="at-moment">
-          <span className="at-moment-icon"><Dumbbell size={17} /></span>
-          <b>{training.weeklyStats.minutes}</b>
-          <span>{t('gym.minutes')}</span>
-        </div>
-        <div className="at-moment">
-          <span className="at-moment-icon"><Dumbbell size={17} /></span>
-          <b>{fmt.n(training.weeklyStats.volumeKg / 1000, 1)}<small>{t('unit.tonnes')}</small></b>
-          <span>{t('today.volume')}</span>
-        </div>
-      </div>
-
-      <div className="at-rail-head"><h3>{t('gym.routines')}</h3></div>
+      <div className="at-rail-head" ref={routinesRef}><h3>{t('gym.routines')}</h3></div>
       {training.routines.length > 0 ? (
         <div className="at-pad">
           <div className="at-card" style={{ padding: '8px 20px' }}>
@@ -94,13 +153,20 @@ export const AtlasGymHub: React.FC = () => {
         <>
           <div className="at-rail-head"><h3>{t('gym.records')}</h3></div>
           <div className="at-pad">
-            <div className="at-card" style={{ padding: '8px 20px' }}>
-              {training.records.slice(0, 4).map((record, i) => (
-                <div key={record.exerciseName} className="at-routine-item" style={{ borderTop: i === 0 ? 'none' : undefined }}>
-                  <span>{record.exerciseName}<small>{fmt.relativeDay(record.at, now)}</small></span>
-                  <b>{fmt.kgReps(record.weightKg, record.reps)}</b>
-                </div>
-              ))}
+            <div className="at-card at-hub-records">
+              {training.records.slice(0, 4).map(record => {
+                const fresh = now.getTime() - record.at.getTime() < NEW_RECORD_MS;
+                return (
+                  <div key={record.exerciseName} className="at-hub-record">
+                    <i aria-hidden="true"><Trophy size={16} /></i>
+                    <span>
+                      <b>{record.exerciseName}</b>
+                      <small>{fmt.kgReps(record.weightKg, record.reps)} · 1RM ≈ {fmt.n(record.e1rm)} {t('unit.kg')}</small>
+                    </span>
+                    <em data-fresh={fresh}>{fresh ? t('train.newRecord') : fmt.relativeDay(record.at, now)}</em>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </>
@@ -113,28 +179,25 @@ export const AtlasGymHub: React.FC = () => {
         )}
       </div>
       {training.history.length > 0 ? (
-        <div className="at-pad" style={{ paddingBottom: 24 }}>
-          <div className="at-card" style={{ padding: '8px 20px' }}>
-            {training.history.slice(0, 10).map((entry, i) => (
-              <button
-                key={entry.id}
-                className="at-routine-item"
-                style={{ borderTop: i === 0 ? 'none' : undefined, width: '100%' }}
-                onClick={() => setSessionId(entry.id)}
-                aria-label={t('history.openSession', { name: entry.title })}
-              >
+        <ol className="at-recent">
+          {training.history.slice(0, 10).map(entry => (
+            <li key={entry.id} data-kind={entry.prs > 0 ? 'pr' : entry.cardio ? 'cardio' : 'lift'}>
+              <button onClick={() => setSessionId(entry.id)} aria-label={t('history.openSession', { name: entry.title })}>
+                <small><i aria-hidden="true" />{fmt.relativeDay(entry.at, now)}</small>
+                <b>{entry.title}</b>
                 <span>
-                  {entry.title}
-                  <small>
-                    {fmt.dmy(entry.at)} · {entry.durationMin} min · {tp('unit.sets', entry.sets)}
-                    {entry.prs > 0 && ` · ${entry.prs} PR`}
-                  </small>
+                  {entry.cardio
+                    ? `${entry.durationMin} min`
+                    : [
+                        `${entry.durationMin} min`,
+                        `${fmt.n(entry.volumeKg / 1000, 1)} ${t('unit.tonnes')}`,
+                        tp('unit.sets', entry.sets),
+                      ].join(' · ')}
                 </span>
-                <b>{fmt.n(entry.volumeKg / 1000, 1)} {t('unit.tonnes')}</b>
               </button>
-            ))}
-          </div>
-        </div>
+            </li>
+          ))}
+        </ol>
       ) : (
         <AtlasStates title={t('gym.noHistory')} body={t('today.noSessionSub')} />
       )}

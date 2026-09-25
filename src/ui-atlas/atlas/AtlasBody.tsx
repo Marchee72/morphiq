@@ -1,32 +1,96 @@
 import React, { useState } from 'react';
-import { Scale } from 'lucide-react';
+import { Check, ChevronRight, Clock, ExternalLink, Lock, Plus, RefreshCw, Scale, Watch } from 'lucide-react';
 import { useT } from '../../i18n';
+import { useStore } from '../../presentation/state/store';
+import { BodyComposition } from '../../data/health/BodyCompositionPlugin';
 import { useAppData, useAppActions } from '../data/useAppData';
-import { metricByKey } from '../derive/bodyMetrics';
+import { useHealthSync } from '../data/useHealthSync';
+import { isImproving, metricByKey, metricColor } from '../derive/bodyMetrics';
+import { syncStrip } from '../derive/syncStrip';
 import { goalProgress } from '../derive/profile';
-import type { MetricPointVM } from '../types';
+import { AtlasSegment } from './AtlasField';
+import { RollingNumber } from '../kit/rolling-number';
+import type { MetricKey, MetricPointVM } from '../types';
 import { AtlasMetricChart } from './AtlasMetricChart';
 import { AtlasMetricDetail } from './AtlasMetricDetail';
 import { AtlasStates } from './AtlasStates';
 
-/** The metrics that get a chart on the tab itself. The rest are a tap away. */
-const CHARTED = ['weight', 'bodyFat', 'muscleMass'] as const;
+/**
+ * The lanes of the trend chart, top to bottom, all in kg. Each gets its own
+ * scale: on one shared axis, 78 kg of weight, 34 of muscle and 14 of fat would
+ * be three flat lines and half a kilo of change would not show.
+ *
+ * Skeletal muscle comes only from Samsung Health; without it the muscle lane
+ * falls back to the muscle mass every scale reading carries.
+ */
+const LANES: MetricKey[][] = [['weight'], ['skeletalMuscle', 'muscleMass'], ['fatMass']];
 
-/** The annotated figure. Non-interactive — the tappable map lives on Library. */
-const BodyFigure: React.FC = () => (
-  <svg viewBox="0 0 120 186" width="112" height="176" aria-hidden="true">
-    <circle cx="60" cy="16" r="13" fill="var(--at-figure-skin)" />
-    <rect x="54" y="27" width="12" height="9" rx="4" fill="var(--at-figure-skin)" />
-    <ellipse cx="33" cy="46" rx="13" ry="9" fill="var(--at-figure-limb)" />
-    <ellipse cx="87" cy="46" rx="13" ry="9" fill="var(--at-figure-limb)" />
-    <rect x="40" y="37" width="40" height="27" rx="11" fill="var(--clay)" opacity="0.85" />
-    <rect x="21" y="54" width="13" height="52" rx="6.5" fill="var(--at-figure-limb)" />
-    <rect x="86" y="54" width="13" height="52" rx="6.5" fill="var(--at-figure-limb)" />
-    <rect x="44" y="67" width="32" height="31" rx="9" fill="var(--at-figure-core)" />
-    <rect x="43" y="102" width="16" height="74" rx="8" fill="var(--at-figure-limb)" />
-    <rect x="61" y="102" width="16" height="74" rx="8" fill="var(--at-figure-limb)" />
-  </svg>
-);
+/** Shown in the hero; the "more" list holds everything else. */
+const IN_HERO = new Set<MetricKey>(['weight', 'fatMass', 'skeletalMuscle', 'muscleMass']);
+
+const SyncStrip: React.FC = () => {
+  const { body } = useAppData();
+  const actions = useAppActions();
+  const { t, fmt } = useT();
+  const { status, checkedAt } = useStore(s => s.healthSync);
+  const { sync } = useHealthSync();
+
+  const strip = syncStrip(body.readingTimes, status, checkedAt);
+  if (!strip) return null;
+  const when = (d: Date) => `${fmt.weekdayShort(d)} ${fmt.shortDate(d)}, ${fmt.clock(d)}`;
+
+  switch (strip.kind) {
+    case 'syncing':
+      return (
+        <div className="at-sync" role="status">
+          <RefreshCw size={16} className="at-spin" /> <span>{t('body.sync.searching')}</span>
+        </div>
+      );
+    case 'denied':
+      return (
+        <div className="at-sync">
+          <Lock size={16} /> <span>{t('body.sync.denied')}</span>
+          <button className="at-sync-action" onClick={() => void sync()}>{t('body.sync.grant')}</button>
+        </div>
+      );
+    case 'fresh':
+      return (
+        <div className="at-sync" data-tone="good">
+          <Check size={16} /> <span>{t('body.sync.last', { when: when(strip.at) })}</span>
+        </div>
+      );
+    case 'last':
+      return (
+        <div className="at-sync">
+          <Clock size={16} /> <span>{t('body.sync.last', { when: when(strip.at) })}</span>
+        </div>
+      );
+    case 'waiting':
+      return (
+        <div className="at-card at-sync-wait">
+          <div className="at-sync-wait-head">
+            <span className="at-sync-wait-icon"><Watch size={20} /></span>
+            <div>
+              <b>{t('body.sync.waitingTitle')}</b>
+              <p>{t('body.sync.waitingBody', { when: when(strip.lastAt) })}</p>
+            </div>
+          </div>
+          <div className="at-sync-wait-actions">
+            <button className="at-btn" onClick={() => void BodyComposition.openSamsungHealth()}>
+              {t('body.sync.openSamsung')} <ExternalLink size={15} />
+            </button>
+            <button className="at-btn" data-ghost="true" onClick={() => void sync()} aria-label={t('body.sync.retry')}>
+              <RefreshCw size={17} />
+            </button>
+          </div>
+          <div className="at-sync-wait-foot">
+            <span>{strip.checkedAt ? t('body.sync.checked', { time: fmt.clock(strip.checkedAt) }) : ''}</span>
+            <button onClick={() => actions.openOverlay('logWeight')}>{t('body.sync.manual')}</button>
+          </div>
+        </div>
+      );
+  }
+};
 
 export const AtlasBody: React.FC = () => {
   const { body, profile } = useAppData();
@@ -34,19 +98,31 @@ export const AtlasBody: React.FC = () => {
   const { t, tp, fmt } = useT();
 
   const [detail, setDetail] = useState<MetricPointVM | null>(null);
+  const [showMore, setShowMore] = useState(false);
+  /**
+   * How far back the trend charts look. The series are weekly, so the honest
+   * windows are a month (five points) and the whole three months — a week
+   * would be two points and a line between them.
+   */
+  const [range, setRange] = useState<'1m' | '3m'>('3m');
+  const windowed = (values: number[]) => (range === '1m' ? values.slice(-5) : values);
   const now = new Date();
 
   const weight = metricByKey(body.metrics, 'weight');
   const series = weight?.series ?? null;
+
+  const newReading = (
+    <button className="at-avatar" style={{ background: 'var(--clay)' }} onClick={() => actions.openOverlay('logWeight')} aria-label={t('body.newReading')}>
+      <Plus size={20} />
+    </button>
+  );
 
   if (!body.hasData || !weight) {
     return (
       <>
         <div className="at-greet" style={{ paddingBottom: 4 }}>
           <div><h1>{t('body.title')}</h1></div>
-          <button className="at-avatar" style={{ background: 'var(--clay)' }} onClick={() => actions.openOverlay('logWeight')}>
-            <Scale size={18} />
-          </button>
+          {newReading}
         </div>
         <AtlasStates
           icon={<Scale size={22} />}
@@ -61,124 +137,153 @@ export const AtlasBody: React.FC = () => {
   const toGo = profile.targetWeightKg === null ? null : +(weight.value - profile.targetWeightKg).toFixed(1);
   const progress = goalProgress(series?.[0] ?? null, weight.value, profile.targetWeightKg);
 
-  // BMI took visceral fat's place here: the layout below places four, and BMI
-  // is a figure that means something. Visceral fat was weight rescaled.
-  const callouts = (['muscleMass', 'bodyFat', 'bodyWater', 'bmi'] as const)
-    .map(key => metricByKey(body.metrics, key))
-    .filter((m): m is NonNullable<typeof m> => Boolean(m));
+  const lanes = LANES
+    .map(keys => keys.map(k => metricByKey(body.metrics, k)).find(m => m?.series))
+    .filter((m): m is MetricPointVM => Boolean(m));
 
-  const calloutPositions = [
-    { side: 'left', style: { left: 14, top: 40 } },
-    { side: 'right', style: { right: 14, top: 40 } },
-    { side: 'left', style: { left: 14, top: 128 } },
-    { side: 'right', style: { right: 14, top: 128 } },
-  ] as const;
+  const c = body.composition;
+  const parts = c && [
+    { label: t('body.metric.fatMass'), kg: c.fat, color: metricColor('fatMass') },
+    { label: t(`body.metric.${c.muscleKey}`), kg: c.muscle, color: metricColor(c.muscleKey) },
+    { label: t('body.part.rest'), kg: c.rest, color: 'var(--hair)' },
+  ];
 
-  const charts = CHARTED
-    .map(key => metricByKey(body.metrics, key))
-    .filter((m): m is MetricPointVM => Boolean(m?.series));
+  const more = body.metrics.filter(m => !IN_HERO.has(m.key) && m.value > 0);
 
   return (
     <>
       <div className="at-greet" style={{ paddingBottom: 4 }}>
         <div>
-          {/* The date, not a device name: the source is not stored per reading,
-              and the hardcoded "Mi Scale 2" was a lie for every manual weigh-in. */}
-          <small>
-            {body.latestAt ? `${t('body.lastUpdated')} ${fmt.dmy(body.latestAt)} · ` : ''}
-            {tp('body.readings', body.readingCount)}
-          </small>
+          <small>{tp('body.readings', body.readingCount)}</small>
           <h1>{t('body.title')}</h1>
         </div>
-        <button className="at-avatar" style={{ background: 'var(--clay)' }} onClick={() => actions.openOverlay('logWeight')} aria-label={t('body.newReading')}>
-          <Scale size={18} />
-        </button>
+        {newReading}
       </div>
 
-      <div className="at-bignum">
-        <b>{fmt.n(weight.value, 1)}<small> {t('unit.kg')}</small></b>
-        <span>
-          {weight.delta30d === null
-            ? t('common.noData')
-            : t('body.overMonth', { delta: fmt.signed(weight.delta30d), unit: t('unit.kg') })}
-        </span>
-      </div>
+      <div className="at-pad" style={{ display: 'grid', gap: 14, paddingBottom: 22 }}>
+        <SyncStrip />
 
-      <div className="at-figure-wrap">
-        {callouts.map((metric, i) => (
-          <div
-            key={metric.key}
-            className="at-callout"
-            data-side={calloutPositions[i].side === 'left' ? 'left' : undefined}
-            style={calloutPositions[i].style}
-          >
-            <b>{fmt.n(metric.value, metric.decimals)}{metric.unitKey === 'unit.pct' ? '%' : metric.unitKey === 'unit.kg' ? ' kg' : ''}</b>
-            <span>{t(metric.labelKey)}</span>
-          </div>
-        ))}
-        <BodyFigure />
-      </div>
-
-      {profile.targetWeightKg !== null && progress !== null && (
-        <div className="at-goal">
-          <div className="at-card">
-            <div className="at-goal-row">
-              <b>{t('today.weight')}</b>
-              <span>{fmt.n(profile.targetWeightKg, 1)} {t('unit.kg')}</span>
+        <div className="at-card at-body-hero">
+          <div className="at-body-hero-head">
+            <div>
+              <span className="at-field-label">{t('body.metric.weight')}</span>
+              <b className="at-body-weight"><RollingNumber value={weight.value} decimals={1} /><small> {t('unit.kg')}</small></b>
             </div>
-            <div className="at-goal-track"><div className="at-goal-fill" style={{ width: `${progress}%` }} /></div>
-            <div className="at-goal-row" style={{ marginTop: 10 }}>
-              <span>{t('body.progressPct', { n: progress })}</span>
-              <span>{toGo !== null && t('body.toGo', { n: fmt.n(Math.abs(toGo), 1) })}</span>
-            </div>
+            {/* Lime when the month moved the way the goal wants, tonal otherwise. */}
+            <span className="at-delta-chip" data-good={isImproving(weight) === true}>
+              {weight.delta30d === null
+                ? t('common.noData')
+                : t('body.overMonth', { delta: fmt.signed(weight.delta30d), unit: t('unit.kg') })}
+            </span>
           </div>
-        </div>
-      )}
 
-      {charts.length > 0 && (
-        <>
-          <div className="at-rail-head"><h3>{t('body.trends')}</h3><button onClick={() => actions.openOverlay('logWeight')}>{t('body.newReading')}</button></div>
-          <div className="at-pad" style={{ paddingBottom: 22, display: 'grid', gap: 12 }}>
-            {charts.map(metric => (
-              <button
-                key={metric.key}
-                className="at-card at-trend-card"
-                onClick={() => setDetail(metric)}
-              >
-                <div className="at-goal-row">
-                  <b>{t(metric.labelKey)}</b>
-                  <span>
-                    {fmt.n(metric.value, metric.decimals)} {t(metric.unitKey)}
-                    {metric.delta30d !== null && ` · ${fmt.signed(metric.delta30d, metric.decimals)}`}
-                  </span>
+          {lanes.length > 0 && (
+            <>
+              <AtlasSegment
+                label={t('body.range')}
+                options={[{ value: '1m', label: t('body.range1m') }, { value: '3m', label: t('body.range3m') }]}
+                value={range}
+                onChange={setRange}
+              />
+              <div className="at-lanes">
+                {lanes.map(metric => (
+                  <button key={metric.key} className="at-lane" onClick={() => setDetail(metric)}>
+                    <span className="at-lane-head">
+                      <b>{t(metric.labelKey)} · {fmt.n(metric.value, metric.decimals)} {t(metric.unitKey)}</b>
+                      {metric.delta90d !== null && (
+                        <span data-good={metric.lowerIsBetter ? metric.delta90d < 0 : metric.delta90d > 0}>
+                          {fmt.signed(metric.delta90d, metric.decimals)}
+                        </span>
+                      )}
+                    </span>
+                    <AtlasMetricChart
+                      series={windowed(metric.series!)}
+                      decimals={metric.decimals}
+                      now={now}
+                      height={52}
+                      color={metricColor(metric.key)}
+                      axis={false}
+                    />
+                  </button>
+                ))}
+                <div className="at-chart-axis">
+                  {[windowed(series ?? []).length - 1, Math.floor((windowed(series ?? []).length - 1) / 2), 0].map(weeksAgo => (
+                    <span key={weeksAgo}>{fmt.monthShort(new Date(now.getTime() - weeksAgo * 7 * 86_400_000))}</span>
+                  ))}
                 </div>
-                <AtlasMetricChart series={metric.series!} decimals={metric.decimals} now={now} />
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+              </div>
+            </>
+          )}
 
-      <div className="at-rail-head"><h3>{t('body.composition')}</h3></div>
-      <div className="at-pad" style={{ paddingBottom: 22 }}>
-        <div className="at-card" style={{ padding: '8px 20px' }}>
-          {body.metrics.filter(m => m.key !== 'weight' && m.value > 0).map((metric, i) => (
-            <button
-              key={metric.key}
-              className="at-routine-item"
-              style={{ borderTop: i === 0 ? 'none' : undefined }}
-              onClick={() => setDetail(metric)}
-            >
-              <span>
-                {t(metric.labelKey)}
-                <small>
-                  {metric.delta30d === null
-                    ? t('common.noData')
-                    : t('body.overMonth', { delta: fmt.signed(metric.delta30d, metric.decimals), unit: '' })}
-                </small>
-              </span>
-              <b>{fmt.n(metric.value, metric.decimals)} {t(metric.unitKey)}</b>
+          {profile.targetWeightKg !== null && progress !== null && (
+            <div>
+              <div className="at-goal-track"><div className="at-goal-fill" style={{ width: `${progress}%` }} /></div>
+              <div className="at-goal-row" style={{ marginTop: 8 }}>
+                <span>{t('body.progressPct', { n: progress })}</span>
+                <span>{toGo !== null && t('body.toGo', { n: fmt.n(Math.abs(toGo), 1) })}</span>
+              </div>
+            </div>
+          )}
+
+          {c && parts && (
+            <div className="at-makeup">
+              <b>{t('body.madeOf', { kg: fmt.n(c.weight, 1) })}</b>
+              <div className="at-makeup-bar" aria-hidden="true">
+                {parts.map(p => <span key={p.label} style={{ flexGrow: p.kg, background: p.color }} />)}
+              </div>
+              <div className="at-makeup-legend">
+                {parts.map(p => (
+                  <div key={p.label}>
+                    <span><i style={{ background: p.color }} />{p.label}</span>
+                    <b>{fmt.kg(p.kg)} <small>{fmt.n((p.kg / c.weight) * 100, 0)} %</small></b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {more.length > 0 && (
+          <>
+            <button className="at-btn at-body-more" data-ghost="true" onClick={() => setShowMore(v => !v)} aria-expanded={showMore}>
+              <span>{t('body.more')}</span>
+              <ChevronRight size={18} style={{ transform: showMore ? 'rotate(90deg)' : undefined }} />
             </button>
+            {showMore && (
+              <div className="at-card" style={{ padding: '8px 20px' }}>
+                {more.map((metric, i) => (
+                  <button
+                    key={metric.key}
+                    className="at-routine-item"
+                    style={{ borderTop: i === 0 ? 'none' : undefined }}
+                    onClick={() => setDetail(metric)}
+                  >
+                    <span>
+                      {t(metric.labelKey)}
+                      <small>
+                        {metric.delta30d === null
+                          ? t('common.noData')
+                          : t('body.overMonth', { delta: fmt.signed(metric.delta30d, metric.decimals), unit: '' })}
+                      </small>
+                    </span>
+                    <b>{fmt.n(metric.value, metric.decimals)} {t(metric.unitKey)}</b>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="at-rail-head" style={{ padding: '6px 0 0' }}><h3>{t('body.recent')}</h3></div>
+        <div className="at-card" style={{ padding: '4px 20px' }}>
+          {body.recent.map((r, i) => (
+            <div key={r.at.getTime()} className="at-routine-item" style={{ borderTop: i === 0 ? 'none' : undefined }}>
+              <span className="at-body-when">
+                {fmt.relativeDay(r.at, now)} · {fmt.clock(r.at)}
+                <small>{r.bodyFat > 0 ? t('body.fatPct', { n: fmt.n(r.bodyFat, 1) }) : t('body.weightOnly')}</small>
+              </span>
+              <b>{fmt.kg(r.weight)}</b>
+            </div>
           ))}
         </div>
       </div>

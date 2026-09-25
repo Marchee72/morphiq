@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BookmarkPlus, Check, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useStore } from '../../presentation/state/store';
@@ -6,6 +6,7 @@ import { FEELING_OPTIONS } from '../../features/gym/feelingOptions';
 import { ExerciseThumb } from '../components/ExerciseThumb';
 import { useDismissOnBack } from '../components/useDismissOnBack';
 import { useSessionSummary } from '../state/sessionSummary';
+import { RollingNumber } from '../kit/rolling-number';
 
 /**
  * What you just did.
@@ -67,15 +68,16 @@ export const AtlasSessionSummary: React.FC = () => {
           <small>{t('summary.duration')}</small>
         </div>
         <div>
-          <b>{fmt.n(summary.volumeKg)}<i>{t('unit.kg')}</i></b>
+          {/* The numbers roll up from zero: the recap is the one moment worth a flourish. */}
+          <b><CountUp value={summary.volumeKg} /><i>{t('unit.kg')}</i></b>
           <small>{t('summary.volume')}</small>
         </div>
         <div>
-          <b>{summary.setsDone}</b>
+          <b><CountUp value={summary.setsDone} /></b>
           <small>{t('summary.sets')}</small>
         </div>
         <div>
-          <b>{summary.exercisesDone}</b>
+          <b><CountUp value={summary.exercisesDone} /></b>
           <small>{t('summary.exercises')}</small>
         </div>
       </div>
@@ -86,7 +88,7 @@ export const AtlasSessionSummary: React.FC = () => {
             <h3><Trophy size={14} color="var(--clay)" /> {t('summary.records')}</h3>
           </div>
           <div className="at-pad">
-            <div className="at-card" style={{ padding: '8px 20px' }}>
+            <div className="at-card at-summary-prs" style={{ padding: '8px 20px' }}>
               {summary.prs.map((pr, i) => (
                 <div
                   key={`${pr.exerciseName}-${pr.weightKg}-${pr.reps}-${i}`}
@@ -133,4 +135,14 @@ export const AtlasSessionSummary: React.FC = () => {
       </div>
     </div>
   );
+};
+
+/** Starts at zero and rolls to the value once mounted. */
+const CountUp: React.FC<{ value: number }> = ({ value }) => {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setShown(value));
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+  return <RollingNumber value={shown} />;
 };

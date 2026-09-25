@@ -44,6 +44,17 @@ export interface WellnessLog {
   restingHr?: number;
   /** RMSSD. Not every watch writes it, so its absence is normal, not an error. */
   hrvMs?: number;
+  /** Samsung Health's own sleep score for the night, 0-100. */
+  sleepScore?: number;
+  /** When the night's main sleep started and ended, as ISO instants. */
+  sleepStart?: string;
+  sleepEnd?: string;
+  /**
+   * Samsung Health's Energy Score for the day, 0-100. It folds in sleep,
+   * recent activity and the heart overnight, which is why readiness builds on
+   * it rather than on sleep and resting heart rate separately.
+   */
+  energyScore?: number;
   /** Which of the two filled the sleep fields, so the sheet can say so. */
   sleepSource?: 'manual' | 'health-connect';
 

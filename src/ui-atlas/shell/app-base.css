@@ -16,46 +16,27 @@
    Fonts — self-hosted.
 
    A remote @import blocks first paint inside the Capacitor WebView and fails
-   outright offline, which is exactly when someone is standing in a gym. These
-   are the variable files, so one file per family covers every weight; only
-   latin and latin-ext are shipped, since the app is English and Spanish.
-   Instrument Serif, JetBrains Mono and Outfit were in the showcase's import
-   and used by neither concept — they are not shipped.
+   outright offline, which is exactly when someone is standing in a gym.
+   Urbanist is the one family: titles at 800, text at 400–700. These are the
+   variable files, so one file per subset covers every weight; only latin and
+   latin-ext are shipped, since the app is English and Spanish.
    -------------------------------------------------------------------------- */
 
 @font-face {
-  font-family: 'Inter';
+  font-family: 'Urbanist';
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 400 800;
   font-display: swap;
-  src: url('/fonts/inter-latin.woff2') format('woff2');
+  src: url('/fonts/urbanist-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Inter';
+  font-family: 'Urbanist';
   font-style: normal;
-  font-weight: 100 900;
+  font-weight: 400 800;
   font-display: swap;
-  src: url('/fonts/inter-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-
-@font-face {
-  font-family: 'Fraunces';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/fraunces-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: 'Fraunces';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/fraunces-latin-ext.woff2') format('woff2');
+  src: url('/fonts/urbanist-latin-ext.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
@@ -94,6 +75,9 @@
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+  /* Today's header folds with the scroll position; anchoring would compensate
+     for it and fight the fold. */
+  overflow-anchor: none;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -152,21 +136,34 @@
   max-width: calc(100% - 36px);
   padding: 8px 14px;
   border-radius: 999px;
-  background: var(--card);
-  color: var(--at-ink-soft);
-  box-shadow: 0 2px 3px rgba(64, 44, 26, 0.05), 0 10px 24px -14px rgba(64, 44, 26, 0.4);
-  font-size: 12px;
-  font-weight: 650;
+  /* The notification pill's colours (atlas.css, .at-top-banner). */
+  background: var(--at-dock-bg);
+  color: var(--at-on-cocoa);
+  box-shadow: var(--shadow-float);
+  font-size: 12.5px;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+[data-mode='dark'] .at-pull-badge { color: var(--cocoa); }
+
 /* Armed is the one state that has to be unmistakable — it is the difference
    between letting go and syncing, and letting go and nothing happening. */
-.at-pull[data-state='armed'] .at-pull-badge {
-  background: var(--clay);
+.at-pull[data-state='armed'] .at-pull-badge,
+.at-pull[data-state='refreshing'] .at-pull-badge {
+  background: var(--d-grad);
   color: var(--at-on-clay);
+  box-shadow: var(--d-hi);
+}
+
+/* The badge springs a little as it arms, so the moment it will take is felt. */
+.at-pull[data-state='armed'] .at-pull-badge { animation: at-pull-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+@keyframes at-pull-pop {
+  from { transform: scale(0.92); }
+  to { transform: none; }
 }
 
 /* The arrow flips to point at the release, rather than being a second icon. */
@@ -179,6 +176,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .at-pull-spin { animation-duration: 2.4s; }
+  .at-pull[data-state='armed'] .at-pull-badge { animation: none; }
   .at-pull { transition: none; }
 }
 

@@ -24,9 +24,9 @@ export const MARK_GEOMETRY = {
 } as const;
 
 export const MARK_COLOURS = {
-  sand: '#f3ece2',
-  cocoa: '#2c241d',
-  clay: '#c4643c',
+  sand: '#fbf4ea',
+  cocoa: '#221a14',
+  clay: '#ff6a2b',
 } as const;
 
 /** Corner radius of the icon plate, in the 64-unit viewBox. */

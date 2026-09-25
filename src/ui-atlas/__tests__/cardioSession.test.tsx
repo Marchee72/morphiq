@@ -19,7 +19,7 @@ import { renderScreen } from '../../test/renderScreen';
 
 const initialState = useStore.getState();
 const card = () => document.querySelector('.at-todaytrain') as HTMLElement | null;
-const rail = () => document.querySelector('.at-rail') as HTMLElement | null;
+const rail = () => document.querySelector('.at-moments') as HTMLElement | null;
 const text = () => document.body.textContent?.replace(/\s+/g, ' ') ?? '';
 
 /** A synced activity: numbers on the log, no sets anywhere. */
@@ -118,45 +118,33 @@ describe('Today — a session the watch recorded', () => {
     render();
 
     await waitFor(() => expect(card()?.getAttribute('data-trained')).toBe('true'));
-    expect(text()).not.toMatch(/0 kcal/);
+    // A bare zero, not the "/ 500 kcal" target of the activity ring.
+    expect(text()).not.toMatch(/(^|[^\d.,])0 kcal/);
     expect(text()).toMatch(/6[.,]4/);
   });
 });
 
-describe('Today — the rail shows only what has data', () => {
+describe('Today — your day is always laid out', () => {
   beforeEach(async () => {
     useStore.setState(initialState, true);
     await Promise.all(db.tables.map(t => t.clear()));
   });
 
-  it('omits a chip whose number was never logged', async () => {
-    // Nothing eaten, nothing weighed, nothing lifted — only the run happened.
-    await seedRun(new Date());
+  it('keeps the rings and the weight strip on a day with nothing logged', async () => {
     render();
-
-    await waitFor(() => expect(rail()).toBeTruthy());
-    const chips = rail()?.querySelectorAll('.at-moment') ?? [];
-    const shown = rail()?.textContent ?? '';
-
-    expect(chips.length).toBeGreaterThan(0);
-    // The readings that used to render as a dash or a bare zero.
-    expect(shown).not.toMatch(/—/);
-    expect(shown).not.toMatch(/\b0 g\b/);
-    expect(shown).not.toMatch(/0[.,]0 t\b/);
+    // An empty ring is the goal still ahead, and an empty weight strip is where
+    // the first weigh-in goes — both stay, rather than the section vanishing.
+    await waitFor(() => expect(rail()?.querySelector('.at-rings-card')).toBeTruthy());
+    expect(rail()!.querySelectorAll('.at-rings-legend button')).toHaveLength(3);
+    expect(rail()!.querySelector('.at-weightstrip')?.textContent).toMatch(/log weight|registrar peso/i);
   });
 
-  it('carries only the wellness question on a day with nothing in it', async () => {
+  it('asks how the day is going in the panel, and puts the run at its top', async () => {
+    await seedRun(new Date());
     render();
-    // The rail used to disappear entirely here, because every chip was a reading
-    // and a heading above nothing is worse than no heading. It now keeps exactly
-    // one: the question, which is not a reading and cannot be waiting on data —
-    // a day nobody has answered is precisely the day worth asking about, and a
-    // chip that appears only once you have answered would never be tapped.
-    await waitFor(() => expect(card()).toBeTruthy());
-    const chips = rail()?.querySelectorAll('.at-moment') ?? [];
-    expect(chips).toHaveLength(1);
-    expect(rail()?.textContent).toMatch(/how are you today|cómo estás hoy/i);
-    // Still no dashes or bare zeros: nothing else crept in with it.
-    expect(rail()?.textContent).not.toMatch(/—/);
+    await waitFor(() => expect(rail()?.querySelector('.at-panel-run')).toBeTruthy());
+    const panel = rail()!.querySelector('.at-panel')!;
+    expect(panel.firstElementChild?.classList.contains('at-panel-run')).toBe(true);
+    expect(panel.textContent).toMatch(/how are you today|cómo estás hoy/i);
   });
 });

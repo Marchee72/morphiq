@@ -52,7 +52,7 @@ describe('starting a session', () => {
     // user actually has a routine saved or one waiting from the coach.
     renderScreen('today', { data: 'empty' });
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^(start|empezar|iniciar)$/i })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^(start|empezar|iniciar)( a session| sesión)?$/i })[0]);
 
     await waitFor(() => expect(useStore.getState().activeSession).not.toBeNull());
     expect(document.querySelector('.at-sheet')).toBeNull();
@@ -63,7 +63,7 @@ describe('starting a session', () => {
     renderScreen('today', { data: 'empty' });
 
     await waitFor(() => expect(useStore.getState().savedRoutines).toHaveLength(1));
-    fireEvent.click(screen.getAllByRole('button', { name: /^(start|empezar|iniciar)$/i })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^(start|empezar|iniciar)( a session| sesión)?$/i })[0]);
 
     await waitFor(() => expect(document.querySelector('.at-sheet')).not.toBeNull());
     expect(text()).toMatch(/Empuje Coach/);
@@ -82,7 +82,7 @@ describe('starting a session', () => {
   it('surfaces the coach\'s latest routine even when nothing is saved yet', async () => {
     renderScreen('today', { data: 'empty', overrides: { chatHistory: [coachMessage(PUSH)] } });
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^(start|empezar|iniciar)$/i })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^(start|empezar|iniciar)( a session| sesión)?$/i })[0]);
 
     await waitFor(() => expect(document.querySelector('.at-sheet')).not.toBeNull());
     expect(text()).toMatch(/Empuje Coach/);

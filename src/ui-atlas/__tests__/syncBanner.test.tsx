@@ -1,6 +1,13 @@
+import React from 'react';
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AtlasSyncBanner } from '../atlas/AtlasSyncBanner';
+import { AtlasResumeBanner } from '../atlas/AtlasResumeBanner';
+import { AtlasResumeSheet } from '../atlas/AtlasResumeSheet';
+import { AppActionsProvider } from '../data/AppActionsProvider';
+import { useAppActions, useAppUi } from '../data/useAppData';
+import { useStore } from '../../presentation/state/store';
+import { testProfile } from '../../test/renderScreen';
 import { resetSyncState, setSyncState } from '../../data/offline/syncState';
 
 /**
@@ -96,8 +103,39 @@ describe('AtlasSyncBanner', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Try now|Reintentar ahora/i }));
     expect(retry).toHaveBeenCalled();
+    // Discarding loses the changes, so the bin asks before it acts.
+    fireEvent.click(screen.getByRole('button', { name: /^(Discard|Descartar)$/i }));
+    expect(discard).not.toHaveBeenCalled();
+    expect(screen.getByText(/Discard 3 changes\?|¿Descartar 3 cambios\?/i)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /^(Discard|Descartar)$/i }));
     expect(discard).toHaveBeenCalled();
+  });
+
+  it('can back out of discarding', async () => {
+    const offline = await import('../../data/offline');
+    const discard = vi.spyOn(offline, 'discardRefused').mockImplementation(async () => {});
+
+    setSyncState({ online: true, failed: 2 });
+    render(<AtlasSyncBanner />);
+    fireEvent.click(screen.getByRole('button', { name: /^(Discard|Descartar)$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^(Cancel|Cancelar)$/i }));
+    expect(discard).not.toHaveBeenCalled();
+    expect(screen.getByText(/could not be saved|no se pudieron guardar/i)).toBeTruthy();
+  });
+
+  it('says it is all saved once a queue drains, then goes quiet', () => {
+    vi.useFakeTimers();
+    try {
+      setSyncState({ online: true, pending: 2, flushing: true });
+      const { rerender, container } = render(<AtlasSyncBanner />);
+      setSyncState({ pending: 0, flushing: false });
+      rerender(<AtlasSyncBanner />);
+      expect(screen.getByText(/All saved|Todo guardado/i)).toBeTruthy();
+      act(() => { vi.advanceTimersByTime(2300); });
+      expect(container.firstChild).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports a failure ahead of a queue, because it is the worse news', () => {
@@ -106,5 +144,108 @@ describe('AtlasSyncBanner', () => {
 
     expect(screen.getByText(/could not be saved|no se pudieron guardar/i)).toBeTruthy();
     expect(screen.queryByText(/5 changes waiting/i)).toBeNull();
+  });
+});
+
+/**
+ * The other band in that slot: the way back to a workout the resume sheet was
+ * closed on.
+ *
+ * The sheet asks once per launch, and its X answers none of its three
+ * questions — so without this the stored session is alive and unreachable until
+ * the process dies. What is pinned here is that the door stays open.
+ */
+
+const STORED_SESSION = {
+  profileId: 'p1',
+  savedAt: new Date(2026, 6, 27, 18, 30),
+  session: {
+    startTime: new Date(2026, 6, 27, 17, 30),
+    workoutType: 'Push A',
+    routineSource: 'manual' as const,
+    routineExercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 3 }],
+    sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+  },
+};
+
+/** Banner and sheet wired the way the shell wires them: through the overlay slot. */
+const ResumeHarness: React.FC = () => {
+  const { overlay } = useAppUi();
+  const actions = useAppActions();
+  return (
+    <>
+      <AtlasResumeBanner />
+      <AtlasResumeSheet open={overlay === 'resumeSession'} onClose={actions.closeOverlay} />
+    </>
+  );
+};
+
+const Resume: React.FC = () => (
+  <AppActionsProvider>
+    <ResumeHarness />
+  </AppActionsProvider>
+);
+
+describe('AtlasResumeBanner', () => {
+  const initialState = useStore.getState();
+
+  beforeEach(() => {
+    useStore.setState(initialState, true);
+    useStore.setState({
+      activeProfile: testProfile,
+      pendingResume: STORED_SESSION,
+      activeSession: null,
+    });
+  });
+
+  afterEach(() => {
+    useStore.setState(initialState, true);
+  });
+
+  it('says nothing when there is nothing waiting', () => {
+    useStore.setState({ pendingResume: null });
+    const { container } = render(<Resume />);
+    expect(container.textContent).toBe('');
+  });
+
+  it('offers the interrupted session while one is stored', () => {
+    render(<Resume />);
+    expect(screen.getByText(/unfinished workout|sesión sin cerrar/i)).toBeTruthy();
+  });
+
+  it('stays quiet while a session is actually running', () => {
+    // Offering to resume the workout you are in the middle of is not an offer.
+    useStore.setState({ activeSession: STORED_SESSION.session });
+    const { container } = render(<Resume />);
+    expect(container.textContent).toBe('');
+  });
+
+  it('keeps a stored session belonging to someone else off screen', () => {
+    useStore.setState({ pendingResume: { ...STORED_SESSION, profileId: 'p2' } });
+    const { container } = render(<Resume />);
+    expect(container.textContent).toBe('');
+  });
+
+  it('re-opens the sheet, with all three answers, when tapped', async () => {
+    render(<Resume />);
+    fireEvent.click(screen.getByText(/unfinished workout|sesión sin cerrar/i));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /resume|retomar/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /finish now|terminar ya/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /discard it|descartar/i })).toBeTruthy();
+    });
+  });
+
+  it('is still there after the sheet is closed without an answer', async () => {
+    render(<Resume />);
+    fireEvent.click(screen.getByText(/unfinished workout|sesión sin cerrar/i));
+    await waitFor(() => expect(screen.getByRole('button', { name: /close|cerrar/i })).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /close|cerrar/i }));
+
+    // The X resolves nothing, so the door has to still be there.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /resume|retomar/i })).toBeNull());
+    expect(screen.getByText(/unfinished workout|sesión sin cerrar/i)).toBeTruthy();
   });
 });

@@ -44,6 +44,12 @@ export const AppActionsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       store.startActiveSession();
       store.setActiveTab('train');
     },
+    startWith: (title, exercises) => {
+      const store = useStore.getState();
+      if (store.activeSession) store.mergeRoutineIntoActiveSession({ title, exercises }, 'append');
+      else store.startActiveSessionWithRoutine({ title, exercises }, 'template');
+      store.setActiveTab('train');
+    },
     startRoutine: routine => {
       /**
        * Every "start this routine" button in the app lands here, so this is the

@@ -101,21 +101,13 @@ describe('empty session launchpad', () => {
   });
 
   describe('on Today', () => {
-    it('drops the photo disc rather than framing two initials', () => {
-      // The disc is a picture of the lift. With no lift it showed the session
-      // title's initials in a circle cropped off the edge of the hero.
+    it('says an empty session is waiting for its first lift, in the header', () => {
+      // The header replaced the hero and its photo disc; what it owes an empty
+      // session is the line saying so, not a frame around two initials.
       renderScreen('today', { data: 'rich', session: emptySession });
 
       expect(screen.getByText(/nothing added yet/i)).toBeInTheDocument();
       expect(document.querySelector('.at-hero-disc')).toBeNull();
-      expect(document.querySelector('.at-hero')?.getAttribute('data-nodisc')).toBe('true');
-    });
-
-    it('keeps the disc once the session has a lift with a picture', async () => {
-      renderScreen('today', { data: 'rich', session: {} });
-      // The picture comes off the catalogue, which is a lazy chunk — so the disc
-      // arrives a beat after the hero does.
-      await waitFor(() => expect(document.querySelector('.at-hero-disc')).not.toBeNull(), SLOW);
     });
 
     it('does not claim zero sets are left in an empty session', () => {

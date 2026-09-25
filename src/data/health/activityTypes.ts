@@ -24,6 +24,9 @@ const STRENGTH_PATTERNS: RegExp[] = [
   /\bbodybuilding\b/,
   /\bgym\b/,
   /\bweight machine/,
+  // Samsung Health's per-lift exercise types (`BENCH_PRESS`, `LAT_PULLDOWNS`…).
+  /\b(bench press|squats|deadlifts|lunges|lat pulldowns|shoulder presses|back extensions)\b/,
+  /\b(leg (presses|extensions|curls)|arm (curls|extensions)|(front|lateral) raises)\b/,
   /\bfuerza\b/,          // Spanish-locale sources
   /\bpesas\b/,
   /\bmusculacion\b/,

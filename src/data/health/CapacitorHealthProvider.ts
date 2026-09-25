@@ -4,8 +4,9 @@ import type { Measurement } from '../../core/entities/Measurement';
 import type { UserProfile } from '../../core/entities/UserProfile';
 import type { Workout, HeartRateSample, HealthPermission, PermissionResponse } from 'capacitor-health';
 import { getAge } from '../../core/entities/UserProfile';
-import { BodyComposition } from './BodyCompositionPlugin';
-import { Wellness, SLEEP_READ_PERMISSIONS, type DailyBpm, type DailyRmssd } from './WellnessPlugin';
+import { BodyComposition, type BodyCompositionRecord } from './BodyCompositionPlugin';
+import { SamsungHealth, isSamsungHealthBuilt, withSamsungReadings, type SamsungBodyRecord, type SamsungWorkout } from './SamsungHealthPlugin';
+import { Wellness, SLEEP_READ_PERMISSIONS, type DailyBpm, type DailyRmssd, type SleepSessionRecord } from './WellnessPlugin';
 import { BiaCalculator, NEUTRAL_IMPEDANCE } from '../calculation/BiaCalculator';
 import { Capacitor } from '@capacitor/core';
 
@@ -58,6 +59,30 @@ export function localDayKey(date: Date): string {
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
   const day = `${date.getDate()}`.padStart(2, '0');
   return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * A Samsung session as a synced workout.
+ *
+ * `source` stays `'health-connect'`: across the app it means "recorded by a
+ * device, timestamped at its start" (see `logInterval`), which is just as true
+ * of a session read from Samsung Health directly.
+ */
+export function fromSamsungWorkout(w: SamsungWorkout): Omit<WorkoutLog, 'profileId'> {
+  const type = w.type || 'OTHER';
+  return {
+    timestamp: new Date(w.startDate),
+    type,
+    duration: Math.round(w.durationMinutes),
+    description: w.title ? `${w.title} via Samsung Health` : `${type} via Samsung Health`,
+    caloriesBurned: Math.round(w.calories || 0),
+    distanceKm: w.distanceMeters > 0 ? parseFloat((w.distanceMeters / 1000).toFixed(2)) : undefined,
+    steps: w.steps > 0 ? w.steps : undefined,
+    avgHeartRate: w.meanHeartRate > 0 ? w.meanHeartRate : undefined,
+    maxHeartRate: w.maxHeartRate > 0 ? w.maxHeartRate : undefined,
+    source: 'health-connect',
+    externalId: `samsung:${w.id}`,
+  };
 }
 
 export class CapacitorHealthProvider implements IHealthProvider {
@@ -145,6 +170,20 @@ export class CapacitorHealthProvider implements IHealthProvider {
         }
       }
 
+      /**
+       * Samsung Health's own read permission, for the skeletal muscle Health
+       * Connect never receives. Only on a build that bundled its SDK, and never
+       * fatal: everything else still comes through Health Connect.
+       */
+      if (isSamsungHealthBuilt()) {
+        try {
+          const { granted } = await SamsungHealth.hasPermission();
+          if (!granted) await settleWithin(SamsungHealth.requestPermission(), PERMISSION_DIALOG_TIMEOUT_MS);
+        } catch (e) {
+          console.warn('MorphIQ: Samsung Health permission request warning:', e);
+        }
+      }
+
       const permissionsMap = grantedIn(result);
 
       /**
@@ -166,6 +205,21 @@ export class CapacitorHealthProvider implements IHealthProvider {
 
   async importWorkouts(since: Date): Promise<Omit<WorkoutLog, 'profileId'>[]> {
     if (!this.isAvailable()) return [];
+    // Samsung first: the watch's sessions reach it before Health Connect. Its
+    // failure (developer mode off, permission refused) falls through to the
+    // Health Connect read below; an empty answer is a real "no workouts".
+    if (isSamsungHealthBuilt()) {
+      try {
+        const futureEnd = new Date();
+        futureEnd.setDate(futureEnd.getDate() + 1);
+        const { workouts } = await SamsungHealth.queryWorkouts({
+          startDate: since.toISOString(), endDate: futureEnd.toISOString(),
+        });
+        return workouts.map(fromSamsungWorkout);
+      } catch (e) {
+        console.warn('MorphIQ: Samsung Health workouts unavailable, using Health Connect:', e);
+      }
+    }
     try {
       const { Health } = await import('capacitor-health');
       const futureEnd = new Date();
@@ -223,13 +277,34 @@ export class CapacitorHealthProvider implements IHealthProvider {
    * would put an evening walk on the following day for anyone east of UTC.
    */
   async getDailySteps(since: Date): Promise<{ date: string; steps: number }[]> {
+    const days = await this.dailyTotals(since, 'steps');
+    return days.map(([date, steps]) => ({ date, steps }));
+  }
+
+  /** Same buckets as steps; `READ_ACTIVE_CALORIES` is already in the permission request. */
+  async getDailyActiveCalories(since: Date): Promise<{ date: string; kcal: number }[]> {
+    const days = await this.dailyTotals(since, 'active-calories');
+    return days.map(([date, kcal]) => ({ date, kcal }));
+  }
+
+  private async dailyTotals(since: Date, dataType: 'steps' | 'active-calories'): Promise<[string, number][]> {
     if (!this.isAvailable()) return [];
+    if (isSamsungHealthBuilt()) {
+      try {
+        const { days } = await SamsungHealth.queryDailyTotals({
+          startDate: since.toISOString(), endDate: new Date().toISOString(), dataType,
+        });
+        return days.map(d => [d.date, Math.max(0, Math.round(d.value))] as [string, number]);
+      } catch (e) {
+        console.warn(`MorphIQ: Samsung Health ${dataType} unavailable, using Health Connect:`, e);
+      }
+    }
     try {
       const { Health } = await import('capacitor-health');
       const result = await Health.queryAggregated({
         startDate: since.toISOString(),
         endDate: new Date().toISOString(),
-        dataType: 'steps',
+        dataType,
         bucket: 'day',
       });
 
@@ -243,11 +318,9 @@ export class CapacitorHealthProvider implements IHealthProvider {
         byDay.set(key, (byDay.get(key) ?? 0) + Math.max(0, Math.round(sample.value || 0)));
       }
 
-      return [...byDay.entries()]
-        .map(([date, steps]) => ({ date, steps }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+      return [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]));
     } catch (e) {
-      console.error('Failed to query steps from Capacitor:', e);
+      console.error(`Failed to query ${dataType} from Capacitor:`, e);
       return [];
     }
   }
@@ -263,6 +336,24 @@ export class CapacitorHealthProvider implements IHealthProvider {
    * questionnaire is answerable by hand and must not be blocked by a device
    * that has nothing to contribute.
    */
+  /**
+   * Samsung Health's sleep where the build can read it, Health Connect's
+   * otherwise. Samsung's is the one the watch shows; Health Connect's copy of
+   * the same nights did not add up to it. Never both — the same night from two
+   * sources would be summed as two.
+   */
+  private async sleepSessions(range: { startDate: string; endDate: string }): Promise<SleepSessionRecord[]> {
+    if (isSamsungHealthBuilt()) {
+      try {
+        const { sessions } = await SamsungHealth.querySleep(range);
+        if (sessions.length > 0) return sessions;
+      } catch (e) {
+        console.warn('MorphIQ: Samsung Health sleep unavailable, using Health Connect:', e);
+      }
+    }
+    return (await Wellness.querySleep(range)).sessions;
+  }
+
   async importWellnessSignals(since: Date): Promise<WellnessSignals[]> {
     if (!Capacitor.isNativePlatform()) return [];
     try {
@@ -282,13 +373,34 @@ export class CapacitorHealthProvider implements IHealthProvider {
         return created;
       };
 
-      const { sessions } = await Wellness.querySleep(range);
-      for (const session of sessions) {
+      // The night's times and score come from its longest session, so a nap
+      // adds its minutes without moving when you went to bed.
+      const longest = new Map<string, number>();
+      for (const session of await this.sleepSessions(range)) {
         if (!(session.totalMinutes > 0)) continue;
         const entry = dayOf(session.day);
         entry.sleepMinutes = (entry.sleepMinutes ?? 0) + session.totalMinutes;
         entry.sleepDeepMinutes = (entry.sleepDeepMinutes ?? 0) + session.deepMinutes;
         entry.sleepRemMinutes = (entry.sleepRemMinutes ?? 0) + session.remMinutes;
+        if (session.totalMinutes > (longest.get(session.day) ?? 0)) {
+          longest.set(session.day, session.totalMinutes);
+          entry.sleepStart = session.startDate;
+          entry.sleepEnd = session.endDate;
+          entry.sleepScore = session.score && session.score > 0 ? session.score : undefined;
+        }
+      }
+
+      // Samsung only, and never fatal: without it readiness falls back to
+      // sleep and resting heart rate.
+      if (isSamsungHealthBuilt()) {
+        try {
+          const { days } = await SamsungHealth.queryEnergyScore(range);
+          for (const { day, score } of days) {
+            if (score > 0) dayOf(day).energyScore = Math.round(score);
+          }
+        } catch (e) {
+          console.warn('MorphIQ: Samsung Health energy score unavailable:', e);
+        }
       }
 
       // Its own try/catch: a device that reports sleep but refuses heart-rate
@@ -326,26 +438,32 @@ export class CapacitorHealthProvider implements IHealthProvider {
   async importBodyComposition(since: Date, profile: UserProfile): Promise<Omit<Measurement, 'profileId'>[]> {
     if (!Capacitor.isNativePlatform()) return [];
     try {
-      const isAvailableResult = await BodyComposition.isAvailable();
-      if (!isAvailableResult.available) {
-        console.log('MorphIQ Capacitor: BodyComposition is not available on this device');
-        return [];
-      }
-
       const futureEnd = new Date();
       futureEnd.setDate(futureEnd.getDate() + 1);
+      const range = { startDate: since.toISOString(), endDate: futureEnd.toISOString() };
 
-      console.log('MorphIQ Capacitor: Querying Health Connect BodyComposition range:', since.toISOString(), 'to', futureEnd.toISOString());
-      const response = await BodyComposition.queryBodyComposition({
-        startDate: since.toISOString(),
-        endDate: futureEnd.toISOString(),
-      });
+      let hcRecords: BodyCompositionRecord[] = [];
+      if ((await BodyComposition.isAvailable()).available) {
+        console.log('MorphIQ Capacitor: Querying Health Connect BodyComposition range:', range.startDate, 'to', range.endDate);
+        hcRecords = (await BodyComposition.queryBodyComposition(range)).records || [];
+      }
+
+      // Its own catch: Samsung failing (developer mode off, permission refused)
+      // must not cost the Health Connect readings.
+      let samsungRecords: SamsungBodyRecord[] = [];
+      if (isSamsungHealthBuilt()) {
+        try {
+          samsungRecords = (await SamsungHealth.queryBodyComposition(range)).records || [];
+        } catch (e) {
+          console.warn('MorphIQ: Samsung Health body composition unavailable:', e);
+        }
+      }
 
       const age = getAge(profile.birthDate);
       const gender = profile.gender;
       const height = profile.height;
 
-      return (response.records || [])
+      return withSamsungReadings(hcRecords, samsungRecords)
         .filter((r) => r.weight > 0)
         .map((r) => {
           const weight = r.weight;
@@ -375,6 +493,7 @@ export class CapacitorHealthProvider implements IHealthProvider {
             bodyWater,
             boneMass,
             muscleMass,
+            skeletalMuscle: r.skeletalMuscle,
           };
         });
     } catch (e) {

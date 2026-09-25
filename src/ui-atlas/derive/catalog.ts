@@ -1,7 +1,7 @@
 import type { Exercise } from '../../core/entities/Exercise';
 import type { Lang } from '../../presentation/state/preferences';
 import type { CatalogItemVM, MuscleGroupId } from '../types';
-import { GROUP_TO_CATEGORIES } from './muscleLoad';
+import { groupFromExercise } from './muscleLoad';
 import { normalizeName, type ExerciseUsageMap } from './records';
 
 /** The bundled dataset is hosted here; `Exercise.image` and `gifUrl` are repo-relative. */
@@ -37,12 +37,12 @@ export function toCatalogItem(
   };
 }
 
-/** Body-map region / muscle drum → the catalogue categories it should filter to. */
-export function categoriesForGroup(group: MuscleGroupId): string[] {
-  return GROUP_TO_CATEGORIES[group] ?? [];
-}
-
+/**
+ * Whether an exercise belongs to a body-map region / muscle chip. Through the
+ * same attribution the weekly load uses, so the library shows exactly the
+ * exercises that count toward the group you tapped.
+ */
 export function matchesGroup(exercise: Exercise, group: MuscleGroupId | null): boolean {
   if (!group) return true;
-  return categoriesForGroup(group).includes(exercise.category?.toLowerCase());
+  return groupFromExercise(exercise) === group;
 }

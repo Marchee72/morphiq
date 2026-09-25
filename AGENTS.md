@@ -47,11 +47,39 @@ src/
 
 ## Design system
 
-All CSS is hand-written in `src/index.css` (~487 lines, "Cinema Dark" theme). No Tailwind, no CSS-in-JS.
+Two stylesheets side by side:
 
-Utility classes follow Tailwind naming conventions (`flex`, `gap-4`, `p-6`, `text-sm`, etc.) but are custom, not imported.
+- `src/ui-atlas/atlas/atlas.css` (~4400 lines, `.at-*` classes, unlayered) owns
+  the palette tokens and every existing screen. The palette is sand + ember,
+  light and dark, under `.at` / `.at[data-mode='dark']`; the original token
+  names (`--sand`, `--clay`, `--cocoa`, …) are kept, plus `--ember`, `--lime`,
+  `--amber`, `--coral` and the relief tokens `--d-*`.
+- `src/ui-atlas/tw.css` is Tailwind v4 **without preflight** (theme +
+  utilities only). Its `@theme inline` maps the shadcn tokens onto the atlas
+  palette, so registry components land in the app's colours. `index.css`
+  declares the layer order and keeps its reset in `@layer base`, below the
+  utilities.
 
-Key classes: `.glass-panel` (glassmorphism), `.glow-btn` (indigo gradient + glow).
+Relief ("system D"): primary = `--d-grad` + `--d-hi`; secondary = `--d-tonal`
++ `--d-soft`, no border, no outer shadow; selected pill = `--d-pill`; danger =
+`--d-danger` + `--d-danger-hi`; cards = `--d-card` + `--d-card-hi`, no outer
+shadow. Only what floats (sheets, notifications, dock, menus) casts a shadow,
+`--shadow-float`.
+
+Type: **Urbanist** only, self-hosted in `public/fonts/`. Titles 800, text
+400–700.
+
+Components built for the redesign live in `src/ui-atlas/kit/` (`@/ui-atlas/kit`).
+Watermelon components install with `npx shadcn add @watermelon/<name>`
+(`components.json`); swap their icons to `lucide-react` and their strings to
+i18n.
+
+Motion: `motion/react` only. `AppShell` wraps everything in
+`MotionConfig reducedMotion="user"`; tests set
+`MotionGlobalConfig.skipAnimations`. Never animate `transform`/`filter` on
+`.at` itself (see `app-base.css`) — animate `.app-scroll` or children.
+
+`npm run check:contrast` verifies AA for every text/background token pair.
 
 ## Testing
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Exercise } from '../../../core/entities/Exercise';
 import type { WorkoutSet } from '../../../core/entities/WorkoutSet';
 import {
-  buildMuscleLoad, CATEGORY_TO_GROUP, GROUP_TO_CATEGORIES, groupFromExercise,
+  buildMuscleLoad, CATEGORY_TO_GROUP, groupFromExercise, TARGET_TO_GROUP,
   groupFromName, MUSCLE_GROUPS, resolveGroup,
 } from '../muscleLoad';
 
@@ -32,23 +32,25 @@ describe('category mapping', () => {
     expect(CATEGORY_TO_GROUP['cardio']).toBeUndefined();
   });
 
-  it('keeps GROUP_TO_CATEGORIES a true inverse', () => {
-    for (const group of MUSCLE_GROUPS) {
-      for (const category of GROUP_TO_CATEGORIES[group]) {
-        expect(CATEGORY_TO_GROUP[category]).toBe(group);
-      }
-    }
+  it('gives every group at least one target, so no chip is always empty', () => {
+    const reached = new Set(Object.values(TARGET_TO_GROUP));
+    for (const group of MUSCLE_GROUPS) expect(reached.has(group), group).toBe(true);
   });
 });
 
 describe('groupFromExercise', () => {
-  it('resolves via category', () => {
-    expect(groupFromExercise(exercise({ category: 'upper legs' }))).toBe('legs');
-    expect(groupFromExercise(exercise({ category: 'waist' }))).toBe('core');
+  it('resolves via target, which names the muscle', () => {
+    expect(groupFromExercise(exercise({ category: 'upper legs', target: 'hamstrings' }))).toBe('hamstrings');
+    expect(groupFromExercise(exercise({ category: 'upper legs', target: 'quads' }))).toBe('quads');
+    expect(groupFromExercise(exercise({ category: 'lower legs', target: 'calves' }))).toBe('glutes');
+    expect(groupFromExercise(exercise({ category: 'upper arms', target: 'triceps' }))).toBe('triceps');
+    expect(groupFromExercise(exercise({ category: 'lower arms', target: 'forearms' }))).toBe('forearms');
+    expect(groupFromExercise(exercise({ category: 'waist', target: 'abs' }))).toBe('core');
   });
 
-  it('falls back to target when the category is unknown', () => {
-    expect(groupFromExercise(exercise({ category: 'mystery', target: 'biceps' }))).toBe('arms');
+  it('falls back to category when the target is unknown', () => {
+    expect(groupFromExercise(exercise({ category: 'waist', target: 'mystery' }))).toBe('core');
+    expect(groupFromExercise(exercise({ category: 'lower arms', target: 'mystery' }))).toBe('forearms');
   });
 
   it('returns null for cardio rather than distorting a strength balance', () => {
@@ -60,28 +62,34 @@ describe('groupFromName', () => {
   it('attributes common English lifts', () => {
     expect(groupFromName('Incline Bench Press')).toBe('chest');
     expect(groupFromName('Barbell Row')).toBe('back');
-    expect(groupFromName('Back Squat')).toBe('legs');
+    expect(groupFromName('Back Squat')).toBe('quads');
     expect(groupFromName('Lateral Raise')).toBe('shoulders');
-    expect(groupFromName('Hammer Curl')).toBe('arms');
+    expect(groupFromName('Hammer Curl')).toBe('biceps');
+    expect(groupFromName('Triceps Pushdown')).toBe('triceps');
+    expect(groupFromName('Wrist Curl')).toBe('forearms');
+    expect(groupFromName('Romanian Deadlift')).toBe('hamstrings');
     expect(groupFromName('Hanging Leg Raise')).toBe('core');
   });
 
   it('attributes Spanish names, since much of the history was typed that way', () => {
     expect(groupFromName('Press de banca')).toBe('chest');
     expect(groupFromName('Dominadas')).toBe('back');
-    expect(groupFromName('Sentadilla')).toBe('legs');
+    expect(groupFromName('Sentadilla')).toBe('quads');
+    expect(groupFromName('Curl femoral')).toBe('hamstrings');
+    expect(groupFromName('Press francés')).toBe('triceps');
+    expect(groupFromName('Elevación de gemelos')).toBe('glutes');
   });
 
   it('lets the movement win over a body-part word in the same name', () => {
     // The naive single-tier version got these wrong: "back" beat "squat".
-    expect(groupFromName('Back Squat')).toBe('legs');
-    expect(groupFromName('Front Squat')).toBe('legs');
-    expect(groupFromName('Leg Curl')).toBe('legs');
+    expect(groupFromName('Back Squat')).toBe('quads');
+    expect(groupFromName('Front Squat')).toBe('quads');
+    expect(groupFromName('Leg Curl')).toBe('hamstrings');
     expect(groupFromName('Chest Supported Row')).toBe('back');
   });
 
   it('distinguishes raises that share a word but not a muscle', () => {
-    expect(groupFromName('Calf Raise')).toBe('legs');
+    expect(groupFromName('Calf Raise')).toBe('glutes');
     expect(groupFromName('Hanging Leg Raise')).toBe('core');
     expect(groupFromName('Lateral Raise')).toBe('shoulders');
   });
@@ -94,19 +102,19 @@ describe('groupFromName', () => {
 
 describe('resolveGroup', () => {
   it('prefers the catalogue over the name', () => {
-    // The name says chest, the catalogue entry says legs — the catalogue is authoritative.
-    expect(resolveGroup(set({ exerciseName: 'Bench Press' }), exercise({ category: 'upper legs' }))).toBe('legs');
+    // The name says chest, the catalogue entry says quads — the catalogue is authoritative.
+    expect(resolveGroup(set({ exerciseName: 'Bench Press' }), exercise({ category: 'upper legs', target: 'quads' }))).toBe('quads');
   });
 
   it('falls back to the name for free-text sets', () => {
-    expect(resolveGroup(set({ exerciseName: 'Sentadilla búlgara' }), undefined)).toBe('legs');
+    expect(resolveGroup(set({ exerciseName: 'Sentadilla búlgara' }), undefined)).toBe('quads');
   });
 });
 
 describe('buildMuscleLoad', () => {
   const resolve = () => exercise();
 
-  it('always returns all six groups in a fixed order', () => {
+  it('always returns every group in a fixed order', () => {
     const load = buildMuscleLoad([], () => undefined, NOW);
     expect(load.rows.map(r => r.group)).toEqual([...MUSCLE_GROUPS]);
   });

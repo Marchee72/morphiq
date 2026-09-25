@@ -33,6 +33,8 @@ ALTER TABLE measurements DROP COLUMN IF EXISTS "visceralFat";
 ALTER TABLE measurements DROP COLUMN IF EXISTS "metabolicAge";
 ALTER TABLE measurements DROP COLUMN IF EXISTS protein;
 ALTER TABLE measurements DROP COLUMN IF EXISTS "bodyType";
+-- Galaxy Watch skeletal muscle, read from Samsung Health (not in Health Connect).
+ALTER TABLE measurements ADD COLUMN IF NOT EXISTS "skeletalMuscle" NUMERIC;
 
 CREATE TABLE IF NOT EXISTS food_logs (
   id SERIAL PRIMARY KEY,
@@ -156,5 +158,10 @@ CREATE TABLE IF NOT EXISTS wellness_logs (
   notes TEXT,
   UNIQUE ("profileId", day)
 );
+-- Samsung Health's scores and the night's times, read through its SDK.
+ALTER TABLE wellness_logs ADD COLUMN IF NOT EXISTS "sleepScore" NUMERIC;
+ALTER TABLE wellness_logs ADD COLUMN IF NOT EXISTS "sleepStart" TEXT;
+ALTER TABLE wellness_logs ADD COLUMN IF NOT EXISTS "sleepEnd" TEXT;
+ALTER TABLE wellness_logs ADD COLUMN IF NOT EXISTS "energyScore" NUMERIC;
 
 

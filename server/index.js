@@ -339,7 +339,7 @@ app.get('/api/profiles/:id/measurements', async (req, res) => {
     // dropped from the model, and a stray `*` would put them back on the wire.
     const { rows } = await pool.query(
       `SELECT id, "profileId", timestamp, weight, impedance, bmi, bmr,
-              "bodyFat", "bodyWater", "boneMass", "muscleMass"
+              "bodyFat", "bodyWater", "boneMass", "muscleMass", "skeletalMuscle"
          FROM measurements WHERE "profileId" = $1 ORDER BY timestamp ASC`,
       [req.params.id]
     );
@@ -348,6 +348,7 @@ app.get('/api/profiles/:id/measurements', async (req, res) => {
       weight: num(r.weight), impedance: num(r.impedance), bmi: num(r.bmi),
       bmr: num(r.bmr), bodyFat: num(r.bodyFat), bodyWater: num(r.bodyWater),
       boneMass: num(r.boneMass), muscleMass: num(r.muscleMass),
+      skeletalMuscle: num(r.skeletalMuscle),
     })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -357,11 +358,11 @@ app.post('/api/measurements', ownBody, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `INSERT INTO measurements ("profileId", timestamp, weight, impedance, bmi, bmr,
-        "bodyFat", "bodyWater", "boneMass", "muscleMass", "clientId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        "bodyFat", "bodyWater", "boneMass", "muscleMass", "skeletalMuscle", "clientId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ${ON_CLIENT_ID_CONFLICT} RETURNING *`,
       [m.profileId, m.timestamp || new Date(), m.weight, m.impedance, m.bmi, m.bmr,
-       m.bodyFat, m.bodyWater, m.boneMass, m.muscleMass, m.clientId ?? null]
+       m.bodyFat, m.bodyWater, m.boneMass, m.muscleMass, m.skeletalMuscle ?? null, m.clientId ?? null]
     );
     const r = rows[0];
     res.status(201).json({ ...r, id: r.id.toString() });
@@ -775,6 +776,8 @@ const wellnessNum = (r) => ({
   sleepRemMinutes: num(r.sleepRemMinutes),
   restingHr: num(r.restingHr),
   hrvMs: num(r.hrvMs),
+  sleepScore: num(r.sleepScore),
+  energyScore: num(r.energyScore),
 });
 
 app.get('/api/profiles/:profileId/wellness', async (req, res) => {
@@ -812,8 +815,8 @@ app.put('/api/profiles/:profileId/wellness/:day', async (req, res) => {
       `INSERT INTO wellness_logs
          ("profileId", day, timestamp, energy, soreness, stress, mood,
           "sleepMinutes", "sleepDeepMinutes", "sleepRemMinutes", "restingHr", "hrvMs",
-          "sleepSource", notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+          "sleepSource", notes, "sleepScore", "sleepStart", "sleepEnd", "energyScore")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT ("profileId", day) DO UPDATE SET
          timestamp = EXCLUDED.timestamp,
          energy = COALESCE(EXCLUDED.energy, wellness_logs.energy),
@@ -826,13 +829,17 @@ app.put('/api/profiles/:profileId/wellness/:day', async (req, res) => {
          "restingHr" = COALESCE(EXCLUDED."restingHr", wellness_logs."restingHr"),
          "hrvMs" = COALESCE(EXCLUDED."hrvMs", wellness_logs."hrvMs"),
          "sleepSource" = COALESCE(EXCLUDED."sleepSource", wellness_logs."sleepSource"),
-         notes = COALESCE(EXCLUDED.notes, wellness_logs.notes)
+         notes = COALESCE(EXCLUDED.notes, wellness_logs.notes),
+         "sleepScore" = COALESCE(EXCLUDED."sleepScore", wellness_logs."sleepScore"),
+         "sleepStart" = COALESCE(EXCLUDED."sleepStart", wellness_logs."sleepStart"),
+         "sleepEnd" = COALESCE(EXCLUDED."sleepEnd", wellness_logs."sleepEnd"),
+         "energyScore" = COALESCE(EXCLUDED."energyScore", wellness_logs."energyScore")
        RETURNING *`,
       [
         req.params.profileId, req.params.day, w.timestamp || new Date(),
         w.energy, w.soreness, w.stress, w.mood,
         w.sleepMinutes, w.sleepDeepMinutes, w.sleepRemMinutes, w.restingHr, w.hrvMs,
-        w.sleepSource, w.notes,
+        w.sleepSource, w.notes, w.sleepScore, w.sleepStart, w.sleepEnd, w.energyScore,
       ]
     );
     res.json(wellnessNum(rows[0]));

@@ -363,6 +363,21 @@ describe('Zustand store state management', () => {
     expect((await db.workoutLogs.toArray()).filter(w => w.externalId === 'hc_old_run').length).toBe(1);
   });
 
+  it('does not import a session again when it comes back from Samsung under another id', async () => {
+    await useStore.getState().createProfile({
+      name: 'Bruce Wayne', gender: 'male', birthDate: new Date('1985-02-19'), height: 188,
+    });
+    const at = new Date(Date.now() - 86_400_000);
+    const run = { type: 'RUNNING', duration: 30, description: 'Run', source: 'health-connect' as const };
+
+    await useStore.getState().importWorkouts([{ ...run, externalId: 'hc_run', timestamp: at }]);
+    await useStore.getState().importWorkouts([
+      { ...run, externalId: 'samsung:abc_0', timestamp: new Date(at.getTime() + 30_000) },
+    ]);
+
+    expect((await db.workoutLogs.toArray()).filter(w => w.type === 'RUNNING')).toHaveLength(1);
+  });
+
   it('keeps importing past a workout that fails to save, then reports the failure', async () => {
     await useStore.getState().createProfile({
       name: 'Hal Jordan', gender: 'male', birthDate: new Date('1988-02-02'), height: 183,
@@ -430,6 +445,25 @@ describe('Zustand store state management', () => {
     const finalStore = useStore.getState();
     // Length should still be 1 (duplicate skipped)
     expect(finalStore.measurements.length).toBe(1);
+  });
+
+  it('completes a weight-only reading when its body composition arrives later', async () => {
+    await useStore.getState().createProfile({
+      name: 'Barry Allen', gender: 'male', birthDate: new Date('1990-03-14'), height: 180,
+    });
+    const at = new Date('2026-09-25T07:42:00Z');
+    const bare = { timestamp: at, weight: 78.4, impedance: 0, bmi: 24.2, bmr: 1712, bodyFat: 0, bodyWater: 0, boneMass: 0, muscleMass: 0 };
+
+    expect(await useStore.getState().importMeasurements([bare])).toBe(1);
+    const added = await useStore.getState().importMeasurements([
+      { ...bare, timestamp: new Date(at.getTime() + 20_000), bodyFat: 18.2, muscleMass: 60.1, skeletalMuscle: 34.2 },
+    ]);
+
+    const { measurements } = useStore.getState();
+    expect(added).toBe(0); // completed, not a new weigh-in
+    expect(measurements).toHaveLength(1);
+    expect(measurements[0]).toMatchObject({ bodyFat: 18.2, skeletalMuscle: 34.2 });
+    expect(new Date(measurements[0].timestamp).getTime()).toBe(at.getTime());
   });
 
   it('should format workout history details for periodic coach analysis', async () => {
