@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  ArrowRight, Bike, Dumbbell, Footprints, Heart, HeartPulse, History, Scale, Sparkles,
+  ArrowRight, Bike, Dumbbell, Footprints, Heart, HeartPulse, Scale, Sparkles,
   Trophy, UtensilsCrossed,
 } from 'lucide-react';
 import { useT } from '../../i18n';
@@ -10,7 +10,6 @@ import { isImproving, metricByKey } from '../derive/bodyMetrics';
 import { daypart } from '../derive/profile';
 import { nextMuscleFocus } from '../derive/todayTraining';
 import { sparkPath } from '../derive/spark';
-import { ActivitiesCard } from '../kit/activities-card';
 import { RollingNumber } from '../kit/rolling-number';
 import { AtlasTodayHeader } from './AtlasTodayHeader';
 import { AtlasStates } from './AtlasStates';
@@ -355,7 +354,7 @@ export const AtlasToday: React.FC = () => {
           over the top of a live workout. */}
       {(trainedToday || !session) && (
       <div className="at-pad" style={{ paddingTop: 16 }}>
-        <div className="at-card at-todaytrain" data-trained={trainedToday}>
+        <div className="at-todaytrain" data-trained={trainedToday}>
           <div className="at-todaytrain-head">
             <span className="at-todaytrain-icon">
               {cardioOnly ? <Footprints size={16} /> : <Dumbbell size={16} />}
@@ -545,24 +544,28 @@ export const AtlasToday: React.FC = () => {
             <h3>{t('today.recent')}</h3>
             <button onClick={() => actions.openOverlay('history')}>{t('common.seeAll')}</button>
           </div>
-          <div className="at-pad at-enter" style={{ paddingBottom: 22, animationDelay: '240ms' }}>
-            <ActivitiesCard
-              icon={<History size={20} />}
-              title={training.history[0].title}
-              subtitle={`${fmt.relativeDay(training.history[0].at, now)} · ${training.history[0].durationMin} min`}
-              items={training.history.slice(0, 5).map(entry => ({
-                key: entry.id,
-                icon: entry.cardio ? <Footprints size={18} /> : <Dumbbell size={18} />,
-                title: entry.title,
-                desc: entry.cardio
-                  ? `${entry.durationMin} min`
-                  : `${entry.durationMin} min · ${fmt.n(entry.volumeKg / 1000, 1)} ${t('unit.tonnes')}`,
-                time: fmt.relativeDay(entry.at, now),
-                onClick: () => setSessionId(entry.id),
-                ariaLabel: t('history.openSession', { name: entry.title }),
-              }))}
-            />
-          </div>
+          {/* A timeline: when, what, how much — the dot is ember for lifting,
+              amber for a run, lime when the session set a record. */}
+          <ol className="at-timeline at-enter" style={{ animationDelay: '240ms' }}>
+            {training.history.slice(0, 5).map(entry => (
+              <li key={entry.id} data-kind={entry.prs > 0 ? 'pr' : entry.cardio ? 'cardio' : 'lift'}>
+                <button onClick={() => setSessionId(entry.id)} aria-label={t('history.openSession', { name: entry.title })}>
+                  <small>{fmt.relativeDay(entry.at, now)}</small>
+                  <b>{entry.title}</b>
+                  <span>
+                    {entry.cardio
+                      ? `${entry.durationMin} min`
+                      : [
+                          `${entry.durationMin} min`,
+                          `${fmt.n(entry.volumeKg / 1000, 1)} ${t('unit.tonnes')}`,
+                          tp('unit.sets', entry.sets),
+                          entry.prs > 0 ? `${entry.prs} PR` : null,
+                        ].filter(Boolean).join(' · ')}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
         </>
       )}
 

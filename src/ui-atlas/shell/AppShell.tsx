@@ -137,14 +137,17 @@ export const AppShell: React.FC = () => {
     <MotionConfig reducedMotion="user">
     <div className="app at" data-mode={resolved} data-screen={screen}>
       <div className="app-statusbar" />
-      <AtlasTopInstallBanner />
-      {/* Above the scroll region: "the server cannot be reached" is a fact
-          about the app, not about the screen you happen to be on. */}
-      <AtlasSyncBanner />
-      {/* Same slot, for the same reason: closing the resume sheet without
-          answering it leaves a workout stored and unreachable, and the way back
-          to it belongs above the screens rather than on one of them. */}
-      <AtlasResumeBanner />
+      {/* Notifications float as pills over the top of every screen, outside
+          the scroll region: "the server cannot be reached" is a fact about the
+          app, not about the screen you happen to be on, and it must not
+          flicker when you switch tabs. */}
+      <div className="at-notices">
+        <AtlasTopInstallBanner />
+        <AtlasSyncBanner />
+        {/* Closing the resume sheet without answering it leaves a workout
+            stored and unreachable; this is the way back to it. */}
+        <AtlasResumeBanner />
+      </div>
       {/* Keyed on the tab so switching screens resets scroll, and slides in
           from the side the tab change went. Only on a change: the first
           screen of a launch just appears. The transform ends at none, so a

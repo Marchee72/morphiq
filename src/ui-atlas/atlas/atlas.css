@@ -154,8 +154,9 @@
 }
 
 .at .app-statusbar { background: var(--sand); }
-/* On Today the status bar is the top of the ember header. */
-.at[data-screen='today'] .app-statusbar { background: #d2461b; }
+/* On Today the status bar is the top of the ember header, until it scrolls away. */
+.at .app-statusbar { transition: background-color 0.2s; }
+.at[data-screen='today']:not([data-scrolled]) .app-statusbar { background: #d2461b; }
 
 .at-serif { font-family: 'Urbanist', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.02em; }
 
@@ -335,56 +336,6 @@
 
 .at-today-next { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; line-height: 1.25; }
 .at-today-next b { font-weight: 800; }
-
-/* The compact bar: a zero-height sticky slot at the top of the scroll area,
-   and the bar hanging from it. It floats, so it casts the float shadow. */
-.at-today-compact-slot {
-  position: sticky;
-  top: 0;
-  height: 0;
-  z-index: 6;
-}
-
-.at-today-compact {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px 12px 18px;
-  border-radius: 0 0 24px 24px;
-  background: #d2461b;
-  color: #fff;
-  box-shadow: 0 10px 24px rgba(90, 20, 5, 0.3);
-}
-
-.at[data-mode='dark'] .at-today-compact { background: var(--grad-hero); }
-
-.at-today-compact-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.at-today-compact-text b { font-size: 17px; font-weight: 800; line-height: 1.1; }
-.at-today-compact-text > span { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.at-today-dots { display: inline-flex; gap: 4px; flex-shrink: 0; }
-.at-today-dots i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255, 255, 255, 0.32); }
-.at-today-dots i[data-done='true'] { background: var(--lime); }
-.at-today-dots i[data-today='true'] { box-shadow: inset 0 0 0 2px #fff; background: rgba(255, 255, 255, 0.18); }
-
-.at-today-cta-round {
-  flex-shrink: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(160deg, #fff, #ffe9da);
-  color: #9a2c12;
-  cursor: pointer;
-  box-shadow: inset 0 -2px 0 rgba(154, 44, 18, 0.12), 0 4px 12px rgba(90, 20, 5, 0.28);
-}
 
 /* Today's metrics: rings for what has a target, a strip for weight, and
    colour tiles for the rest. */
@@ -782,14 +733,21 @@
 
 /* ---------- today: what you have trained ----------
    Sits between the hero and the rail. The hero says what is running; this says
-   what the day has actually contained, which survives the session ending. */
+   what the day has actually contained, which survives the session ending.
+   A colour tile like the day's: amber while the day is open, ember once it
+   holds a session. */
 
 .at-todaytrain {
+  --tint: #ffb020;
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 16px 18px;
+  border-radius: 26px;
+  background: color-mix(in srgb, var(--tint) 16%, var(--sand));
 }
+
+.at-todaytrain[data-trained='true'] { --tint: #ff6a2b; }
 
 .at-todaytrain-head { display: flex; align-items: center; gap: 12px; }
 
@@ -798,16 +756,16 @@
   width: 34px;
   height: 34px;
   border-radius: 12px;
-  background: var(--at-tonal);
-  color: var(--muted);
+  background: color-mix(in srgb, var(--tint) 30%, transparent);
+  color: var(--cocoa);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* Trained is the state worth colouring. Not-trained is not a failure — it is
-   most of every morning — so it stays neutral rather than going red. */
-.at-todaytrain[data-trained='true'] .at-todaytrain-icon { background: var(--clay); color: var(--at-on-clay); }
+/* Trained is the state worth the full colour. Not-trained is not a failure —
+   it is most of every morning — so it stays a wash rather than going red. */
+.at-todaytrain[data-trained='true'] .at-todaytrain-icon { background: var(--d-grad); color: #fff; }
 
 .at-todaytrain-head small {
   display: block;
@@ -831,21 +789,26 @@
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
-  color: var(--muted);
+  color: var(--at-ink-soft);
 }
 
+/* Small tiles inside the tile: the sand showing through the tint. */
 .at-todaytrain-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  padding: 10px 0 2px;
-  border-top: 1px solid var(--hair);
+}
+
+.at-todaytrain-stats > div {
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--sand) 65%, transparent);
 }
 
 .at-todaytrain-stats b {
   display: block;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
@@ -870,6 +833,57 @@
   font-weight: 600;
   line-height: 1.4;
 }
+
+/* ---------- today: recent, as a timeline ----------
+   A rail on the left, a dot per session, the words beside it. The dot says
+   what kind of session it was: ember lifting, amber a run, lime a record. */
+
+.at-timeline {
+  list-style: none;
+  margin: 0 18px 22px;
+  padding: 0 0 0 16px;
+  border-left: 2px solid var(--hair);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.at-timeline li { position: relative; }
+
+.at-timeline li::before {
+  content: '';
+  position: absolute;
+  left: -24px;
+  top: 12px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 0 3px var(--sand);
+}
+
+.at-timeline li[data-kind='cardio']::before { background: var(--amber); }
+.at-timeline li[data-kind='pr']::before { background: var(--lime); }
+
+.at-timeline button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  margin-left: -10px;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  color: var(--cocoa);
+  text-align: left;
+  cursor: pointer;
+}
+
+.at-timeline button:active { background: var(--at-tonal-soft); }
+.at-timeline small { font-size: 12px; font-weight: 700; color: var(--muted); }
+.at-timeline b { font-size: 15px; font-weight: 800; }
+.at-timeline span { font-size: 13px; color: var(--muted); }
 
 /* ---------- coach note ---------- */
 
@@ -3457,25 +3471,42 @@ button.at-routine-item { cursor: pointer; }
 
 /* ---------- install offer ---------- */
 
-.at-top-banner {
-  /* A notification card: it floats (so it casts the float shadow) and drops in
-     on a spring, but it stays in the flow above the scroll area, so a message
-     that lingers — a refusal, an unclosed session — pushes the screen down
-     instead of covering its header. */
-  flex-shrink: 0;
-  margin: 8px 12px 0;
-  padding: 10px 10px 10px 12px;
-  border-radius: 20px;
-  background: var(--d-card);
-  box-shadow: var(--d-card-hi), 0 10px 26px -12px rgba(30, 15, 5, 0.35);
-  color: var(--cocoa);
+/* Notifications: pills in the dock's colour, floating over the top of the
+   screen and stacked when there is more than one. The stack lets touches
+   through; only the pills take them. */
+.at-notices {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 12px;
+  right: 12px;
   z-index: 50;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 8px;
+  pointer-events: none;
+}
+
+.at-top-banner {
+  --pill-ink: var(--at-on-cocoa);
+  pointer-events: auto;
+  max-width: 100%;
+  padding: 6px 6px 6px 6px;
+  border-radius: 999px;
+  background: var(--at-dock-bg);
+  box-shadow: var(--shadow-float);
+  color: var(--pill-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   overflow: hidden;
   animation: at-drop 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.15);
 }
+
+[data-mode='dark'] .at-top-banner { --pill-ink: var(--cocoa); }
+
+/* The iOS install steps open under the pill; a pill that tall is a card. */
+.at-top-banner:has(.at-top-banner-ios) { border-radius: 24px; padding: 8px; }
 
 @keyframes at-drop {
   from { transform: translateY(-120%); opacity: 0; }
@@ -3486,19 +3517,14 @@ button.at-routine-item { cursor: pointer; }
   .at-top-banner { animation: none; }
 }
 
-.at-top-banner-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
 /* Indeterminate: the sync has no real percentage, so none is invented. */
 .at-top-banner-bar {
   position: relative;
-  height: 4px;
+  height: 3px;
+  margin: 0 14px 2px;
   border-radius: 2px;
   overflow: hidden;
-  background: var(--at-tonal);
+  background: color-mix(in srgb, var(--pill-ink) 18%, transparent);
 }
 
 .at-top-banner-bar i {
@@ -3522,11 +3548,17 @@ button.at-routine-item { cursor: pointer; }
 .at-top-banner-main {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  padding-right: 8px;
 }
 
+/* A button at the end of the pill sits flush with its curve. */
+.at-top-banner-main:has(> button:last-child) { padding-right: 0; }
+.at-top-banner .at-round-sm { background: color-mix(in srgb, var(--pill-ink) 14%, transparent); box-shadow: none; color: var(--pill-ink); }
+.at-top-banner .at-btn-sm { border-radius: 999px; }
+
 /* ─── Sync banner ───────────────────────────────────────────────────────────
-   Borrows the install banner's frame — same slot, same altitude, same shape —
+   Borrows the install banner's pill — same slot, same altitude, same shape —
    so "the app cannot reach the server" reads as the same kind of statement as
    "the app can be installed", rather than as a new species of alert.
 
@@ -3534,8 +3566,8 @@ button.at-routine-item { cursor: pointer; }
    affairs to be aware of, not an offer to act on. Work carries on either way,
    which is the whole point of the queue behind it. */
 .at-sync-banner .at-top-banner-icon {
-  background: var(--at-tonal);
-  color: var(--muted);
+  background: color-mix(in srgb, var(--pill-ink) 14%, transparent);
+  color: var(--pill-ink);
 }
 
 /* Something of the user's did not make it. The one state here worth alarming
@@ -3582,7 +3614,7 @@ button.at-routine-item { cursor: pointer; }
 .at-top-banner-icon {
   width: 36px;
   height: 36px;
-  border-radius: 12px;
+  border-radius: 50%;
   background: var(--d-grad);
   color: var(--at-on-clay);
   display: flex;
@@ -3606,7 +3638,7 @@ button.at-routine-item { cursor: pointer; }
 
 .at-top-banner-text small {
   font-size: 12px;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--pill-ink) 68%, transparent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3638,9 +3670,12 @@ button.at-routine-item { cursor: pointer; }
 
 
 .at-top-banner-ios {
-  padding-top: 6px;
-  border-top: 1px dashed var(--hair);
+  padding: 6px 6px 2px;
+  border-top: 1px dashed color-mix(in srgb, var(--pill-ink) 22%, transparent);
 }
+
+.at-top-banner-ios .at-field-hint { color: color-mix(in srgb, var(--pill-ink) 68%, transparent); }
+.at-top-banner-ios .at-install-steps span { background: color-mix(in srgb, var(--pill-ink) 12%, transparent); }
 
 .at-install-steps {
   display: flex;
@@ -4451,29 +4486,19 @@ button.at-routine-item { cursor: pointer; }
 
 /* ---------- heat map card ---------- */
 
-.at-heatmap {
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-}
-
-/* Tighter than `.at-card`'s 20px — the two-column figure+info layout reads
-   crowded at the default. Matches the todaytrain card's rhythm. */
+/* Tighter than `.at-card`'s 20px. Matches the todaytrain card's rhythm. */
 .at-card.at-heatmap-card { padding: 16px 18px; }
 
-/* The one caption left, over the set counts. The figure needs none: it is a
-   body, and the legend under it says which end is which. */
+/* What the numbers are: sets this week. */
 .at-heatmap-label {
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 6px;
 }
 
-/* Title and the front/back switch on one line, so the switch reads as belonging
-   to the figure rather than floating under it. */
+/* Title and caption on one line. */
 .at-heatmap-head {
   display: flex;
   align-items: center;
@@ -4488,40 +4513,6 @@ button.at-routine-item { cursor: pointer; }
   font-weight: 600;
   letter-spacing: -0.02em;
 }
-
-.at-heatmap-figure { flex-shrink: 0; }
-
-/* Was 96px with three columns of text beside it. With one column it can be the
-   size a body map should be. */
-.at-heatmap-figure svg { width: 108px; height: auto; display: block; }
-
-/* The fill here comes from the data, inline, so it already beats the Library's
-   hover and active rules. Nothing left to override. */
-
-.at-heatmap-legend {
-  width: 92px;
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(to right, var(--at-figure-limb), var(--muted), var(--clay-strong));
-  margin: 8px auto 0;
-}
-
-.at-heatmap-legend-labels {
-  display: flex;
-  justify-content: space-between;
-  width: 92px;
-  margin: 3px auto 0;
-  font-size: 8.5px;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-/* A definite width, because each `FluidTabs` option is `flex: 1; min-width: 0` — in a
-   row that is sized to its content, that resolves to no content at all and the
-   two labels collapse into each other. Under the figure it inherited the
-   column's 96px and the question never came up. */
-.at-heatmap-side { flex-shrink: 0; width: 132px; }
-.at-heatmap-side button { min-height: 34px; }
 
 /* ── the heat map, read as numbers ──────────────────────────────────────── */
 

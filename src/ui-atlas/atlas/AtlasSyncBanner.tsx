@@ -8,7 +8,7 @@ const SAVED_MS = 2200;
 
 /**
  * What the app tells you about getting your changes to the server — a
- * notification card at the top of the frame.
+ * floating pill at the top of the frame.
  *
  * Outside `app-scroll`, so switching tabs does not make it flicker. Reads
  * `syncState` directly rather than through the store: the offline layer cannot
@@ -60,8 +60,6 @@ export const AtlasSyncBanner: React.FC = () => {
             <div className="at-top-banner-text">
               <b>{tp('sync.discardConfirm', state.failed)}</b>
             </div>
-          </div>
-          <div className="at-top-banner-actions">
             <button className="at-btn at-btn-sm" data-ghost="true" onClick={() => setConfirming(false)}>
               {t('common.cancel')}
             </button>

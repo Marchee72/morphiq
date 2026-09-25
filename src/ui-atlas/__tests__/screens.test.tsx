@@ -20,7 +20,7 @@ describe('screens', () => {
   beforeEach(() => useStore.setState(initialState, true));
 
   describe('Today', () => {
-    it('renders the body heat map with front/back toggle and no X/16 targets', () => {
+    it('renders the balance card as numbers, without a figure or X/16 targets', () => {
       renderScreen('today');
       const text = visibleText();
       // The X/16 targets are gone — no "/16" or "/8" should appear.
@@ -31,8 +31,9 @@ describe('screens', () => {
       // identifies it is the balance heading and the set counts beside it.
       expect(text).toContain('Balance');
       expect(text).toContain('Weekly sets');
-      expect(text).toContain('Front');
-      expect(text).toContain('Back');
+      // The body figure and its front/back switch are gone.
+      expect(document.querySelector('.at-heatmap-card svg')).toBeNull();
+      expect(text).not.toContain('Front');
     });
 
     it('shows the last session and goal nudge with rich data', () => {

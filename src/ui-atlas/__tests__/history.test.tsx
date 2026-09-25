@@ -247,13 +247,11 @@ describe('history entry points', () => {
   it('opens a past session straight from Today', async () => {
     renderScreen('today', { data: 'empty' });
 
-    // "Recent" is a card that opens into the last sessions; open it first.
-    const recent = await waitFor(
-      () => screen.getAllByRole('button', { expanded: false }).find(b => /push a/i.test(b.textContent ?? ''))!,
+    // "Recent" is a timeline; each session in it is a button.
+    const row = await waitFor(
+      () => screen.getAllByRole('button', { name: /open push a/i })[0],
       { timeout: 20000 },
     );
-    fireEvent.click(recent);
-    const row = await waitFor(() => screen.getAllByRole('button', { name: /open push a/i })[0]);
 
     fireEvent.click(row);
     await waitFor(() => expect(document.querySelector('.at-sheet')).toBeTruthy());

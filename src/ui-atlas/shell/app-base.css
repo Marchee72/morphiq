@@ -75,9 +75,6 @@
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
-  /* Today's header changes its margin with the scroll position; anchoring would
-     compensate for it and fight the collapse. */
-  overflow-anchor: none;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -136,15 +133,18 @@
   max-width: calc(100% - 36px);
   padding: 8px 14px;
   border-radius: 999px;
-  background: var(--d-card);
-  color: var(--at-ink-soft);
-  box-shadow: var(--d-card-hi), var(--shadow-float);
+  /* The notification pill's colours (atlas.css, .at-top-banner). */
+  background: var(--at-dock-bg);
+  color: var(--at-on-cocoa);
+  box-shadow: var(--shadow-float);
   font-size: 12.5px;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+[data-mode='dark'] .at-pull-badge { color: var(--cocoa); }
 
 /* Armed is the one state that has to be unmistakable — it is the difference
    between letting go and syncing, and letting go and nothing happening. */
