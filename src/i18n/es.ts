@@ -778,6 +778,12 @@ export const es: Translations = {
 
   // -- Compañeros de entreno -------------------------------------
   'buddy.title': 'Gymbros',
+  'buddy.trainingNow': 'Entrenando ahora',
+  'buddy.yourPartners': 'Tus compañeros',
+  'buddy.message': 'Mensaje a {name}',
+  'buddy.manageFor': 'Opciones de {name}',
+  'buddy.todayNobody': 'Nadie está entrenando ahora',
+  'buddy.todayInvite': 'Entrená con alguien',
   'buddy.subtitle': 'Entrena al lado de alguien, cada uno con lo suyo',
   'buddy.open': 'Compañeros de entreno',
   'buddy.forProfile': 'Compañeros de {name}',

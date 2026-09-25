@@ -781,6 +781,12 @@ export const en = {
 
   // -- Training partners -----------------------------------------
   'buddy.title': 'Gymbros',
+  'buddy.trainingNow': 'Training now',
+  'buddy.yourPartners': 'Your partners',
+  'buddy.message': 'Message {name}',
+  'buddy.manageFor': 'Manage {name}',
+  'buddy.todayNobody': 'Nobody is training right now',
+  'buddy.todayInvite': 'Train alongside someone',
   'buddy.subtitle': 'Train alongside someone, each doing your own work',
   'buddy.open': 'Training partners',
   'buddy.forProfile': 'Partners of {name}',

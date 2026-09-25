@@ -99,9 +99,6 @@ export const AtlasToday: React.FC = () => {
         onDay={date => setDetail({ kind: 'day', date })}
       />
 
-      {/* A partner training right now, if any — renders nothing otherwise, so it
-          costs nothing on the common path. */}
-      <AtlasBuddyStrip />
 
       {/* Directly under the hero, because it is the first thing you want and the
           hero cannot carry it: once a session is finished the hero goes back to
@@ -212,6 +209,9 @@ export const AtlasToday: React.FC = () => {
       )}
 
       <AtlasYourDay now={now} onDetail={setDetail} onSession={setSessionId} />
+
+      {/* Your gymbros: who is training now, and who has written. */}
+      <AtlasBuddyStrip />
 
       <div className="at-pad at-enter" style={{ paddingTop: 22, paddingBottom: 22, animationDelay: '180ms' }}>
         <AtlasHeatMap onPickRegion={(group) => setDetail({ kind: 'muscle', group })} />

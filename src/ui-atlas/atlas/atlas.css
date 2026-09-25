@@ -4397,15 +4397,115 @@ button.at-routine-item { cursor: pointer; }
 
 /* ---------- training partners ---------- */
 
-.at-buddy-row {
+.at-buddies { display: flex; flex-direction: column; gap: 12px; }
+
+.at-buddies-head { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
+.at-buddies-head h3 { margin: 0; font-size: 18px; font-weight: 800; }
+.at-buddies-head small { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+
+.at-buddy-invite-round {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--d-grad);
+  box-shadow: var(--d-hi);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.at-buddy-avatar {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: #1a0e07;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.at-buddy-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+
+.at-buddy-avatar-live {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 28%;
+  height: 28%;
+  border-radius: 50%;
+  background: var(--lime);
+  box-shadow: 0 0 0 2px var(--sand);
+  animation: at-live 1.6s ease-in-out infinite;
+}
+
+@keyframes at-live { 50% { opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) { .at-buddy-avatar-live { animation: none; } }
+
+.at-buddy-card {
+  border-radius: 22px;
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
+  padding: 12px 8px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* A paused partner stays in the list and reads as set aside. Hiding them would
+   leave no way to lift a pause you set yourself. */
+.at-buddy-card[data-muted='true'] { opacity: 0.6; }
+
+.at-buddy-card-main { display: flex; align-items: center; gap: 4px; }
+.at-buddy-card .at-buddy-actions { padding-right: 6px; }
+
+.at-buddy-more {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.at-buddy-more[aria-expanded='true'] { background: var(--d-tonal); box-shadow: var(--d-soft); color: var(--cocoa); }
+
+.at-buddy-doors { display: flex; gap: 8px; }
+.at-buddy-doors .at-btn { flex: 1; justify-content: center; }
+
+/* Someone training right now: the tab's ember card. */
+.at-buddy-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  border-radius: 28px;
+  background: #d2461b;
+  color: #fff;
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-/* A paused partner stays in the list and reads as set aside. Hiding them would
-   leave no way to lift a pause you set yourself. */
-.at-buddy-row[data-muted='true'] { opacity: 0.6; }
+.at[data-mode='dark'] .at-buddy-hero { background: var(--grad-hero); }
+.at-buddy-hero > *:not(.at-today-glow) { position: relative; }
+.at-buddy-hero .at-buddy-avatar-live { box-shadow: 0 0 0 2px #d2461b; }
+.at-buddy-hero-top { display: flex; align-items: center; gap: 12px; }
+.at-buddy-hero-top > span { display: flex; flex-direction: column; min-width: 0; }
+.at-buddy-hero-top small { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.at-buddy-hero-top b { font-size: 20px; font-weight: 800; }
+.at-buddy-hero-top em { font-style: normal; font-size: 13px; font-weight: 600; }
+.at-buddy-hero-actions { display: flex; gap: 8px; }
+.at-buddy-hero-actions .at-today-cta { flex: 1; justify-content: center; }
 
 .at-buddy-actions {
   display: flex;
@@ -4452,7 +4552,11 @@ button.at-routine-item { cursor: pointer; }
 
 /* The identity block is the tap target for the conversation. */
 .at-buddy-open {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   border: 0;
   background: transparent;
   padding: 0;
@@ -4462,6 +4566,10 @@ button.at-routine-item { cursor: pointer; }
   cursor: pointer;
 }
 
+.at-buddy-open > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.at-buddy-open b { font-size: 16px; font-weight: 800; }
+.at-buddy-open small { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 .at-buddy-open:disabled { cursor: default; }
 
 .at-buddy-badge {
@@ -4470,8 +4578,8 @@ button.at-routine-item { cursor: pointer; }
   height: 22px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--clay);
-  color: var(--at-on-clay);
+  background: var(--d-grad);
+  color: #fff;
   font-size: 11.5px;
   font-weight: 700;
   display: inline-flex;
@@ -4530,20 +4638,67 @@ button.at-routine-item { cursor: pointer; }
 
 .at-buddy-composer .at-round:disabled { opacity: 0.4; }
 
-/* The live strip on Today. Absent entirely when nobody is training. */
-.at-buddy-strip { display: flex; flex-direction: column; gap: 8px; }
+/* Gymbros on Today: whoever is training, then everyone as a row of faces. */
+.at-buddy-strip { display: flex; flex-direction: column; gap: 10px; padding-bottom: 22px; }
 
 .at-buddy-live {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   width: 100%;
+  padding: 12px 16px 12px 12px;
   border: 0;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--ember) 16%, var(--sand));
   font-family: inherit;
   color: inherit;
   text-align: left;
   cursor: pointer;
 }
+
+.at-buddy-live > svg { margin-left: auto; flex-shrink: 0; color: var(--ember); }
+
+.at-buddy-today {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
+  font-family: inherit;
+  color: var(--cocoa);
+  text-align: left;
+}
+
+button.at-buddy-today { flex-direction: row; align-items: center; gap: 12px; cursor: pointer; }
+button.at-buddy-today > svg { margin-left: auto; color: var(--muted); flex-shrink: 0; }
+
+.at-buddy-today-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--d-grad);
+  box-shadow: var(--d-hi);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.at-buddy-today-text { display: flex; flex-direction: column; min-width: 0; }
+.at-buddy-today-text b { font-size: 15px; font-weight: 800; }
+.at-buddy-today-text small { font-size: 12.5px; color: var(--muted); }
+
+.at-buddy-faces { display: flex; gap: 10px; flex-wrap: wrap; }
+.at-buddy-faces button { position: relative; padding: 0; border: 0; background: none; cursor: pointer; }
+.at-buddy-faces .at-buddy-badge { position: absolute; top: -4px; right: -6px; font-style: normal; box-shadow: 0 0 0 2px var(--sand); }
+
+.at-buddy-today-line { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.at-buddy-today-line:empty { display: none; }
 
 .at-buddy-dot {
   flex-shrink: 0;

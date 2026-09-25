@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Dumbbell, PauseCircle, PlayCircle, Trash2, UserPlus, Users } from 'lucide-react';
+import { Dumbbell, MessageCircle, MoreHorizontal, PauseCircle, PlayCircle, Trash2, UserPlus, Users } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useStore } from '../../presentation/state/store';
 import { useSocial } from '../data/useSocial';
@@ -10,6 +10,7 @@ import { AtlasSwitch } from './AtlasField';
 import { AtlasBuddyInvite } from './AtlasBuddyInvite';
 import { AtlasBuddyRedeem } from './AtlasBuddyRedeem';
 import { AtlasBuddyChat } from './AtlasBuddyChat';
+import { AtlasBuddyAvatar } from './AtlasBuddyAvatar';
 import {
   disablePush, enablePush, isPushEnabledFor, isPushSupported,
 } from '../../data/social/pushNotifications';
@@ -31,13 +32,15 @@ export const AtlasBuddies: React.FC = () => {
   const buddiesFocus = useStore(state => state.buddiesFocus);
   const clearBuddiesFocus = useStore(state => state.clearBuddiesFocus);
   const {
-    available, ready, rows, error, removeBuddy, setBlocked, training, shared, startShared,
+    available, ready, rows, error, removeBuddy, setBlocked, training, shared, startShared, joinShared,
   } = useSocial();
   const trainingByLink = new Map(training.map(row => [row.linkId, row]));
 
   const [panel, setPanel] = useState<Panel>(buddiesFocus?.code ? 'redeem' : null);
   const [confirming, setConfirming] = useState<BuddyRowVM | null>(null);
   const [chatting, setChatting] = useState<BuddyRowVM | null>(null);
+  // Whose pause / remove actions are showing. One at a time.
+  const [managing, setManaging] = useState<string | null>(null);
   // Which `linkId` has already been opened, so a partner tapped elsewhere opens
   // their chat exactly once even though the match below re-runs every render
   // until the row it refers to has actually loaded.
@@ -87,16 +90,25 @@ export const AtlasBuddies: React.FC = () => {
     if (appliedFocusLinkId) clearBuddiesFocus();
   }, [appliedFocusLinkId, clearBuddiesFocus]);
 
+  /** Train together: join their room if they opened one, else open one with them. */
+  const trainWith = (linkId: string, sharedSessionId?: string) =>
+    void (sharedSessionId ? joinShared(sharedSessionId) : startShared(linkId));
+
   return (
     <>
-      <div className="at-greet">
+      <header className="at-hub-head">
         <div>
           <small>{activeProfile ? t('buddy.forProfile', { name: activeProfile.name }) : 'MorphIQ'}</small>
           <h1>{t('buddy.title')}</h1>
         </div>
-      </div>
+        {available && (
+          <button className="at-buddy-invite-round" onClick={() => setPanel('invite')} aria-label={t('buddy.invite')}>
+            <UserPlus size={20} />
+          </button>
+        )}
+      </header>
 
-      <div className="at-pad at-settings-body">
+      <div className="at-pad at-buddies">
         {/* Nothing here works without a server and a signed-in session — see
             `socialAvailable`. The tab itself stays reachable either way, since
             hiding a dock icon by build mode would shift the whole row under
@@ -109,132 +121,161 @@ export const AtlasBuddies: React.FC = () => {
           />
         ) : (
           <>
-        <div className="at-card at-settings-stack">
-          <div>
-            <span className="at-field-label">{t('buddy.subtitle')}</span>
-            {ready && rows.length > 0 && <small>{tp('buddy.count', rows.length)}</small>}
-          </div>
-          <div className="at-buddy-actions">
-            <button className="at-btn" onClick={() => setPanel('invite')}>
-              <UserPlus size={15} /> {t('buddy.invite')}
-            </button>
-            <button className="at-btn" data-ghost="true" onClick={() => setPanel('redeem')}>
-              {t('buddy.redeem')}
-            </button>
-          </div>
-        </div>
+            {/* Whoever is training right now, loudest: the one moment this tab
+                is about something happening rather than something to manage. */}
+            {training.map(live => {
+              const row = rows.find(r => r.linkId === live.linkId);
+              return (
+                <section key={live.profileId} className="at-buddy-hero at-enter" aria-label={t('buddy.trainingNow')}>
+                  <div className="at-today-glow" aria-hidden="true" />
+                  <div className="at-buddy-hero-top">
+                    <AtlasBuddyAvatar name={live.name} picture={live.picture} live size={52} />
+                    <span>
+                      <small>{t('buddy.trainingNow')}</small>
+                      <b>{live.name || '—'}</b>
+                      <em>{presenceProgress(live, t)}</em>
+                    </span>
+                  </div>
+                  <div className="at-buddy-hero-actions">
+                    {!shared && (
+                      <button className="at-today-cta" onClick={() => trainWith(live.linkId, live.sharedSessionId)}>
+                        <Dumbbell size={16} /> {t('buddy.together')}
+                      </button>
+                    )}
+                    {row && (
+                      <button className="at-hub-another" onClick={() => setChatting(row)}
+                        aria-label={t('buddy.message', { name: live.name || '—' })}>
+                        <MessageCircle size={18} />
+                      </button>
+                    )}
+                  </div>
+                </section>
+              );
+            })}
 
-        {/* Presence sharing, moved in from Settings — this tab is now where
-            everything about a partner is managed, including whether they can
-            see you train. */}
-        {activeProfile && (
-          <div className="at-card at-settings-stack">
-            <AtlasSwitch
-              label={t('buddy.presenceToggle')}
-              checked={activeProfile.sharePresence !== false}
-              onChange={checked => void updateProfile({ ...activeProfile, sharePresence: checked })}
-            />
-            <small className="at-field-hint">{t('buddy.presenceSub')}</small>
-          </div>
-        )}
-
-        {/* Push registration lives on the device, not the profile, so this is
-            read from the device rather than from anything the server sent. */}
-        {activeProfile?.id && (
-          <div className="at-card at-settings-stack">
-            {isPushSupported() ? (
-              <AtlasSwitch
-                label={t('buddy.pushToggle')}
-                checked={pushOn}
-                onChange={checked => { if (!pushBusy) void togglePush(activeProfile.id!, checked); }}
-              />
-            ) : (
-              <span className="at-field-label">{t('buddy.pushUnsupported')}</span>
-            )}
-            <small className="at-field-hint">
-              {pushError ? t('buddy.pushError', { message: pushError }) : t('buddy.pushSub')}
-            </small>
-          </div>
-        )}
-
-        {/* Offline keeps whatever was loaded on screen and says so, rather than
-            blanking a list that is probably still accurate. */}
-        {error && (
-          <div className="at-card at-settings-stack">
-            <span className="at-field-label">{t('buddy.offline')}</span>
-            <small className="at-field-hint">{t('buddy.offlineSub')}</small>
-          </div>
-        )}
-
-        {ready && rows.length === 0 ? (
-          <AtlasStates
-            icon={<Users size={20} />}
-            title={t('buddy.none')}
-            body={t('buddy.noneSub')}
-            action={{ label: t('buddy.invite'), onClick: () => setPanel('invite') }}
-          />
-        ) : (
-          rows.map(row => {
-            const live = trainingByLink.get(row.linkId);
-            return (
-            <div key={row.linkId} className="at-card at-buddy-row" data-muted={row.muted}>
-              {/* The whole identity block opens the conversation. Muted
-                  partners are not tappable: nothing can be sent through a
-                  paused link, so offering the thread would be a dead end. */}
-              <button
-                className="at-account at-buddy-open"
-                disabled={row.muted}
-                onClick={() => setChatting(row)}
-              >
-                {row.picture && <img src={row.picture} alt="" referrerPolicy="no-referrer" />}
-                <div>
-                  <b>{row.name || '—'}</b>
-                  <small>
-                    {row.blockedByMe
-                      ? t('buddy.blockedByMe')
-                      : row.blockedByThem
-                        ? t('buddy.blockedByThem')
-                        : live
-                          ? <><span className="at-buddy-dot" aria-hidden="true" /> {presenceProgress(live, t)}</>
-                          : t('buddy.since', { date: fmt.dmy(row.since) })}
-                  </small>
-                </div>
-                {row.unread > 0 && !row.muted && (
-                  <span className="at-buddy-badge" aria-label={tp('buddy.unread', row.unread)}>
-                    {row.unread}
-                  </span>
-                )}
-              </button>
-
-              <div className="at-buddy-actions">
-                {/* One tap to train together, without going through the
-                    conversation first. Hidden once this device is already in a
-                    session — offering it again would just re-propose the room
-                    you are standing in. */}
-                {!row.muted && !shared && (
-                  <button className="at-chip" onClick={() => void startShared(row.linkId)}>
-                    <Dumbbell size={14} /> {t('buddy.trainNow')}
-                  </button>
-                )}
-                {/* Offered only to the side that blocked. The other side seeing
-                    "resume" would promise something the server refuses. */}
-                {row.blockedByMe ? (
-                  <button className="at-chip" onClick={() => void setBlocked(row.linkId, false)}>
-                    <PlayCircle size={14} /> {t('buddy.unblock')}
-                  </button>
-                ) : !row.blockedByThem && (
-                  <button className="at-chip" onClick={() => void setBlocked(row.linkId, true)}>
-                    <PauseCircle size={14} /> {t('buddy.block')}
-                  </button>
-                )}
-                <button className="at-chip" data-danger="true" onClick={() => setConfirming(row)}>
-                  <Trash2 size={14} /> {t('buddy.remove')}
-                </button>
+            {/* Offline keeps whatever was loaded on screen and says so, rather
+                than blanking a list that is probably still accurate. */}
+            {error && (
+              <div className="at-card at-settings-stack">
+                <span className="at-field-label">{t('buddy.offline')}</span>
+                <small className="at-field-hint">{t('buddy.offlineSub')}</small>
               </div>
+            )}
+
+            {ready && rows.length === 0 ? (
+              <AtlasStates icon={<Users size={20} />} title={t('buddy.none')} body={t('buddy.noneSub')} />
+            ) : (
+              <>
+                <div className="at-buddies-head">
+                  <h3>{t('buddy.yourPartners')}</h3>
+                  {ready && <small>{tp('buddy.count', rows.length)}</small>}
+                </div>
+                {rows.map(row => {
+                  const live = trainingByLink.get(row.linkId);
+                  const open = managing === row.linkId;
+                  return (
+                    <div key={row.linkId} className="at-buddy-card" data-muted={row.muted}>
+                      <div className="at-buddy-card-main">
+                        {/* The whole identity block opens the conversation. Muted
+                            partners are not tappable: nothing can be sent through
+                            a paused link, so offering the thread is a dead end. */}
+                        <button className="at-buddy-open" disabled={row.muted} onClick={() => setChatting(row)}>
+                          <AtlasBuddyAvatar name={row.name} picture={row.picture} live={!!live} />
+                          <span>
+                            <b>{row.name || '—'}</b>
+                            <small>
+                              {row.blockedByMe
+                                ? t('buddy.blockedByMe')
+                                : row.blockedByThem
+                                  ? t('buddy.blockedByThem')
+                                  : live
+                                    ? presenceProgress(live, t)
+                                    : t('buddy.since', { date: fmt.dmy(row.since) })}
+                            </small>
+                          </span>
+                          {row.unread > 0 && !row.muted && (
+                            <span className="at-buddy-badge" aria-label={tp('buddy.unread', row.unread)}>
+                              {row.unread}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          className="at-buddy-more"
+                          aria-expanded={open}
+                          aria-label={t('buddy.manageFor', { name: row.name || '—' })}
+                          onClick={() => setManaging(open ? null : row.linkId)}
+                        >
+                          <MoreHorizontal size={18} />
+                        </button>
+                      </div>
+
+                      {open && (
+                        <div className="at-buddy-actions">
+                          {/* Hidden once this device is already in a session —
+                              offering it again would re-propose the room you are in. */}
+                          {!row.muted && !shared && (
+                            <button className="at-chip" onClick={() => trainWith(row.linkId)}>
+                              <Dumbbell size={14} /> {t('buddy.trainNow')}
+                            </button>
+                          )}
+                          {/* Offered only to the side that blocked. The other side
+                              seeing "resume" would promise something the server refuses. */}
+                          {row.blockedByMe ? (
+                            <button className="at-chip" onClick={() => void setBlocked(row.linkId, false)}>
+                              <PlayCircle size={14} /> {t('buddy.unblock')}
+                            </button>
+                          ) : !row.blockedByThem && (
+                            <button className="at-chip" onClick={() => void setBlocked(row.linkId, true)}>
+                              <PauseCircle size={14} /> {t('buddy.block')}
+                            </button>
+                          )}
+                          <button className="at-chip" data-danger="true" onClick={() => setConfirming(row)}>
+                            <Trash2 size={14} /> {t('buddy.remove')}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {/* What partners can see of you, and whether they can reach you. */}
+            {activeProfile && (
+              <div className="at-card at-settings-stack">
+                <AtlasSwitch
+                  label={t('buddy.presenceToggle')}
+                  checked={activeProfile.sharePresence !== false}
+                  onChange={checked => void updateProfile({ ...activeProfile, sharePresence: checked })}
+                />
+                <small className="at-field-hint">{t('buddy.presenceSub')}</small>
+                {/* Push registration lives on the device, not the profile, so it
+                    is read from the device rather than from the server. */}
+                {activeProfile.id && (isPushSupported() ? (
+                  <AtlasSwitch
+                    label={t('buddy.pushToggle')}
+                    checked={pushOn}
+                    onChange={checked => { if (!pushBusy) void togglePush(activeProfile.id!, checked); }}
+                  />
+                ) : (
+                  <span className="at-field-label">{t('buddy.pushUnsupported')}</span>
+                ))}
+                {activeProfile.id && (
+                  <small className="at-field-hint">
+                    {pushError ? t('buddy.pushError', { message: pushError }) : t('buddy.pushSub')}
+                  </small>
+                )}
+              </div>
+            )}
+
+            <div className="at-buddy-doors">
+              <button className="at-btn" onClick={() => setPanel('invite')}>
+                <UserPlus size={15} /> {t('buddy.invite')}
+              </button>
+              <button className="at-btn" data-ghost="true" onClick={() => setPanel('redeem')}>
+                {t('buddy.redeem')}
+              </button>
             </div>
-            );
-          })
-        )}
           </>
         )}
       </div>
