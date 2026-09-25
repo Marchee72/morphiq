@@ -59,7 +59,11 @@ export interface BodyVM {
   hasData: boolean;
 }
 
-export type MuscleGroupId = 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'core';
+export type MuscleGroupId =
+  | 'chest' | 'back' | 'shoulders'
+  | 'biceps' | 'triceps' | 'forearms'
+  | 'quads' | 'hamstrings' | 'glutes'
+  | 'core';
 
 export interface MuscleLoadRow {
   group: MuscleGroupId;

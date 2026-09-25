@@ -4547,17 +4547,15 @@ button.at-routine-item { cursor: pointer; }
   cursor: pointer;
 }
 
-/* Fixed rather than fluid: six bars that all start at the same x are comparable
-   at a glance, and six that do not are six unrelated bars. */
+/* Fixed rather than fluid: bars that all start at the same x are comparable at
+   a glance. Wide enough for "Cuádriceps"; the one long name wraps. */
 .at-heatgroup > span {
-  width: 62px;
+  width: 76px;
   flex-shrink: 0;
   font-size: 11.5px;
   font-weight: 600;
+  line-height: 1.15;
   color: var(--at-ink-soft);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .at-heatgroup > i {

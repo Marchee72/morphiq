@@ -22,16 +22,21 @@ interface Region {
 const FRONT_REGIONS: Region[] = [
   { id: 'shoulders', shape: <><ellipse cx="33" cy="46" rx="13" ry="9" /><ellipse cx="87" cy="46" rx="13" ry="9" /></> },
   { id: 'chest', shape: <rect x="40" y="37" width="40" height="27" rx="11" /> },
-  { id: 'arms', shape: <><rect x="21" y="54" width="13" height="52" rx="6.5" /><rect x="86" y="54" width="13" height="52" rx="6.5" /></> },
+  { id: 'biceps', shape: <><rect x="21" y="54" width="13" height="26" rx="6.5" /><rect x="86" y="54" width="13" height="26" rx="6.5" /></> },
+  { id: 'forearms', shape: <><rect x="21" y="82" width="13" height="24" rx="6.5" /><rect x="86" y="82" width="13" height="24" rx="6.5" /></> },
   { id: 'core', shape: <rect x="44" y="67" width="32" height="31" rx="9" /> },
-  { id: 'legs', shape: <><rect x="43" y="102" width="16" height="74" rx="8" /><rect x="61" y="102" width="16" height="74" rx="8" /></> },
+  { id: 'quads', shape: <><rect x="43" y="102" width="16" height="44" rx="8" /><rect x="61" y="102" width="16" height="44" rx="8" /></> },
+  // The shins carry no group of their own; the calves behind them are "glutes & calves".
+  { id: 'glutes', shape: <><rect x="44" y="149" width="14" height="27" rx="7" /><rect x="62" y="149" width="14" height="27" rx="7" /></> },
 ];
 
 const BACK_REGIONS: Region[] = [
   { id: 'shoulders', shape: <><ellipse cx="33" cy="46" rx="13" ry="9" /><ellipse cx="87" cy="46" rx="13" ry="9" /></> },
   { id: 'back', shape: <rect x="40" y="37" width="40" height="45" rx="11" /> },
-  { id: 'arms', shape: <><rect x="21" y="54" width="13" height="52" rx="6.5" /><rect x="86" y="54" width="13" height="52" rx="6.5" /></> },
-  { id: 'legs', shape: <><rect x="43" y="86" width="16" height="90" rx="8" /><rect x="61" y="86" width="16" height="90" rx="8" /></> },
+  { id: 'triceps', shape: <><rect x="21" y="54" width="13" height="26" rx="6.5" /><rect x="86" y="54" width="13" height="26" rx="6.5" /></> },
+  { id: 'forearms', shape: <><rect x="21" y="82" width="13" height="24" rx="6.5" /><rect x="86" y="82" width="13" height="24" rx="6.5" /></> },
+  { id: 'glutes', shape: <><rect x="42" y="86" width="36" height="22" rx="10" /><rect x="44" y="149" width="14" height="27" rx="7" /><rect x="62" y="149" width="14" height="27" rx="7" /></> },
+  { id: 'hamstrings', shape: <><rect x="43" y="110" width="16" height="36" rx="8" /><rect x="61" y="110" width="16" height="36" rx="8" /></> },
 ];
 
 const REGIONS: Record<Side, Region[]> = { front: FRONT_REGIONS, back: BACK_REGIONS };

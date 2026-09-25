@@ -4,64 +4,81 @@ import type { StaticKey } from '../../i18n/types';
 import type { MuscleGroupId, MuscleLoadRow, MuscleLoadVM } from '../types';
 import { clamp, hoursBetween } from './buckets';
 
-/** Fixed render order, so the UI never reflows as data arrives. */
-export const MUSCLE_GROUPS: readonly MuscleGroupId[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'] as const;
+/**
+ * Fixed render order, so the UI never reflows as data arrives. Upper body front
+ * to back, then the arms, the legs, and the core.
+ *
+ * Ten groups rather than the six the first designs used: "arms" hid whether it
+ * was biceps or triceps that went untrained, and "legs" put a week of squats
+ * and a week of hamstring curls in the same bucket. The catalogue's `target`
+ * already names the muscle, so the split costs no data.
+ */
+export const MUSCLE_GROUPS: readonly MuscleGroupId[] = [
+  'chest', 'back', 'shoulders', 'biceps', 'triceps', 'forearms', 'quads', 'hamstrings', 'glutes', 'core',
+] as const;
 
 export const MUSCLE_GROUP_LABELS: Record<MuscleGroupId, StaticKey> = {
   chest: 'muscle.chest',
   back: 'muscle.back',
-  legs: 'muscle.legs',
   shoulders: 'muscle.shoulders',
-  arms: 'muscle.arms',
+  biceps: 'muscle.biceps',
+  triceps: 'muscle.triceps',
+  forearms: 'muscle.forearms',
+  quads: 'muscle.quads',
+  hamstrings: 'muscle.hamstrings',
+  glutes: 'muscle.glutes',
   core: 'muscle.core',
 };
 
-/** Weekly set targets — the middle of the commonly cited 10–20 hypertrophy range. */
+/**
+ * Weekly set targets — the middle of the commonly cited 10–20 hypertrophy range
+ * for the big groups, less for the small ones that the big lifts already train
+ * (biceps in every row, triceps in every press, forearms in every grip).
+ */
 export const MUSCLE_GROUP_TARGETS: Record<MuscleGroupId, number> = {
-  chest: 16, back: 16, legs: 16, shoulders: 12, arms: 12, core: 8,
+  chest: 16, back: 16, shoulders: 12, biceps: 8, triceps: 8, forearms: 6,
+  quads: 12, hamstrings: 10, glutes: 10, core: 8,
 };
 
 /** Rough time-to-recovered, used for the "how fresh is this muscle" read. */
 export const RECOVERY_HOURS: Record<MuscleGroupId, number> = {
-  chest: 48, back: 72, legs: 72, shoulders: 48, arms: 48, core: 24,
+  chest: 48, back: 72, shoulders: 48, biceps: 48, triceps: 48, forearms: 24,
+  quads: 72, hamstrings: 72, glutes: 72, core: 24,
 };
 
 /**
- * The bundled dataset's `category` values, mapped onto the six groups the designs use.
- * `cardio` and `neck` map to nothing on purpose — they are real exercises but they
- * are not a strength group, and folding them in would distort the balance read.
+ * The catalogue's `target` — the muscle the exercise is for — onto the groups.
+ * Every strength target in the bundled dataset is here; `levator scapulae` and
+ * `cardiovascular system` are left out on purpose (neck stretches and cardio
+ * are exercises, not a strength group, and would skew every share).
+ */
+export const TARGET_TO_GROUP: Record<string, MuscleGroupId> = {
+  pectorals: 'chest', 'serratus anterior': 'chest', serratus: 'chest',
+  lats: 'back', 'upper back': 'back', traps: 'back', spine: 'back',
+  delts: 'shoulders',
+  biceps: 'biceps',
+  triceps: 'triceps',
+  forearms: 'forearms',
+  quads: 'quads',
+  hamstrings: 'hamstrings',
+  glutes: 'glutes', calves: 'glutes', adductors: 'glutes', abductors: 'glutes',
+  abs: 'core',
+};
+
+/**
+ * `category` is coarser than `target` and only a fallback for an exercise that
+ * arrives without one. Where a category spans several groups ("upper legs")
+ * it goes to the one most of its exercises belong to.
  */
 export const CATEGORY_TO_GROUP: Record<string, MuscleGroupId> = {
   chest: 'chest',
   back: 'back',
-  'upper legs': 'legs',
-  'lower legs': 'legs',
   shoulders: 'shoulders',
-  'upper arms': 'arms',
-  'lower arms': 'arms',
+  'upper arms': 'biceps',
+  'lower arms': 'forearms',
+  'upper legs': 'glutes',
+  'lower legs': 'glutes',
   waist: 'core',
-};
-
-/** Inverse map — drives the body map and the filter chips straight into a catalogue query. */
-export const GROUP_TO_CATEGORIES: Record<MuscleGroupId, string[]> = {
-  chest: ['chest'],
-  back: ['back'],
-  legs: ['upper legs', 'lower legs'],
-  shoulders: ['shoulders'],
-  arms: ['upper arms', 'lower arms'],
-  core: ['waist'],
-};
-
-/** `target` is finer-grained than `category` and survives when only the muscle is known. */
-export const TARGET_TO_GROUP: Record<string, MuscleGroupId> = {
-  pectorals: 'chest', serratus: 'chest',
-  // `levator scapulae` is deliberately absent: the only two exercises targeting it
-  // are neck stretches, which are not a back training set.
-  lats: 'back', 'upper back': 'back', traps: 'back', spine: 'back',
-  quads: 'legs', hamstrings: 'legs', glutes: 'legs', calves: 'legs', adductors: 'legs', abductors: 'legs',
-  delts: 'shoulders',
-  biceps: 'arms', triceps: 'arms', forearms: 'arms',
-  abs: 'core',
 };
 
 /**
@@ -76,40 +93,60 @@ const NAME_KEYWORDS: [RegExp, MuscleGroupId][] = [
   // 1. Phrases whose meaning is not the sum of their words. Every rule here was
   //    added because the tier below got a real catalogue entry wrong — see
   //    `attribution.coverage.test.ts`, which measures both paths against the dataset.
+  // Forearm curls before any other curl, glute kickbacks before triceps kickbacks.
+  [/\b(wrist curl|wrist roller|farmer|curl de mu[nñ]eca|antebrazos?|forearms?)\b/i, 'forearms'],
+  [/\b(glute kick ?back|donkey kick|cable kick ?back|hip abduction|hip adduction|abductor|adductor|clamshell)\b/i, 'glutes'],
   // "close-grip bench press" is a triceps lift, but "close-grip pulldown" is still back,
   // so the grip only reassigns the movement when it is a press.
-  [/\btriceps?\b/i, 'arms'],
-  [/\bclose[- ]?grip\b.*\b(bench|press|push)/i, 'arms'],
+  [/\btriceps?\b|\btr[ií]ceps\b/i, 'triceps'],
+  [/\bclose[- ]?grip\b.*\b(bench|press|push)/i, 'triceps'],
+  [/\b(bench dip|jm (bench )?press|skull ?crusher|pushdown|push down|kick ?back|french press|press franc[eé]s|overhead extension|extensi[oó]n de tr[ií]ceps)\b/i, 'triceps'],
+  [/\b(preacher|hammer curl|concentration curl|spider curl|b[ií]ceps)\b/i, 'biceps'],
   [/\bpull ?over\b/i, 'back'],
   [/\b(leg raise|knee raise|toes to bar|hanging|v-?up|sit[- ]?up|situp|pallof|roll ?out|rollerout|side bend|twist|bicycle|air bike|mountain climber|dead ?bug|bird ?dog|hollow)\b/i, 'core'],
-  [/\b(calf raise|leg curl|leg extension|leg press|hip thrust|hip extension|glute bridge|good morning|step[- ]?up|rack pull|deadlift|peso muerto)\b/i, 'legs'],
+  [/\b(leg curl|nordic|good morning|romanian|rdl|stiff[- ]?leg|curl femoral|femoral|isquios?|isquiotibiales?)\b/i, 'hamstrings'],
+  [/\b(calf raise|hip thrust|hip extension|glute bridge|gemelos?|pantorrillas?)\b/i, 'glutes'],
+  [/\b(leg extension|leg press|hack squat|step[- ]?up|extensi[oó]n de cu[aá]driceps|cu[aá]driceps?)\b/i, 'quads'],
+  [/\b(deadlift|peso muerto|rack pull)\b/i, 'hamstrings'],
   [/\b(lateral raise|front raise|rear delt|reverse fly|face pull|upright row|overhead press|military press|arnold press|shoulder press|y-?raise|thruster|snatch)\b/i, 'shoulders'],
-  [/\b(skull ?crusher|preacher|pushdown|push down|kick ?back)\b/i, 'arms'],
   [/\b(chest press|chest fly|pec deck|cross ?over|press de banca)\b/i, 'chest'],
 
   // 2. Movement names, which identify a lift more reliably than a body part does.
-  [/\b(squat|lunge|sentadilla|zancada|prensa)\b/i, 'legs'],
+  [/\b(squat|lunge|sentadilla|zancada|prensa)\b/i, 'quads'],
   [/\b(row|pull[- ]?up|pullup|chin[- ]?up|pulldown|pull down|shrug|remo|dominadas?|jal[oó]n)\b/i, 'back'],
   [/\b(bench|fly|flye|dip|push[- ]?up|pushup|fondos)\b/i, 'chest'],
-  [/\b(curl)\b/i, 'arms'],
+  [/\b(curl)\b/i, 'biceps'],
   [/\b(crunch|plank|plancha|abdominales?)\b/i, 'core'],
 
   // 3. Bare body-part words, last because they appear inside other lifts' names.
   [/\b(chest|pec|pectorals?|pecho)\b/i, 'chest'],
   [/\b(back|lats?|traps?|espalda|dorsal)\b/i, 'back'],
-  [/\b(legs?|quads?|hamstrings?|glutes?|calf|calves|pierna|cu[aá]driceps?|femoral|gemelos?|gl[uú]teos?)\b/i, 'legs'],
+  [/\b(hamstrings?)\b/i, 'hamstrings'],
+  [/\b(glutes?|calf|calves|gl[uú]teos?)\b/i, 'glutes'],
+  [/\b(legs?|quads?|pierna)\b/i, 'quads'],
   [/\b(shoulders?|delts?|deltoids?|hombros?|deltoides?)\b/i, 'shoulders'],
-  [/\b(biceps?|forearms?|antebrazo|b[ií]ceps?|tr[ií]ceps?)\b/i, 'arms'],
+  [/\b(biceps?)\b/i, 'biceps'],
   [/\b(abs?|core|obliques?|abdominal|oblicuos?|waist)\b/i, 'core'],
 ];
 
+/**
+ * Target first — it names the muscle — and category only when there is no
+ * target. Cardio and neck resolve to nothing through both.
+ */
 export function groupFromExercise(exercise: Exercise | undefined): MuscleGroupId | null {
   if (!exercise) return null;
-  return (
-    CATEGORY_TO_GROUP[exercise.category?.toLowerCase()] ??
-    TARGET_TO_GROUP[exercise.target?.toLowerCase()] ??
-    null
-  );
+  const category = exercise.category?.toLowerCase();
+  if (category === 'cardio' || category === 'neck') return null;
+  const group = TARGET_TO_GROUP[exercise.target?.toLowerCase()] ?? CATEGORY_TO_GROUP[category] ?? null;
+  // The dataset files every squat, lunge and deadlift under `glutes`. They are
+  // the lifts people count as their quad and hamstring work, so a glutes entry
+  // whose name is clearly one of those moves to that group; hip thrusts,
+  // bridges and kickbacks stay.
+  if (group === 'glutes') {
+    const byName = groupFromName(exercise.name);
+    if (byName === 'quads' || byName === 'hamstrings') return byName;
+  }
+  return group;
 }
 
 export function groupFromName(name: string): MuscleGroupId | null {

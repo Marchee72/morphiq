@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { Exercise } from '../../core/entities/Exercise';
 import type { CatalogItemVM, MuscleGroupId } from '../types';
 import { matchesGroup } from '../derive/catalog';
-import { MUSCLE_GROUPS } from '../derive/muscleLoad';
+import { groupFromExercise, MUSCLE_GROUPS } from '../derive/muscleLoad';
 import { useAppData } from './useAppData';
 
 export const SEARCH_LIMIT = 60;
@@ -76,20 +76,17 @@ export function useExerciseSearch(): ExerciseSearch {
     return favouritesOnly ? mapped.filter(item => item.favorite) : mapped;
   }, [matches, catalog, favouritesOnly]);
 
-  // All six computed up front rather than memoised behind a closure: there are
-  // only six, and a lazily-filled cache would be a mutation after render.
+  // Every group counted in one pass over the catalogue, up front: a lazily
+  // filled cache would be a mutation after render.
   const groupCounts = useMemo(() => {
-    const counts = new Map<MuscleGroupId, number>();
-    for (const id of MUSCLE_GROUPS) {
-      counts.set(
-        id,
-        catalog.facets.category
-          .filter(bucket => matchesGroup({ category: bucket.id } as Exercise, id))
-          .reduce((total, bucket) => total + bucket.count, 0),
-      );
+    const counts = new Map<MuscleGroupId, number>(MUSCLE_GROUPS.map(id => [id, 0]));
+    if (!catalog.ready) return counts;
+    for (const exercise of catalog.search('')) {
+      const id = groupFromExercise(exercise);
+      if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     return counts;
-  }, [catalog.facets]);
+  }, [catalog]);
 
   const countForGroup = useCallback(
     (id: MuscleGroupId) => groupCounts.get(id) ?? 0,

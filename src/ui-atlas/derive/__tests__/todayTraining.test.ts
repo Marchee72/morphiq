@@ -138,10 +138,10 @@ describe('nextMuscleFocus', () => {
   it('picks the group furthest behind its weekly target', () => {
     const focus = nextMuscleFocus([
       row({ group: 'chest', sets: 14, target: 16 }),
-      row({ group: 'legs', labelKey: 'muscle.legs', sets: 2, target: 16 }),
-      row({ group: 'arms', labelKey: 'muscle.arms', sets: 9, target: 12 }),
+      row({ group: 'quads', labelKey: 'muscle.quads', sets: 2, target: 16 }),
+      row({ group: 'biceps', labelKey: 'muscle.biceps', sets: 9, target: 12 }),
     ]);
-    expect(focus?.group).toBe('legs');
+    expect(focus?.group).toBe('quads');
   });
 
   it('measures the gap in proportion, not in raw sets', () => {
@@ -165,7 +165,7 @@ describe('nextMuscleFocus', () => {
     // Anything else dresses a lowest-of-six pick up as advice.
     expect(nextMuscleFocus([
       row({ group: 'chest', sets: 16, target: 16 }),
-      row({ group: 'legs', labelKey: 'muscle.legs', sets: 20, target: 16 }),
+      row({ group: 'quads', labelKey: 'muscle.quads', sets: 20, target: 16 }),
     ])).toBeNull();
   });
 });
@@ -186,10 +186,10 @@ describe('freshGroups', () => {
   it('returns groups that have never been trained', () => {
     const fresh = freshGroups([
       freshRow('chest', 2),
-      freshRow('legs', null),
+      freshRow('quads', null),
       freshRow('back', null),
     ], NOW);
-    expect(fresh.map(f => f.group)).toEqual(['legs', 'back']);
+    expect(fresh.map(f => f.group)).toEqual(['quads', 'back']);
   });
 
   it('returns groups past their recovery window', () => {
@@ -211,16 +211,16 @@ describe('freshGroups', () => {
   it('sorts by longest rest first', () => {
     const fresh = freshGroups([
       freshRow('chest', 50),
-      freshRow('legs', 200), // legs have a 72h window, 200h is way past
+      freshRow('quads', 200), // quads have a 72h window, 200h is way past
     ], NOW);
-    expect(fresh[0].group).toBe('legs');
+    expect(fresh[0].group).toBe('quads');
   });
 
   it('returns at most two groups', () => {
     const fresh = freshGroups([
       freshRow('chest', null),
       freshRow('back', null),
-      freshRow('legs', null),
+      freshRow('quads', null),
     ], NOW);
     expect(fresh).toHaveLength(2);
   });
