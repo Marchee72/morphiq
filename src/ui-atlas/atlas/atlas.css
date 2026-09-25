@@ -4506,6 +4506,76 @@ button.at-routine-item { cursor: pointer; }
 .at-buddy-hero-top em { font-style: normal; font-size: 13px; font-weight: 600; }
 .at-buddy-hero-actions { display: flex; gap: 8px; }
 .at-buddy-hero-actions .at-today-cta { flex: 1; justify-content: center; }
+/* The hero's second button, translucent on the ember. */
+.at-buddy-hero-ghost {
+  height: 48px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* No partners yet: three overlapping faces, the last one an invitation. */
+.at-buddy-empty-faces { display: flex; }
+
+.at-buddy-empty-faces i {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px #d2461b;
+  background: linear-gradient(140deg, #ffb020, #ff6a2b);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.at-buddy-empty-faces i + i { margin-left: -14px; }
+.at-buddy-empty-faces i:nth-child(2) { background: linear-gradient(140deg, #c6f24e, #7fb63a); }
+.at-buddy-empty-faces i:nth-child(3) { background: rgba(255, 255, 255, 0.18); }
+.at[data-mode='dark'] .at-buddy-empty-faces i { box-shadow: 0 0 0 3px #b23a17; }
+
+.at-buddy-empty-title { margin: 0; font-size: 26px; font-weight: 800; line-height: 1.1; }
+.at-buddy-empty-body { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.45; }
+
+.at-card.at-buddy-sees { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.at-buddy-sees b { font-size: 15px; font-weight: 800; }
+.at-buddy-sees span { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-weight: 600; }
+
+.at-buddy-sees i {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--at-tonal);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.at-buddy-sees i[data-yes='true'] { background: var(--lime-bg); color: var(--sage); }
+
+/* Presence above, notifications below, one card. */
+.at-buddy-split { display: block; border-top: 1px solid var(--hair); margin: 2px 0; }
+
+/* A partner's actions: tonal pills, the removal in the danger fill. */
+.at-buddy-card .at-chip {
+  border-color: transparent;
+  background: var(--d-tonal);
+  box-shadow: var(--d-soft);
+  color: var(--cocoa);
+  font-weight: 700;
+}
+
+.at-buddy-card .at-chip[data-danger='true'] { background: var(--d-danger); box-shadow: none; color: #fff; }
+
 
 .at-buddy-actions {
   display: flex;

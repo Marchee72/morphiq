@@ -146,6 +146,14 @@ describe('the partners hub', () => {
     expect(screen.getByText(/I have a code/i)).toBeTruthy();
   });
 
+  it('says what a partner would see of you before you have one', async () => {
+    renderBuddies([]);
+    await waitFor(() => expect(text()).toContain('What they see of you'));
+    expect(text()).toContain('Your weights, body and meals: never');
+    // Privacy switches are for someone who has partners to hide from.
+    expect(text()).not.toContain('Show when I train');
+  });
+
   it('lists a partner with the date the friendship started', async () => {
     renderBuddies([link()]);
     await waitFor(() => expect(text()).toContain('Ana'));

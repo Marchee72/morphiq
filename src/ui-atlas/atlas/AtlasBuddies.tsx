@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Dumbbell, MessageCircle, MoreHorizontal, PauseCircle, PlayCircle, Trash2, UserPlus, Users } from 'lucide-react';
+import {
+  Check, Dumbbell, MessageCircle, Minus, MoreHorizontal, PauseCircle, PlayCircle, Trash2, UserPlus, Users,
+} from 'lucide-react';
 import { useT } from '../../i18n';
 import { useStore } from '../../presentation/state/store';
 import { useSocial } from '../data/useSocial';
-import { presenceProgress, type BuddyRowVM } from '../derive/social';
+import { presenceProgress, type BuddyRowVM, type PresenceRowVM } from '../derive/social';
+import { useElapsedSeconds } from '../components/useTicker';
 import { AtlasSheet } from './AtlasSheet';
 import { AtlasStates } from './AtlasStates';
 import { AtlasSwitch } from './AtlasField';
@@ -101,7 +104,7 @@ export const AtlasBuddies: React.FC = () => {
           <small>{activeProfile ? t('buddy.forProfile', { name: activeProfile.name }) : 'MorphIQ'}</small>
           <h1>{t('buddy.title')}</h1>
         </div>
-        {available && (
+        {available && rows.length > 0 && (
           <button className="at-buddy-invite-round" onClick={() => setPanel('invite')} aria-label={t('buddy.invite')}>
             <UserPlus size={20} />
           </button>
@@ -126,30 +129,13 @@ export const AtlasBuddies: React.FC = () => {
             {training.map(live => {
               const row = rows.find(r => r.linkId === live.linkId);
               return (
-                <section key={live.profileId} className="at-buddy-hero at-enter" aria-label={t('buddy.trainingNow')}>
-                  <div className="at-today-glow" aria-hidden="true" />
-                  <div className="at-buddy-hero-top">
-                    <AtlasBuddyAvatar name={live.name} picture={live.picture} live size={52} />
-                    <span>
-                      <small>{t('buddy.trainingNow')}</small>
-                      <b>{live.name || '—'}</b>
-                      <em>{presenceProgress(live, t)}</em>
-                    </span>
-                  </div>
-                  <div className="at-buddy-hero-actions">
-                    {!shared && (
-                      <button className="at-today-cta" onClick={() => trainWith(live.linkId, live.sharedSessionId)}>
-                        <Dumbbell size={16} /> {t('buddy.together')}
-                      </button>
-                    )}
-                    {row && (
-                      <button className="at-hub-another" onClick={() => setChatting(row)}
-                        aria-label={t('buddy.message', { name: live.name || '—' })}>
-                        <MessageCircle size={18} />
-                      </button>
-                    )}
-                  </div>
-                </section>
+                <LiveHero
+                  key={live.profileId}
+                  live={live}
+                  canJoin={!shared}
+                  onTogether={() => trainWith(live.linkId, live.sharedSessionId)}
+                  onMessage={row ? () => setChatting(row) : undefined}
+                />
               );
             })}
 
@@ -163,7 +149,28 @@ export const AtlasBuddies: React.FC = () => {
             )}
 
             {ready && rows.length === 0 ? (
-              <AtlasStates icon={<Users size={20} />} title={t('buddy.none')} body={t('buddy.noneSub')} />
+              <>
+                {/* No partners yet: the two ways to get one, and what a partner
+                    would see of you — the question that stops people inviting. */}
+                <section className="at-buddy-hero at-enter" aria-label={t('buddy.todayInvite')}>
+                  <div className="at-today-glow" aria-hidden="true" />
+                  <div className="at-buddy-empty-faces" aria-hidden="true">
+                    <i /><i /><i><UserPlus size={22} /></i>
+                  </div>
+                  <h2 className="at-buddy-empty-title">{t('buddy.todayInvite')}</h2>
+                  <p className="at-buddy-empty-body">{t('buddy.emptyBody')}</p>
+                  <div className="at-buddy-hero-actions">
+                    <button className="at-today-cta" onClick={() => setPanel('invite')}>{t('buddy.invite')}</button>
+                    <button className="at-buddy-hero-ghost" onClick={() => setPanel('redeem')}>{t('buddy.redeem')}</button>
+                  </div>
+                </section>
+                <section className="at-card at-buddy-sees" aria-label={t('buddy.seesTitle')}>
+                  <b>{t('buddy.seesTitle')}</b>
+                  <span><i data-yes="true"><Check size={15} strokeWidth={3} /></i>{t('buddy.seesTraining')}</span>
+                  <span><i data-yes="true"><Check size={15} strokeWidth={3} /></i>{t('buddy.seesProgress')}</span>
+                  <span><i><Minus size={15} strokeWidth={3} /></i>{t('buddy.seesNever')}</span>
+                </section>
+              </>
             ) : (
               <>
                 <div className="at-buddies-head">
@@ -241,7 +248,7 @@ export const AtlasBuddies: React.FC = () => {
             )}
 
             {/* What partners can see of you, and whether they can reach you. */}
-            {activeProfile && (
+            {activeProfile && rows.length > 0 && (
               <div className="at-card at-settings-stack">
                 <AtlasSwitch
                   label={t('buddy.presenceToggle')}
@@ -251,6 +258,7 @@ export const AtlasBuddies: React.FC = () => {
                 <small className="at-field-hint">{t('buddy.presenceSub')}</small>
                 {/* Push registration lives on the device, not the profile, so it
                     is read from the device rather than from the server. */}
+                <span className="at-buddy-split" aria-hidden="true" />
                 {activeProfile.id && (isPushSupported() ? (
                   <AtlasSwitch
                     label={t('buddy.pushToggle')}
@@ -268,6 +276,7 @@ export const AtlasBuddies: React.FC = () => {
               </div>
             )}
 
+            {rows.length > 0 && (
             <div className="at-buddy-doors">
               <button className="at-btn" onClick={() => setPanel('invite')}>
                 <UserPlus size={15} /> {t('buddy.invite')}
@@ -276,6 +285,7 @@ export const AtlasBuddies: React.FC = () => {
                 {t('buddy.redeem')}
               </button>
             </div>
+            )}
           </>
         )}
       </div>
@@ -320,5 +330,41 @@ export const AtlasBuddies: React.FC = () => {
         <p className="at-field-hint">{t('buddy.removeConfirmSub')}</p>
       </AtlasSheet>
     </>
+  );
+};
+
+/** A partner training right now: who, what, how long, and the two ways in. */
+const LiveHero: React.FC<{
+  live: PresenceRowVM;
+  canJoin: boolean;
+  onTogether: () => void;
+  onMessage?: () => void;
+}> = ({ live, canJoin, onTogether, onMessage }) => {
+  const { t, fmt } = useT();
+  const elapsed = useElapsedSeconds(live.startedAt);
+  return (
+    <section className="at-buddy-hero at-enter" aria-label={t('buddy.trainingNow')}>
+      <div className="at-today-glow" aria-hidden="true" />
+      <div className="at-buddy-hero-top">
+        <AtlasBuddyAvatar name={live.name} picture={live.picture} live size={52} />
+        <span>
+          <small>{t('buddy.trainingNow')}</small>
+          <b>{live.name || '—'}</b>
+          <em>{presenceProgress(live, t)} · {fmt.duration(elapsed)}</em>
+        </span>
+      </div>
+      <div className="at-buddy-hero-actions">
+        {canJoin && (
+          <button className="at-today-cta" onClick={onTogether}>
+            <Dumbbell size={16} /> {t('buddy.together')}
+          </button>
+        )}
+        {onMessage && (
+          <button className="at-hub-another" onClick={onMessage} aria-label={t('buddy.message', { name: live.name || '—' })}>
+            <MessageCircle size={18} />
+          </button>
+        )}
+      </div>
+    </section>
   );
 };

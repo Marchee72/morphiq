@@ -778,6 +778,11 @@ export const es: Translations = {
 
   // -- Compañeros de entreno -------------------------------------
   'buddy.title': 'Gymbros',
+  'buddy.emptyBody': 'Mandale un código a un amigo. Van a ver cuándo entrena el otro, chatear y entrenar juntos, cada uno con sus pesos.',
+  'buddy.seesTitle': 'Qué ven de vos',
+  'buddy.seesTraining': 'Cuándo estás entrenando, si lo activás',
+  'buddy.seesProgress': 'El ejercicio y la serie en la que vas',
+  'buddy.seesNever': 'Tus pesos, tu cuerpo y tus comidas: nunca',
   'buddy.trainingNow': 'Entrenando ahora',
   'buddy.yourPartners': 'Tus compañeros',
   'buddy.message': 'Mensaje a {name}',
@@ -828,12 +833,12 @@ export const es: Translations = {
 
   // Gestionar
   'buddy.manage': 'Gestionar',
-  'buddy.block': 'Pausar a este compañero',
+  'buddy.block': 'Pausar',
   'buddy.blockSub': 'Dejáis de veros los dos hasta que lo deshagas.',
   'buddy.blockedByMe': 'Lo has pausado',
   'buddy.blockedByThem': 'En pausa',
   'buddy.unblock': 'Reanudar',
-  'buddy.remove': 'Eliminar compañero',
+  'buddy.remove': 'Quitar',
   'buddy.removeConfirm': '¿Eliminar a {name}?',
   'buddy.removeConfirmSub': 'Se borra tu copia de la conversación y dejáis de entrenar juntos. Su copia se queda con él. Volver a añadirlo pide un código nuevo.',
   'buddy.removeAction': 'Eliminar',

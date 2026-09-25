@@ -781,6 +781,11 @@ export const en = {
 
   // -- Training partners -----------------------------------------
   'buddy.title': 'Gymbros',
+  'buddy.emptyBody': 'Send a friend a code. You will each see when the other trains, chat, and train together — each at your own weights.',
+  'buddy.seesTitle': 'What they see of you',
+  'buddy.seesTraining': 'When you are training, if you turn it on',
+  'buddy.seesProgress': 'The exercise and the set you are on',
+  'buddy.seesNever': 'Your weights, body and meals: never',
   'buddy.trainingNow': 'Training now',
   'buddy.yourPartners': 'Your partners',
   'buddy.message': 'Message {name}',
