@@ -336,11 +336,11 @@
 .at-today-next { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; line-height: 1.25; }
 .at-today-next b { font-weight: 800; }
 
-/* Sticky with a negative top (set from the header's measured height): it
-   scrolls until only the start strip is left, then holds over the page. */
-.at-today-sticky { position: sticky; z-index: 6; }
-
-.at-today-upper { display: flex; flex-direction: column; gap: 16px; }
+/* The week folds away on scroll (its height follows the scroll position). It
+   carries its own gap as a margin inside the fold, cancelled by the fold's
+   negative one, so a closed fold leaves no gap behind. */
+.at-today-fold { overflow: hidden; margin-top: -16px; }
+.at-today-fold > section { margin-top: 16px; }
 
 /* "Up next" and the collapsed week share one cell and cross-fade. */
 .at-today-ctaside { flex: 1; min-width: 0; display: grid; }

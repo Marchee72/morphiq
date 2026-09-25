@@ -243,7 +243,8 @@ export const AtlasToday: React.FC = () => {
   }
 
   const bodyFat = metricByKey(body.metrics, 'bodyFat');
-  if (bodyFat?.value != null) {
+  // A scale without impedance writes 0 rather than nothing: not a reading.
+  if (bodyFat?.value != null && bodyFat.value > 0) {
     moments.push({
       key: 'bodyFat',
       icon: <Percent size={17} />,

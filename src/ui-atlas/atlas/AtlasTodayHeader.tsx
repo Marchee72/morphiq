@@ -1,12 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef } from 'react';
-import { motion, useMotionValue, useTransform } from 'motion/react';
+import { motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { ArrowRight, Check, Flame, Play } from 'lucide-react';
 import { useT } from '../../i18n';
 import type { DayCell } from '../types';
-
-/** The float shadow, for once the header has collapsed onto the page. */
-const FLOAT = '0 10px 24px rgba(90, 20, 5, 0.3)';
-const NO_FLOAT = '0 0 0 rgba(90, 20, 5, 0)';
 
 /**
  * Today's header: ember, edge to edge from the very top, carrying the week.
@@ -15,12 +11,11 @@ const NO_FLOAT = '0 0 0 rgba(90, 20, 5, 0)';
  * says who and when, where the week stands (sessions against the goal, the
  * seven days, what they weighed) and the one thing to do next.
  *
- * On scroll it minimises rather than leaving: it is sticky with a negative
- * `top`, so it scrolls with the page until only its last strip — the start
- * button — is left, and holds there. The part scrolling under the top fades as
- * it goes, and in the strip "up next" hands over to the week as seven dots, so
- * the collapsed header still says where the week stands. All of it follows the
- * scroll position, so scrolling back undoes it.
+ * On scroll it minimises and stays in the page: the week section folds away
+ * as you scroll (its height follows the scroll position), leaving a compact
+ * card — the greeting and the start button, with "up next" handing over to the
+ * week as seven dots. Nothing sticks; once compact it scrolls on with the page,
+ * and scrolling back unfolds it.
  */
 export const AtlasTodayHeader: React.FC<{
   now: Date;
@@ -44,7 +39,8 @@ export const AtlasTodayHeader: React.FC<{
 }> = props => {
   const { t, fmt } = useT();
   const ref = useRef<HTMLDivElement>(null);
-  const ctaRef = useRef<HTMLDivElement>(null);
+  const reduce = useReducedMotion();
+  const weekRef = useRef<HTMLElement>(null);
 
   // The scroller is the shell's, not ours: follow it by listening rather than
   // owning it, and keep the position in a motion value so scrolling renders
@@ -59,53 +55,51 @@ export const AtlasTodayHeader: React.FC<{
     return () => scroller.removeEventListener('scroll', read);
   }, [scrollY]);
 
-  // How far the header travels before it holds: everything above the start
-  // button's strip. Measured, because the header's height depends on what it
-  // carries (a live session, a week with or without numbers).
-  const collapse = useMotionValue(0);
-  const top = useTransform(collapse, c => -c);
+  // How much folds away: the week section's natural height, measured, since it
+  // depends on what the week holds. Until measured the fold stays open.
+  const weekHeight = useMotionValue(0);
   useLayoutEffect(() => {
-    const measure = () => {
-      const header = ref.current;
-      const cta = ctaRef.current;
-      if (!header || !cta) return;
-      collapse.set(Math.max(0, cta.getBoundingClientRect().top - header.getBoundingClientRect().top - 12));
-    };
+    const week = weekRef.current;
+    if (!week) return;
+    // Plus the 16px the section sits below the fold's top (see atlas.css).
+    const measure = () => weekHeight.set(week.offsetHeight + 16);
     measure();
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(measure);
-    if (ref.current) observer.observe(ref.current);
+    observer.observe(week);
     return () => observer.disconnect();
-  }, [collapse, props.live, props.workouts]);
+  }, [weekHeight]);
 
-  const progress = useTransform([scrollY, collapse], ([y, c]: number[]) => (c > 0 ? Math.min(1, y / c) : 0));
-  const upperOpacity = useTransform(progress, [0, 0.8], [1, 0]);
+  const progress = useTransform([scrollY, weekHeight], ([y, h]: number[]) => (h > 0 ? Math.min(1, y / h) : 0));
+  const foldHeight = useTransform([scrollY, weekHeight], ([y, h]: number[]) => (h > 0 ? Math.max(0, h - y) : 'auto'));
+  const foldOpacity = useTransform(progress, [0, 0.7], [1, 0]);
   const nextOpacity = useTransform(progress, [0.75, 0.95], [1, 0]);
   const miniOpacity = useTransform(progress, [0.8, 1], [0, 1]);
-  const shadow = useTransform(progress, p => (p >= 0.99 ? FLOAT : NO_FLOAT));
 
   // Tonnage only when there is some: a week of runs is not "0.0 t".
   const tonnes = props.volumeKg > 0 ? `${fmt.n(props.volumeKg / 1000, 1)} ${t('unit.tonnes')}` : null;
 
   return (
-    <motion.div ref={ref} className="at-today-sticky" style={{ top }}>
-      <motion.header className="at-today-head" style={{ boxShadow: shadow }}>
+    <div ref={ref}>
+      <header className="at-today-head">
         <div className="at-today-glow" aria-hidden="true" />
         <div className="at-today-in">
-          <motion.div className="at-today-upper" style={{ opacity: upperOpacity }}>
-            <div className="at-today-top">
-              <div>
-                <small>{fmt.weekdayShort(props.now)}, {fmt.shortDate(props.now)}</small>
-                <h1>{props.greeting}</h1>
-              </div>
-              <button className="at-today-avatar" onClick={props.onSettings} aria-label={t('nav.settings')}>
-                {props.initial}
-              </button>
+          <div className="at-today-top">
+            <div>
+              <small>{fmt.weekdayShort(props.now)}, {fmt.shortDate(props.now)}</small>
+              <h1>{props.greeting}</h1>
             </div>
+            <button className="at-today-avatar" onClick={props.onSettings} aria-label={t('nav.settings')}>
+              {props.initial}
+            </button>
+          </div>
 
-            {props.live && <p className="at-today-live">● {props.live}</p>}
+          {props.live && <p className="at-today-live">● {props.live}</p>}
 
-            <section className="at-today-week" aria-label={t('today.weekSummary')}>
+          {/* Folds away as the page scrolls. The fold's gap to the start button
+              goes with it, so the compact card is not left with a hole. */}
+          <motion.div className="at-today-fold" style={reduce ? undefined : { height: foldHeight, opacity: foldOpacity }}>
+            <section className="at-today-week" ref={weekRef} aria-label={t('today.weekSummary')}>
               <div className="at-today-week-head">
                 <small>{t('today.weekSummary')}</small>
                 {props.streak > 0 && (
@@ -141,7 +135,7 @@ export const AtlasTodayHeader: React.FC<{
             </section>
           </motion.div>
 
-          <div className="at-today-ctarow" ref={ctaRef}>
+          <div className="at-today-ctarow">
             <button className="at-today-cta" onClick={props.onCta}>
               {props.live ? <ArrowRight size={17} /> : <Play size={16} fill="currentColor" />}
               {props.ctaLabel}
@@ -165,7 +159,7 @@ export const AtlasTodayHeader: React.FC<{
             </span>
           </div>
         </div>
-      </motion.header>
-    </motion.div>
+      </header>
+    </div>
   );
 };
