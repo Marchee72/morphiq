@@ -247,6 +247,15 @@ export const en = {
   'feeling.low_energy': 'Low Energy',
 
   // -- Train ----------------------------------------------------
+  'train.suggestKicker': 'Train today',
+  'train.suggestDaysOne': '{days} days since you trained it',
+  'train.suggestDaysMany': '{days} days since you trained them',
+  'train.suggestFits': 'fits',
+  'train.suggestStart': 'Start with these',
+  'train.suggestAnother': 'Another suggestion',
+  'train.freeSession': 'Free session',
+  'train.repeatLast': 'Repeat last',
+  'train.newRecord': 'New',
   'train.title': 'Train',
   'train.exerciseOf': 'Exercise {n} of {total}',
   'train.setOf': 'Set {n} of {total}',

@@ -48,9 +48,9 @@ describe('Train', () => {
 
   it('shows the gym hub when nothing is running', () => {
     renderScreen('train', { data: 'rich' });
-    // The hero used to promise an empty session. It now opens the routine
-    // chooser when there is one to choose from, so the label is just "start".
-    expect(screen.getAllByRole('button', { name: /^(start|empezar|iniciar)$/i }).length).toBeGreaterThan(0);
+    // Led by what to train, with a free session one tap away beside it.
+    expect(screen.getByRole('button', { name: /free session|sesión libre/i })).toBeTruthy();
+    expect(document.querySelector('.at-hub-head')).toBeTruthy();
   });
 
   it('shows the live session once one is running', () => {

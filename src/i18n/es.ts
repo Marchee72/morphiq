@@ -245,6 +245,15 @@ export const es: Translations = {
   'feeling.low_energy': 'Poca energía',
 
   // -- Entrenar --------------------------------------------------
+  'train.suggestKicker': 'Hoy toca',
+  'train.suggestDaysOne': '{days} días sin entrenarlo',
+  'train.suggestDaysMany': '{days} días sin entrenarlos',
+  'train.suggestFits': 'encaja con',
+  'train.suggestStart': 'Empezar así',
+  'train.suggestAnother': 'Otra sugerencia',
+  'train.freeSession': 'Sesión libre',
+  'train.repeatLast': 'Repetir la última',
+  'train.newRecord': 'Nuevo',
   'train.title': 'Entrenar',
   'train.exerciseOf': 'Ejercicio {n} de {total}',
   'train.setOf': 'Serie {n} de {total}',

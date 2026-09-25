@@ -8,7 +8,7 @@ import type { CatalogSlice, AppData } from './types';
 import { AppDataContext } from './contexts';
 import { buildBody } from '../derive/bodyMetrics';
 import { buildProfile } from '../derive/profile';
-import { buildMuscleLoad } from '../derive/muscleLoad';
+import { buildMuscleLoad, groupFromExercise, groupFromName } from '../derive/muscleLoad';
 import { buildNutrition } from '../derive/nutrition';
 import { annotatePrs, bestBefore, buildExerciseUsage, buildPersonalRecords, normalizeName } from '../derive/records';
 import { buildStreak } from '../derive/streak';
@@ -16,6 +16,7 @@ import { buildHistory, buildWeeklyStats, buildWeeklyVolume } from '../derive/his
 import { buildSessionExercises, buildSessionTotals, findCursor } from '../derive/session';
 import { toCatalogItem } from '../derive/catalog';
 import { buildExerciseHistory } from '../derive/exerciseHistory';
+import { buildGroupHistory, suggestTraining as pickSuggestion } from '../derive/trainSuggestion';
 import { buildExerciseStats, type StatWindow } from '../derive/exerciseStats';
 import { buildSessionDetail } from '../derive/sessionDetail';
 import { buildSteps } from '../derive/steps';
@@ -283,6 +284,22 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     toItem: exercise => toCatalogItem(exercise, usage, favorites, lang),
   }), [catalog, usage, favorites, lang]);
 
+  const groupHistory = useMemo(
+    () => buildGroupHistory(setsForDerivation, resolveExerciseByName),
+    [setsForDerivation, resolveExerciseByName],
+  );
+
+  const suggestTraining = useCallback(
+    (offset = 0) => pickSuggestion(
+      groupHistory,
+      savedRoutines,
+      item => groupFromExercise(resolveExerciseByName(item)) ?? groupFromName(item.exerciseName),
+      at,
+      offset,
+    ),
+    [groupHistory, savedRoutines, resolveExerciseByName, at],
+  );
+
   const exerciseHistory = useCallback(
     (exerciseName: string) => buildExerciseHistory(setsForDerivation, exerciseName),
     [setsForDerivation],
@@ -318,9 +335,10 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     catalog: catalogSlice,
     coach: { thread: chatHistory, isLoading: isAiLoading },
     exerciseHistory,
+    suggestTraining,
     exerciseStats,
     sessionDetail,
-  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, steps, wellness, catalogSlice, chatHistory, isAiLoading, exerciseHistory, exerciseStats, sessionDetail]);
+  }), [activeProfile, profile, body, session, sessionExercises, sessionTotals, cursor, training, nutrition, steps, wellness, catalogSlice, chatHistory, isAiLoading, exerciseHistory, suggestTraining, exerciseStats, sessionDetail]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 };

@@ -845,6 +845,170 @@
   .at-panel-gauge path + path, .at-panel-bars i, .at-panel-stages i { animation: none; transition: none; }
 }
 
+/* ---------- train tab, no session ----------
+   Led by the suggestion: an ember card saying what is due and the lifts to do
+   it with, then three quick ways in, routines, records and history. */
+
+.at-hub-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 22px 18px 14px;
+}
+
+.at-hub-head small { font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.at-hub-head h1 { margin: 2px 0 0; font-size: 34px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+
+.at-hub-week { list-style: none; margin: 0 0 4px; padding: 0; display: flex; gap: 5px; }
+
+.at-hub-week li {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  background: var(--at-tonal);
+  color: var(--muted);
+}
+
+.at-hub-week li[data-done='true'] { background: var(--lime); color: var(--lime-ink); }
+.at-hub-week li[data-today='true'] { background: transparent; box-shadow: inset 0 0 0 2px var(--cocoa); color: var(--cocoa); }
+
+.at-hub-suggest {
+  position: relative;
+  overflow: hidden;
+  margin: 0 18px;
+  padding: 18px;
+  border-radius: 28px;
+  background: #d2461b;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.at[data-mode='dark'] .at-hub-suggest { background: var(--grad-hero); }
+.at-hub-suggest > *:not(.at-today-glow) { position: relative; }
+.at-hub-suggest > small { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.at-hub-suggest h2 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+.at-hub-suggest p { margin: 0; font-size: 13px; font-weight: 600; }
+.at-hub-suggest p b { font-weight: 800; }
+
+.at-hub-suggest ol {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.at-hub-suggest li { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; font-weight: 700; }
+.at-hub-suggest li span:last-child { opacity: 0.85; flex-shrink: 0; }
+
+.at-hub-suggest-actions { display: flex; gap: 10px; margin-top: 4px; }
+.at-hub-suggest-actions .at-today-cta { flex: 1; justify-content: center; }
+
+.at-hub-another {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.at-hub-quick {
+  margin: 14px 18px 0;
+  display: grid;
+  /* Two or three, however many there are, in equal columns. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+.at-hub-quick button {
+  min-height: 92px;
+  padding: 14px 8px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
+  color: var(--cocoa);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.at-hub-quick button:active { transform: scale(0.97); }
+
+.at-hub-quick i {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cocoa);
+}
+
+.at-hub-quick i[data-tone='primary'] { background: var(--d-grad); box-shadow: var(--d-hi); color: #fff; }
+.at-hub-quick i[data-tone='amber'] { background: color-mix(in srgb, var(--amber) 26%, transparent); }
+.at-hub-quick i[data-tone='coral'] { background: color-mix(in srgb, var(--coral) 26%, transparent); }
+
+.at-card.at-hub-records { padding: 4px 16px; }
+
+.at-hub-record { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+.at-hub-record + .at-hub-record { border-top: 1px solid var(--hair); }
+
+.at-hub-record > i {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--lime) 30%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.at-hub-record > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.at-hub-record b { font-size: 15px; font-weight: 800; }
+.at-hub-record small { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+
+.at-hub-record em {
+  flex-shrink: 0;
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--at-tonal);
+  color: var(--muted);
+}
+
+.at-hub-record em[data-fresh='true'] { background: var(--lime-bg); color: var(--sage); }
+
 /* ---------- today: what you have trained ----------
    Sits between the hero and the rail. The hero says what is running; this says
    what the day has actually contained, which survives the session ending.

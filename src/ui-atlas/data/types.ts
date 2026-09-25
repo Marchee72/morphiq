@@ -8,6 +8,7 @@ import type { BuddyDayVM, BuddyRowVM, PresenceRowVM } from '../derive/social';
 import type { ExerciseFilters, FacetCounts } from '../../data/exercises/ExerciseCatalog';
 import type { WeeklyStatsVM } from '../derive/history';
 import type { ExerciseSessionVM } from '../derive/exerciseHistory';
+import type { TrainSuggestionVM } from '../derive/trainSuggestion';
 import type { ExerciseStatsVM, StatWindow } from '../derive/exerciseStats';
 import type { WellnessTodayVM, WellnessTrendVM } from '../derive/wellness';
 import type { SessionDetailVM } from '../derive/sessionDetail';
@@ -71,6 +72,11 @@ export interface AppData {
    * all 1,324 up front would be absurd.
    */
   exerciseHistory(exerciseName: string): ExerciseSessionVM[];
+  /**
+   * What to train today, and the lifts to do it with. A function because the
+   * Train tab rotates through the options ("another suggestion").
+   */
+  suggestTraining(offset?: number): TrainSuggestionVM | null;
   /**
    * The same history measured rather than listed — trend, volume, rep-range
    * bests. On demand for the same reason `exerciseHistory` is, and takes the
@@ -201,6 +207,11 @@ export interface AppActions {
    * goes through here, which is what makes that guard universal.
    */
   startRoutine(routine: RoutineTemplate): void;
+  /**
+   * Starts a session already holding these exercises — a suggestion taken, a
+   * session repeated. With one running, they are appended to it instead.
+   */
+  startWith(title: string, exercises: RoutineExerciseItem[]): void;
   /**
    * Folds a routine into the running session. Returns what changed.
    *
