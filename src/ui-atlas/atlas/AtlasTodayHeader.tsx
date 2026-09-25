@@ -61,7 +61,10 @@ export const AtlasTodayHeader: React.FC<{
     opacity: useTransform(scrollY, [0, 160], [1, 0]),
   };
   const marginTop = useTransform(scrollY, [0, 168], [0, -168]);
-  const barOpacity = useTransform(scrollY, [110, 180], [0, 1]);
+  // Opaque the moment it starts to drop: on a short day the page cannot scroll
+  // far enough to finish the slide, and a half-transparent bar let the cards
+  // under it show through.
+  const barOpacity = useTransform(scrollY, [109, 111], [0, 1]);
   const barY = useTransform(scrollY, [110, 180], ['-110%', '0%']);
   const [compact, setCompact] = useState(false);
   useMotionValueEvent(scrollY, 'change', v => setCompact(v > 150));

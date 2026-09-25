@@ -6,7 +6,7 @@ import {
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { useElapsedSeconds } from '../components/useTicker';
-import { metricByKey } from '../derive/bodyMetrics';
+import { isImproving, metricByKey } from '../derive/bodyMetrics';
 import { daypart } from '../derive/profile';
 import { nextMuscleFocus } from '../derive/todayTraining';
 import { sparkPath } from '../derive/spark';
@@ -45,15 +45,37 @@ const MomentBar: React.FC<{ value: number; target: number }> = ({ value, target 
   );
 };
 
-/** Steps against their weekly average, as a ring that draws itself. */
-const MomentRing: React.FC<{ value: number; target: number }> = ({ value, target }) => {
-  if (!target || target <= 0) return null;
-  const pct = Math.min(1, Math.max(0, value / target));
-  const c = 2 * Math.PI * 15;
+/** The three day rings, outer to inner, and the colour each keeps everywhere. */
+const RING_TINT: Record<string, string> = { steps: '#FF6A2B', protein: '#FFB020', calories: '#FF8A5B' };
+/** Tiles take the colour of what they measure; the text stays ink, the colour is the tint and the icon. */
+const TILE_TINT: Record<string, string> = { wellness: '#9CCC5A', volume: '#FFB020' };
+
+/**
+ * Steps, protein and calories as concentric rings that draw themselves — the
+ * three numbers with a target, read against it at a glance. Each ring's
+ * fraction is clamped at a full turn; the legend still says the real number.
+ */
+const DayRings: React.FC<{ rings: { key: string; pct: number }[] }> = ({ rings }) => {
+  const radii = [52, 38, 24];
   return (
-    <svg className="at-moment-ring" width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">
-      <circle cx="18" cy="18" r="15" />
-      <circle cx="18" cy="18" r="15" strokeDasharray={c} strokeDashoffset={c * (1 - pct)} transform="rotate(-90 18 18)" />
+    <svg className="at-rings" width="120" height="120" viewBox="0 0 120 120" aria-hidden="true">
+      {rings.map((ring, i) => {
+        const r = radii[i];
+        const c = 2 * Math.PI * r;
+        const tint = RING_TINT[ring.key];
+        return (
+          <g key={ring.key}>
+            <circle cx="60" cy="60" r={r} style={{ stroke: `color-mix(in srgb, ${tint} 18%, transparent)` }} />
+            <circle
+              cx="60" cy="60" r={r}
+              strokeDasharray={c}
+              strokeDashoffset={c * (1 - Math.min(1, Math.max(0, ring.pct)))}
+              transform="rotate(-90 60 60)"
+              style={{ stroke: tint, animationDelay: `${200 + i * 150}ms`, ['--c' as string]: c }}
+            />
+          </g>
+        );
+      })}
     </svg>
   );
 };
@@ -141,7 +163,7 @@ export const AtlasToday: React.FC = () => {
     unit?: string;
     label: React.ReactNode;
     bar?: { value: number; target: number };
-    /** Steps draw a ring instead of a bar; weight a sparkline. */
+    /** Steps draw a ring against their weekly average. */
     ring?: { value: number; target: number };
     spark?: number[];
     /** The value as a number, so it rolls when it changes. */
@@ -289,6 +311,14 @@ export const AtlasToday: React.FC = () => {
   }
   
 
+  const RING_KEYS = ['steps', 'protein', 'calories'];
+  const ringMoments = moments
+    .filter(m => RING_KEYS.includes(m.key))
+    .sort((a, b) => RING_KEYS.indexOf(a.key) - RING_KEYS.indexOf(b.key))
+    .map(m => ({ ...m, target: m.ring ?? m.bar }));
+  const weightMoment = moments.find(m => m.key === 'weight');
+  const tileMoments = moments.filter(m => !RING_KEYS.includes(m.key) && m.key !== 'weight');
+
   return (
     <>
       <AtlasTodayHeader
@@ -432,33 +462,75 @@ export const AtlasToday: React.FC = () => {
             already covers all of them. */}
         <button onClick={() => setDetail({ kind: 'day', date: now })}>{t('common.seeAll')}</button>
       </div>
+      {/* Rings for what has a target, a strip for weight, colour tiles for
+          the rest — each only when it has something to say. */}
       <div className="at-moments">
-        {moments.map((moment, i) => (
-          <button
-            key={moment.key}
-            className="at-moment"
-            onClick={moment.onClick}
-            aria-label={moment.ariaLabel}
-            // Staggered entrance: the grid assembles in reading order.
-            style={{ animationDelay: `${Math.min(i, 6) * 60}ms` }}
-          >
-            <span className="at-moment-top">
-              <span className="at-moment-icon">{moment.icon}</span>
-              {moment.ring && <MomentRing value={moment.ring.value} target={moment.ring.target} />}
+        {ringMoments.length > 0 && (
+          <div className="at-rings-card at-enter">
+            <DayRings rings={ringMoments.map(m => ({ key: m.key, pct: m.target ? m.target.value / m.target.target : 0 }))} />
+            <div className="at-rings-legend">
+              {ringMoments.map(m => (
+                <button key={m.key} onClick={m.onClick} aria-label={m.ariaLabel}>
+                  <i style={{ background: RING_TINT[m.key] }} aria-hidden="true" />
+                  <span>
+                    <small>{m.label}</small>
+                    <b>
+                      {m.num ? <RollingNumber value={m.num.value} decimals={m.num.decimals} /> : m.value}
+                      {m.unit && <em> {m.unit}</em>}
+                    </b>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {weightMoment && (
+          <button className="at-weightstrip at-enter" onClick={weightMoment.onClick} style={{ animationDelay: '80ms' }}>
+            <span className="at-weightstrip-num">
+              <small>{t('today.weight')}</small>
+              <b>
+                {weightMoment.num ? <RollingNumber value={weightMoment.num.value} decimals={1} /> : weightMoment.value}
+                <em> {weightMoment.unit}</em>
+              </b>
             </span>
-            <b>
-              {moment.num ? <RollingNumber value={moment.num.value} decimals={moment.num.decimals} /> : moment.value}
-              {moment.unit && <small>{moment.unit}</small>}
-            </b>
-            {moment.spark && moment.spark.length > 1 && (
+            {weightMoment.spark && weightMoment.spark.length > 1 && (
               <svg className="at-moment-spark" viewBox="0 0 120 24" preserveAspectRatio="none" aria-hidden="true">
-                <path d={sparkPath(moment.spark, 120, 24, 3)} />
+                <path d={sparkPath(weightMoment.spark, 120, 24, 3)} />
               </svg>
             )}
-            {moment.bar && <MomentBar value={moment.bar.value} target={moment.bar.target} />}
-            <span>{moment.label}</span>
+            {weight?.delta30d != null && (
+              <span className="at-delta-chip" data-good={weight.delta30d !== 0 && isImproving(weight) === true}>
+                {fmt.signed(weight.delta30d)} {t('unit.kg')}
+              </span>
+            )}
           </button>
-        ))}
+        )}
+
+        {tileMoments.length > 0 && (
+          <div className="at-tiles">
+            {tileMoments.map((moment, i) => (
+              <button
+                key={moment.key}
+                className="at-moment at-tile"
+                onClick={moment.onClick}
+                aria-label={moment.ariaLabel}
+                style={{
+                  ['--tint' as string]: TILE_TINT[moment.key] ?? '#FF6A2B',
+                  animationDelay: `${120 + Math.min(i, 6) * 60}ms`,
+                }}
+              >
+                <span className="at-moment-icon">{moment.icon}</span>
+                <b>
+                  {moment.num ? <RollingNumber value={moment.num.value} decimals={moment.num.decimals} /> : moment.value}
+                  {moment.unit && <small>{moment.unit}</small>}
+                </b>
+                {moment.bar && <MomentBar value={moment.bar.value} target={moment.bar.target} />}
+                <span>{moment.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       </>
       )}

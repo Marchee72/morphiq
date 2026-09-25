@@ -386,35 +386,97 @@
   box-shadow: inset 0 -2px 0 rgba(154, 44, 18, 0.12), 0 4px 12px rgba(90, 20, 5, 0.28);
 }
 
-/* Today's metrics: a grid of cards rather than a rail you had to scroll. */
+/* Today's metrics: rings for what has a target, a strip for weight, and
+   colour tiles for the rest. */
 .at-moments {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   padding: 0 18px;
 }
 
-.at-moments .at-moment { width: auto; }
+.at-rings-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 26px;
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
+}
+
+.at-rings { flex-shrink: 0; }
+.at-rings circle { fill: none; stroke-width: 11; }
+.at-rings g circle + circle {
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: at-rings-draw 1.3s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+@keyframes at-rings-draw { from { stroke-dashoffset: var(--c); } }
+
+.at-rings-legend { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.at-rings-legend button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--cocoa);
+  text-align: left;
+  cursor: pointer;
+}
+
+.at-rings-legend i { flex-shrink: 0; width: 10px; height: 10px; border-radius: 50%; }
+.at-rings-legend span { display: flex; flex-direction: column; min-width: 0; }
+.at-rings-legend small { font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.at-rings-legend b { font-size: 18px; font-weight: 800; line-height: 1.15; }
+.at-rings-legend em, .at-weightstrip em { font-style: normal; font-size: 12px; font-weight: 600; color: var(--muted); }
+
+.at-weightstrip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
+  color: var(--cocoa);
+  text-align: left;
+  cursor: pointer;
+}
+
+.at-weightstrip-num { display: flex; flex-direction: column; flex-shrink: 0; }
+.at-weightstrip-num small { font-size: 12px; font-weight: 700; color: var(--muted); }
+.at-weightstrip-num b { font-size: 24px; font-weight: 800; line-height: 1.1; }
+.at-weightstrip .at-moment-spark { flex: 1; min-width: 0; margin: 0; }
+.at-weightstrip .at-delta-chip { flex-shrink: 0; margin: 0; }
+
+/* Tiles tinted by what they measure: the tint washes the surface and colours
+   the icon; the text stays ink, so it reads at full contrast. */
+.at-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+.at-moments .at-tile {
+  width: auto;
+  background: color-mix(in srgb, var(--tint) 16%, var(--sand));
+  box-shadow: none;
+}
+
+.at-tile .at-moment-icon { background: color-mix(in srgb, var(--tint) 28%, transparent); color: var(--cocoa); }
+
+@media (prefers-reduced-motion: reduce) {
+  .at-rings g circle + circle { animation: none; transition: none; }
+}
+
 .at-moment-top { display: flex; justify-content: space-between; align-items: flex-start; }
 .at-moment-top .at-moment-icon { margin-bottom: 12px; }
 
-.at-moment-ring { flex-shrink: 0; }
-.at-moment-ring circle { fill: none; stroke-width: 5; stroke: var(--at-tonal); }
-.at-moment-ring circle + circle {
-  stroke: var(--ember);
-  stroke-linecap: round;
-  transition: stroke-dashoffset 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-  animation: at-ring-draw 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.2s backwards;
-}
-
-@keyframes at-ring-draw { from { stroke-dashoffset: 94.25; } }
 
 .at-moment-spark { display: block; width: 100%; height: 24px; margin: 4px 0 2px; overflow: visible; }
 .at-moment-spark path { fill: none; stroke: var(--ember); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-
-@media (prefers-reduced-motion: reduce) {
-  .at-moment-ring circle + circle { animation: none; transition: none; }
-}
 
 /* Cards arrive one after another, top to bottom. `backwards` holds each one
    hidden through its delay. */
