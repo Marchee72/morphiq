@@ -2,10 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { MotionConfig, motion } from 'motion/react';
 import { useStore } from '../../presentation/state/store';
 import { resolveMode, SURFACE } from '../../presentation/state/preferences';
-import { useAppData, useAppActions, useAppUi } from '../data/useAppData';
+import { useAppData, useAppActions } from '../data/useAppData';
 import { useHealthSync } from '../data/useHealthSync';
 import { usePullToRefresh } from '../components/usePullToRefresh';
-import { useTabSwipe } from '../components/useTabSwipe';
 import { SCREENS as ORDER, type ScreenId } from '../types';
 import { AppOverlays } from './AppOverlays';
 import { AtlasPullRefresh } from '../atlas/AtlasPullRefresh';
@@ -54,8 +53,6 @@ export const AppShell: React.FC = () => {
   const screen: ScreenId = activeTab === 'settings' ? 'today' : activeTab;
   const Screen = SCREENS[screen];
   const resolved = resolveMode(mode);
-  const { overlay } = useAppUi();
-  const liveSession = useStore(s => s.activeSession != null);
 
   /**
    * Which way the last tab change went, so the new screen slides in from that
@@ -67,17 +64,6 @@ export const AppShell: React.FC = () => {
   const [nav, setNav] = useState({ index, dir: 0 });
   if (nav.index !== index) setNav({ index, dir: Math.sign(index - nav.index) });
 
-  /**
-   * Sideways between tabs — except on Train during a session, where the same
-   * gesture changes exercise, and while an overlay is up.
-   */
-  const swipe = useTabSwipe({
-    enabled: ready && !overlay && !(screen === 'train' && liveSession),
-    canPrev: index > 0,
-    canNext: index < ORDER.length - 1,
-    onPrev: () => setActiveTab(ORDER[index - 1].id),
-    onNext: () => setActiveTab(ORDER[index + 1].id),
-  });
 
   // `color-scheme` on the root still drives native form controls, the on-screen
   // keyboard and scrollbars, so the resolved mode is mirrored there even though
@@ -161,8 +147,10 @@ export const AppShell: React.FC = () => {
       <AtlasResumeBanner />
       {/* Keyed on the tab so switching screens resets scroll, and slides in
           from the side the tab change went. Only on a change: the first
-          screen of a launch just appears. Both transforms end at none, so a
-          sheet opened from a screen is never trapped inside it. */}
+          screen of a launch just appears. The transform ends at none, so a
+          sheet opened from a screen is never trapped inside it. Changing tab
+          by sliding is the dock's (AtlasNav), not the page's: here a sideways
+          drag belongs to whatever is on screen. */}
       <motion.div
         className="app-scroll"
         key={screen}
@@ -171,7 +159,6 @@ export const AppShell: React.FC = () => {
         initial={nav.dir === 0 ? false : { x: nav.dir * 48, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ x: { type: 'spring', stiffness: 380, damping: 36 }, opacity: { duration: 0.18 } }}
-        {...swipe.bind}
       >
         <AtlasPullRefresh state={pull.state} message={syncNote} />
         {!ready && (
@@ -179,9 +166,7 @@ export const AppShell: React.FC = () => {
             <RefreshCw size={13} className="at-spin" /> {t('sync.syncing')}
           </span>
         )}
-        <motion.div className="app-screen" style={{ x: swipe.x }}>
-          {ready ? <Screen /> : <AtlasSkeleton shape={SKELETON[screen]} />}
-        </motion.div>
+        {ready ? <Screen /> : <AtlasSkeleton shape={SKELETON[screen]} />}
       </motion.div>
       <AtlasNav active={screen} onNavigate={setActiveTab} />
       <AppOverlays onClose={actions.closeOverlay} />
