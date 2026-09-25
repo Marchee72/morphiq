@@ -46,6 +46,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
   const activeWorkoutSets = useStore(s => s.activeWorkoutSets);
   const allSets = useStore(s => s.allSets);
   const dailySteps = useStore(s => s.dailySteps);
+  const dailyActiveCalories = useStore(s => s.dailyActiveCalories);
   const activeSession = useStore(s => s.activeSession);
   const savedRoutines = useStore(s => s.savedRoutines);
   const wellnessLogs = useStore(s => s.wellnessLogs);
@@ -233,7 +234,7 @@ export const AppDataProvider: React.FC<{ children: React.ReactNode; now?: Date }
     trend: buildWellnessTrend(wellnessLogs, at),
   }), [wellnessLogs, at]);
 
-  const steps = useMemo(() => buildSteps(dailySteps, at), [dailySteps, at]);
+  const steps = useMemo(() => buildSteps(dailySteps, at, 7, dailyActiveCalories), [dailySteps, dailyActiveCalories, at]);
 
   const nutrition = useMemo(
     () => buildNutrition(foodLogs, workoutLogs, activeProfile, latestMeasurement, at),

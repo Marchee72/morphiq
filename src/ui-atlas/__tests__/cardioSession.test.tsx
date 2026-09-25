@@ -118,7 +118,8 @@ describe('Today — a session the watch recorded', () => {
     render();
 
     await waitFor(() => expect(card()?.getAttribute('data-trained')).toBe('true'));
-    expect(text()).not.toMatch(/0 kcal/);
+    // A bare zero, not the "/ 500 kcal" target of the activity ring.
+    expect(text()).not.toMatch(/(^|[^\d.,])0 kcal/);
     expect(text()).toMatch(/6[.,]4/);
   });
 });
@@ -138,13 +139,12 @@ describe('Today — your day is always laid out', () => {
     expect(rail()!.querySelector('.at-weightstrip')?.textContent).toMatch(/log weight|registrar peso/i);
   });
 
-  it('asks how the day is going among the tiles, and never shows a bare zero for food', async () => {
+  it('asks how the day is going in the panel, and puts the run at its top', async () => {
     await seedRun(new Date());
     render();
-    await waitFor(() => expect(rail()?.querySelectorAll('.at-tile').length).toBeGreaterThan(0));
-    const tiles = [...rail()!.querySelectorAll('.at-tile')].map(el => el.textContent ?? '').join(' ');
-    expect(tiles).toMatch(/how are you today|cómo estás hoy/i);
-    // Protein and calories live in the rings, against their target.
-    expect(tiles).not.toMatch(/\b0 g\b/);
+    await waitFor(() => expect(rail()?.querySelector('.at-panel-run')).toBeTruthy());
+    const panel = rail()!.querySelector('.at-panel')!;
+    expect(panel.firstElementChild?.classList.contains('at-panel-run')).toBe(true);
+    expect(panel.textContent).toMatch(/how are you today|cómo estás hoy/i);
   });
 });

@@ -181,6 +181,9 @@ function App() {
         since.setHours(0, 0, 0, 0);
         const days = await healthProvider.getDailySteps(since);
         if (!cancelled) useStore.getState().setDailySteps(days);
+        // The activity ring's calories, read alongside for the same reason.
+        const kcal = await healthProvider.getDailyActiveCalories?.(since);
+        if (!cancelled && kcal) useStore.getState().setDailyActiveCalories(kcal);
       } catch (err) { console.warn('Step sync failed', err); }
     };
 

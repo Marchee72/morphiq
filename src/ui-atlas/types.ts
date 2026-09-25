@@ -234,6 +234,8 @@ export interface StepsVM {
   recent: DailyStepsVM[];
   /** Mean over the days that reported, or null when none did. */
   weeklyAvg: number | null;
+  /** Today's active calories from the same source; null when it has said nothing. */
+  activeKcal: number | null;
 }
 
 /**

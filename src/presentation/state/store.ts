@@ -449,6 +449,9 @@ interface StoreState {
    */
   dailySteps: { date: string; steps: number }[];
   setDailySteps: (days: { date: string; steps: number }[]) => void;
+  /** Active calories per local day, cached the same way as `dailySteps`. */
+  dailyActiveCalories: { date: string; kcal: number }[];
+  setDailyActiveCalories: (days: { date: string; kcal: number }[]) => void;
   addWorkoutSet: (set: Omit<WorkoutSet, 'profileId' | 'timestamp'>) => Promise<void>;
   deleteWorkoutSet: (id: string, workoutLogId: string) => Promise<void>;
   loadExerciseStats: (exerciseName: string) => Promise<void>;
@@ -516,6 +519,7 @@ export const useStore = create<StoreState>((set, get) => ({
   resolvedIds: {},
   allSets: [],
   dailySteps: [],
+  dailyActiveCalories: [],
   exerciseStats: {},
   theme: getInitialTheme(),
   language: initialLanguage(),
@@ -532,6 +536,7 @@ export const useStore = create<StoreState>((set, get) => ({
   pendingResume: readStoredSession(),
 
   setDailySteps: (days) => set({ dailySteps: days }),
+  setDailyActiveCalories: (days) => set({ dailyActiveCalories: days }),
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setBuddiesFocus: (focus) => set({ buddiesFocus: focus }),

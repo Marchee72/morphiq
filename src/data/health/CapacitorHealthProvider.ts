@@ -223,13 +223,24 @@ export class CapacitorHealthProvider implements IHealthProvider {
    * would put an evening walk on the following day for anyone east of UTC.
    */
   async getDailySteps(since: Date): Promise<{ date: string; steps: number }[]> {
+    const days = await this.dailyTotals(since, 'steps');
+    return days.map(([date, steps]) => ({ date, steps }));
+  }
+
+  /** Same buckets as steps; `READ_ACTIVE_CALORIES` is already in the permission request. */
+  async getDailyActiveCalories(since: Date): Promise<{ date: string; kcal: number }[]> {
+    const days = await this.dailyTotals(since, 'active-calories');
+    return days.map(([date, kcal]) => ({ date, kcal }));
+  }
+
+  private async dailyTotals(since: Date, dataType: 'steps' | 'active-calories'): Promise<[string, number][]> {
     if (!this.isAvailable()) return [];
     try {
       const { Health } = await import('capacitor-health');
       const result = await Health.queryAggregated({
         startDate: since.toISOString(),
         endDate: new Date().toISOString(),
-        dataType: 'steps',
+        dataType,
         bucket: 'day',
       });
 
@@ -243,11 +254,9 @@ export class CapacitorHealthProvider implements IHealthProvider {
         byDay.set(key, (byDay.get(key) ?? 0) + Math.max(0, Math.round(sample.value || 0)));
       }
 
-      return [...byDay.entries()]
-        .map(([date, steps]) => ({ date, steps }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+      return [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]));
     } catch (e) {
-      console.error('Failed to query steps from Capacitor:', e);
+      console.error(`Failed to query ${dataType} from Capacitor:`, e);
       return [];
     }
   }
