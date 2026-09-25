@@ -154,9 +154,8 @@
 }
 
 .at .app-statusbar { background: var(--sand); }
-/* On Today the status bar is the top of the ember header, until it scrolls away. */
-.at .app-statusbar { transition: background-color 0.2s; }
-.at[data-screen='today']:not([data-scrolled]) .app-statusbar { background: #d2461b; }
+/* On Today the status bar is the top of the ember header. */
+.at[data-screen='today'] .app-statusbar { background: #d2461b; }
 
 .at-serif { font-family: 'Urbanist', system-ui, sans-serif; font-weight: 800; letter-spacing: -0.02em; }
 
@@ -337,6 +336,24 @@
 .at-today-next { display: flex; flex-direction: column; font-size: 13px; font-weight: 600; line-height: 1.25; }
 .at-today-next b { font-weight: 800; }
 
+/* Sticky with a negative top (set from the header's measured height): it
+   scrolls until only the start strip is left, then holds over the page. */
+.at-today-sticky { position: sticky; z-index: 6; }
+
+.at-today-upper { display: flex; flex-direction: column; gap: 16px; }
+
+/* "Up next" and the collapsed week share one cell and cross-fade. */
+.at-today-ctaside { flex: 1; min-width: 0; display: grid; }
+.at-today-ctaside > * { grid-area: 1 / 1; align-self: center; }
+
+.at-today-mini { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.at-today-mini b { font-size: 15px; font-weight: 800; line-height: 1; }
+
+.at-today-dots { display: inline-flex; gap: 4px; }
+.at-today-dots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255, 255, 255, 0.32); }
+.at-today-dots i[data-done='true'] { background: var(--lime); }
+.at-today-dots i[data-today='true'] { box-shadow: inset 0 0 0 2px #fff; background: rgba(255, 255, 255, 0.18); }
+
 /* Today's metrics: rings for what has a target, a strip for weight, and
    colour tiles for the rest. */
 .at-moments {
@@ -405,6 +422,20 @@
 .at-weightstrip-num b { font-size: 24px; font-weight: 800; line-height: 1.1; }
 .at-weightstrip .at-moment-spark { flex: 1; min-width: 0; margin: 0; }
 .at-weightstrip .at-delta-chip { flex-shrink: 0; margin: 0; }
+/* No weigh-in yet: the strip ends in the way to log one. */
+.at-weightstrip-add {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--d-grad);
+  box-shadow: var(--d-hi);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
 
 /* Tiles tinted by what they measure: the tint washes the surface and colours
    the icon; the text stays ink, so it reads at full contrast. */

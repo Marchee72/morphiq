@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
-  ArrowRight, Bike, Dumbbell, Footprints, Heart, HeartPulse, Scale, Sparkles,
-  Trophy, UtensilsCrossed,
+  ArrowRight, Bike, Dumbbell, Flame, Footprints, HeartPulse, Percent, Plus, Sparkles, Trophy,
 } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
@@ -47,7 +46,9 @@ const MomentBar: React.FC<{ value: number; target: number }> = ({ value, target 
 /** The three day rings, outer to inner, and the colour each keeps everywhere. */
 const RING_TINT: Record<string, string> = { steps: '#FF6A2B', protein: '#FFB020', calories: '#FF8A5B' };
 /** Tiles take the colour of what they measure; the text stays ink, the colour is the tint and the icon. */
-const TILE_TINT: Record<string, string> = { wellness: '#9CCC5A', volume: '#FFB020' };
+const TILE_TINT: Record<string, string> = { wellness: '#9CCC5A', volume: '#FFB020', bodyFat: '#FF8A5B', streak: '#FF6A2B' };
+/** What the steps ring fills against before there is a weekly average to use. */
+const STEPS_GOAL = 8000;
 
 /**
  * Steps, protein and calories as concentric rings that draw themselves — the
@@ -222,62 +223,7 @@ export const AtlasToday: React.FC = () => {
         ariaLabel: t('wellness.ask'),
       });
 
-  if (body.hasData && weight?.value != null) {
-    moments.push({
-      key: 'weight',
-      icon: <Scale size={17} />,
-      value: fmt.n(weight.value, 1),
-      num: { value: weight.value, decimals: 1 },
-      spark: weight.series?.slice(-8),
-      unit: t('unit.kg'),
-      label: (
-        <>
-          {t('today.weight')}
-          {weight.delta7d != null && ` · ${fmt.signed(weight.delta7d)} ${t('unit.kg')} / ${t('today.change7d')}`}
-          {weight.delta7d == null && weight.delta30d != null
-            && ` · ${t('body.overMonth', { delta: fmt.signed(weight.delta30d), unit: t('unit.kg') })}`}
-        </>
-      ),
-      onClick: () => setDetail({ kind: 'weight' }),
-    });
-  }
-
-  // Null is "the phone has not answered", which is not the same as not walking.
-  if (steps.today != null) {
-    moments.push({
-      key: 'steps',
-      icon: <Footprints size={17} />,
-      value: fmt.n(steps.today),
-      num: { value: steps.today, decimals: 0 },
-      unit: t('unit.steps'),
-      // The weekly average is the only target steps have, and the one people
-      // compare today against.
-      ring: steps.weeklyAvg != null ? { value: steps.today, target: steps.weeklyAvg } : undefined,
-      label: (
-        <>
-          {t('today.steps')}
-          {steps.weeklyAvg != null && ` · ${t('today.stepsAvg', { n: fmt.n(steps.weeklyAvg) })}`}
-        </>
-      ),
-      onClick: () => setDetail({ kind: 'steps' }),
-      ariaLabel: t('today.stepsDetail'),
-    });
-  }
-
-  if (nutrition.protein.eaten > 0) {
-    moments.push({
-      key: 'protein',
-      icon: <UtensilsCrossed size={17} />,
-      value: fmt.n(nutrition.protein.eaten),
-      num: { value: nutrition.protein.eaten, decimals: 0 },
-      unit: t('unit.g'),
-      bar: { value: nutrition.protein.eaten, target: nutrition.protein.target },
-      label: `${t('today.protein')} · ${fmt.n(Math.max(0, nutrition.protein.target - nutrition.protein.eaten))} ${t('unit.g')}`,
-      onClick: () => setDetail({ kind: 'nutrition', macro: 'protein' }),
-    });
-  }
-
-  if (volumeKg > 0) {
+  if (volumeKg > 0 || !session) {
     moments.push({
       key: 'volume',
       icon: <Dumbbell size={17} />,
@@ -296,27 +242,70 @@ export const AtlasToday: React.FC = () => {
     });
   }
 
-  if (nutrition.calories.eaten > 0) {
+  const bodyFat = metricByKey(body.metrics, 'bodyFat');
+  if (bodyFat?.value != null) {
     moments.push({
-      key: 'calories',
-      icon: <Heart size={17} />,
-      value: fmt.n(nutrition.calories.eaten),
-      num: { value: nutrition.calories.eaten, decimals: 0 },
-      unit: t('unit.kcal'),
-      bar: { value: nutrition.calories.eaten, target: nutrition.calories.target },
-      label: `${t('today.calories')} · ${fmt.n(nutrition.calories.target)}`,
-      onClick: () => setDetail({ kind: 'nutrition', macro: 'calories' }),
+      key: 'bodyFat',
+      icon: <Percent size={17} />,
+      value: fmt.n(bodyFat.value, 1),
+      num: { value: bodyFat.value, decimals: 1 },
+      unit: t('unit.pct'),
+      label: t('body.metric.bodyFat'),
+      onClick: () => actions.navigate('body'),
     });
   }
-  
 
-  const RING_KEYS = ['steps', 'protein', 'calories'];
-  const ringMoments = moments
-    .filter(m => RING_KEYS.includes(m.key))
-    .sort((a, b) => RING_KEYS.indexOf(a.key) - RING_KEYS.indexOf(b.key))
-    .map(m => ({ ...m, target: m.ring ?? m.bar }));
-  const weightMoment = moments.find(m => m.key === 'weight');
-  const tileMoments = moments.filter(m => !RING_KEYS.includes(m.key) && m.key !== 'weight');
+  moments.push({
+    key: 'streak',
+    icon: <Flame size={17} />,
+    value: String(training.streak.current),
+    num: { value: training.streak.current, decimals: 0 },
+    unit: t('unit.days'),
+    label: training.streak.best > training.streak.current
+      ? `${t('today.streakTile')} · ${t('today.streakBest', { n: training.streak.best })}`
+      : t('today.streakTile'),
+    onClick: () => actions.openOverlay('history'),
+  });
+
+  /**
+   * The three numbers with a target, as rings — always, because an empty ring
+   * is the goal still ahead, not a missing reading. Steps are the exception to
+   * the zero: null means the phone has not answered, so the ring stays empty
+   * and the number reads as a dash.
+   */
+  const stepsTarget = steps.weeklyAvg ?? STEPS_GOAL;
+  const rings = [
+    {
+      key: 'steps',
+      pct: steps.today != null ? steps.today / stepsTarget : 0,
+      label: steps.weeklyAvg != null
+        ? `${t('today.steps')} · ${t('today.stepsAvg', { n: fmt.n(steps.weeklyAvg) })}`
+        : t('today.steps'),
+      value: steps.today,
+      unit: t('unit.steps'),
+      onClick: () => setDetail({ kind: 'steps' }),
+      ariaLabel: t('today.stepsDetail'),
+    },
+    {
+      key: 'protein',
+      pct: nutrition.protein.target > 0 ? nutrition.protein.eaten / nutrition.protein.target : 0,
+      label: t('today.protein'),
+      value: nutrition.protein.eaten,
+      unit: `/ ${fmt.n(nutrition.protein.target)} ${t('unit.g')}`,
+      onClick: () => setDetail({ kind: 'nutrition', macro: 'protein' }),
+      ariaLabel: undefined,
+    },
+    {
+      key: 'calories',
+      pct: nutrition.calories.target > 0 ? nutrition.calories.eaten / nutrition.calories.target : 0,
+      label: t('today.calories'),
+      value: nutrition.calories.eaten,
+      unit: `/ ${fmt.n(nutrition.calories.target)}`,
+      onClick: () => setDetail({ kind: 'nutrition', macro: 'calories' }),
+      ariaLabel: undefined,
+    },
+  ];
+  const hasWeight = body.hasData && weight?.value != null;
 
   return (
     <>
@@ -453,62 +442,66 @@ export const AtlasToday: React.FC = () => {
       </div>
       )}
 
-      {moments.length > 0 && (
-      <>
       <div className="at-rail-head">
         <h3>{t('today.yourDay')}</h3>
-        {/* Was the Body tab, which covers two of the five chips. The day sheet
-            already covers all of them. */}
+        {/* The day sheet covers everything below. */}
         <button onClick={() => setDetail({ kind: 'day', date: now })}>{t('common.seeAll')}</button>
       </div>
       {/* Rings for what has a target, a strip for weight, colour tiles for
-          the rest — each only when it has something to say. */}
+          the rest. */}
       <div className="at-moments">
-        {ringMoments.length > 0 && (
-          <div className="at-rings-card at-enter">
-            <DayRings rings={ringMoments.map(m => ({ key: m.key, pct: m.target ? m.target.value / m.target.target : 0 }))} />
-            <div className="at-rings-legend">
-              {ringMoments.map(m => (
-                <button key={m.key} onClick={m.onClick} aria-label={m.ariaLabel}>
-                  <i style={{ background: RING_TINT[m.key] }} aria-hidden="true" />
-                  <span>
-                    <small>{m.label}</small>
-                    <b>
-                      {m.num ? <RollingNumber value={m.num.value} decimals={m.num.decimals} /> : m.value}
-                      {m.unit && <em> {m.unit}</em>}
-                    </b>
-                  </span>
-                </button>
-              ))}
-            </div>
+        <div className="at-rings-card at-enter">
+          <DayRings rings={rings.map(r => ({ key: r.key, pct: r.pct }))} />
+          <div className="at-rings-legend">
+            {rings.map(r => (
+              <button key={r.key} onClick={r.onClick} aria-label={r.ariaLabel}>
+                <i style={{ background: RING_TINT[r.key] }} aria-hidden="true" />
+                <span>
+                  <small>{r.label}</small>
+                  <b>
+                    {r.value != null ? <RollingNumber value={r.value} decimals={0} /> : '—'}
+                    <em> {r.unit}</em>
+                  </b>
+                </span>
+              </button>
+            ))}
           </div>
-        )}
+        </div>
 
-        {weightMoment && (
-          <button className="at-weightstrip at-enter" onClick={weightMoment.onClick} style={{ animationDelay: '80ms' }}>
+        {hasWeight ? (
+          <button className="at-weightstrip at-enter" onClick={() => setDetail({ kind: 'weight' })} style={{ animationDelay: '80ms' }}>
             <span className="at-weightstrip-num">
               <small>{t('today.weight')}</small>
               <b>
-                {weightMoment.num ? <RollingNumber value={weightMoment.num.value} decimals={1} /> : weightMoment.value}
-                <em> {weightMoment.unit}</em>
+                <RollingNumber value={weight!.value!} decimals={1} />
+                <em> {t('unit.kg')}</em>
               </b>
             </span>
-            {weightMoment.spark && weightMoment.spark.length > 1 && (
+            {weight!.series && weight!.series.length > 1 && (
               <svg className="at-moment-spark" viewBox="0 0 120 24" preserveAspectRatio="none" aria-hidden="true">
-                <path d={sparkPath(weightMoment.spark, 120, 24, 3)} />
+                <path d={sparkPath(weight!.series.slice(-8), 120, 24, 3)} />
               </svg>
             )}
-            {weight?.delta30d != null && (
-              <span className="at-delta-chip" data-good={weight.delta30d !== 0 && isImproving(weight) === true}>
-                {fmt.signed(weight.delta30d)} {t('unit.kg')}
+            {weight!.delta30d != null && (
+              <span className="at-delta-chip" data-good={weight!.delta30d !== 0 && isImproving(weight!) === true}>
+                {fmt.signed(weight!.delta30d)} {t('unit.kg')}
               </span>
             )}
           </button>
+        ) : (
+          // No weigh-in yet: the strip is where the first one goes.
+          <button className="at-weightstrip at-enter" onClick={() => actions.openOverlay('logWeight')} style={{ animationDelay: '80ms' }}>
+            <span className="at-weightstrip-num">
+              <small>{t('today.weight')}</small>
+              <b>—<em> {t('unit.kg')}</em></b>
+            </span>
+            <span className="at-weightstrip-add"><Plus size={15} /> {t('today.logWeight')}</span>
+          </button>
         )}
 
-        {tileMoments.length > 0 && (
+        {moments.length > 0 && (
           <div className="at-tiles">
-            {tileMoments.map((moment, i) => (
+            {moments.map((moment, i) => (
               <button
                 key={moment.key}
                 className="at-moment at-tile"
@@ -531,8 +524,6 @@ export const AtlasToday: React.FC = () => {
           </div>
         )}
       </div>
-      </>
-      )}
 
       <div className="at-pad at-enter" style={{ paddingTop: 22, paddingBottom: 22, animationDelay: '180ms' }}>
         <AtlasHeatMap onPickRegion={(group) => setDetail({ kind: 'muscle', group })} />
