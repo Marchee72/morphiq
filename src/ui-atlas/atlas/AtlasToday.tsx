@@ -223,13 +223,13 @@ export const AtlasToday: React.FC = () => {
             <h3>{t('today.recent')}</h3>
             <button onClick={() => actions.openOverlay('history')}>{t('common.seeAll')}</button>
           </div>
-          {/* A timeline: when, what, how much — the dot is ember for lifting,
-              amber for a run, lime when the session set a record. */}
-          <ol className="at-timeline at-enter" style={{ animationDelay: '240ms' }}>
+          {/* A row of cards that slides sideways: when, what, how much — the
+              dot is ember for lifting, amber for a run, lime for a record. */}
+          <ol className="at-recent at-enter" style={{ animationDelay: '240ms' }}>
             {training.history.slice(0, 5).map(entry => (
               <li key={entry.id} data-kind={entry.prs > 0 ? 'pr' : entry.cardio ? 'cardio' : 'lift'}>
                 <button onClick={() => setSessionId(entry.id)} aria-label={t('history.openSession', { name: entry.title })}>
-                  <small>{fmt.relativeDay(entry.at, now)}</small>
+                  <small><i aria-hidden="true" />{fmt.relativeDay(entry.at, now)}</small>
                   <b>{entry.title}</b>
                   <span>
                     {entry.cardio

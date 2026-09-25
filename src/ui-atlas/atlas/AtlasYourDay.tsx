@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Bike, ChevronRight, Droplet, Dumbbell, Flame, Footprints, HeartPulse, Plus, Timer, UtensilsCrossed,
+  Bike, ChevronRight, Droplet, Dumbbell, Flame, Footprints, HeartPulse, Moon, Plus, Timer,
 } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
@@ -10,7 +10,7 @@ import { RollingNumber } from '../kit/rolling-number';
 import type { TodayDetail } from './AtlasTodayDetail';
 
 /** Each ring's colour, kept everywhere that number appears. */
-const TINT = { steps: '#FF6A2B', active: '#FFB020', kcal: '#FF8A5B', ready: '#7FB63A' };
+const TINT = { steps: '#FF6A2B', active: '#FFB020', kcal: '#FF8A5B', ready: '#7FB63A', deep: '#9A2C12', rem: '#FF8A5B', light: '#FFB020' };
 /**
  * What each ring fills against. Not the weekly steps average: it includes today,
  * so a ring against it would always read close to full.
@@ -67,20 +67,11 @@ const Head: React.FC<{ icon: React.ReactNode; tint: string; children: React.Reac
   <span className="at-panel-head"><span style={{ color: tint }}>{icon}</span>{children}</span>
 );
 
-/** One of the food bars: eaten against the target. */
-const Thin: React.FC<{ label: string; value: string; pct: number; tint: string }> = ({ label, value, pct, tint }) => (
-  <span className="at-panel-thin">
-    <span><span>{label}</span><b>{value}</b></span>
-    <i style={{ background: `color-mix(in srgb, ${tint} 20%, transparent)` }}>
-      <u style={{ width: `${Math.min(100, Math.max(0, pct * 100))}%`, background: tint }} />
-    </i>
-  </span>
-);
-
 /**
  * "Your day": the activity rings, the weight strip, and one panel holding the
  * rest — the day's activities, readiness, the week's volume, the streak, body
- * fat and food. The panel is one card split into cells rather than a tile per
+ * fat and last night's sleep. Everything in it arrives on its own (the phone,
+ * the watch, the scale, the sessions); nothing waits on a target nobody set. The panel is one card split into cells rather than a tile per
  * number; each cell's colour is in its drawing, not its background.
  */
 export const AtlasYourDay: React.FC<{
@@ -88,7 +79,7 @@ export const AtlasYourDay: React.FC<{
   onDetail: (detail: TodayDetail) => void;
   onSession: (id: string) => void;
 }> = ({ now, onDetail, onSession }) => {
-  const { body, nutrition, training, steps, wellness } = useAppData();
+  const { body, training, steps, wellness } = useAppData();
   const actions = useAppActions();
   const { t, tp, fmt } = useT();
 
@@ -133,10 +124,20 @@ export const AtlasYourDay: React.FC<{
 
   const readiness = wellness.today.readiness;
   const log = wellness.today.log;
-  const readyLine = [
-    log?.sleepMinutes ? `${t('wellness.sleep')} ${fmt.duration(log.sleepMinutes * 60)}` : null,
-    log?.restingHr ? `${t('wellness.restingHr')} ${log.restingHr}` : null,
-  ].filter(Boolean).join(' · ');
+  const readyLine = log?.restingHr ? `${t('wellness.restingHr')} ${log.restingHr}` : '';
+
+  // Last night, as Samsung Health splits it. Light is what the stages leave.
+  const sleep = log?.sleepMinutes ?? 0;
+  const deep = Math.min(sleep, log?.sleepDeepMinutes ?? 0);
+  const rem = Math.min(sleep - deep, log?.sleepRemMinutes ?? 0);
+  const stages = sleep > 0 && deep + rem > 0
+    ? [
+        { key: 'deep', label: t('wellness.deep'), min: deep, tint: TINT.deep },
+        { key: 'rem', label: t('wellness.rem'), min: rem, tint: TINT.rem },
+        { key: 'light', label: t('wellness.light'), min: sleep - deep - rem, tint: TINT.light },
+      ]
+    : [];
+  const hm = (minutes: number) => `${Math.floor(minutes / 60)} h ${String(Math.round(minutes % 60)).padStart(2, '0')}`;
 
   return (
     <>
@@ -277,28 +278,30 @@ export const AtlasYourDay: React.FC<{
             )}
           </div>
 
-          <div className="at-panel-food">
-            <span className="at-panel-foodhead">
-              <Head icon={<UtensilsCrossed size={14} />} tint={TINT.kcal}>{t('today.food')}</Head>
-              <button className="at-panel-add" onClick={() => actions.openOverlay('addFood')}>
-                <Plus size={14} /> {t('today.addFood')}
-              </button>
+          {/* Last night's sleep: from the watch through Health Connect, so it is
+              filled without anyone typing it. */}
+          <button className="at-panel-sleep" onClick={() => actions.openOverlay('wellness')}>
+            <span className="at-panel-row">
+              <Head icon={<Moon size={14} />} tint={TINT.rem}>{t('wellness.sleep')}</Head>
+              <b className="at-panel-big">{sleep > 0 ? hm(sleep) : '—'}</b>
             </span>
-            <button className="at-panel-foodbars" onClick={() => onDetail({ kind: 'nutrition', macro: 'protein' })}>
-              <Thin
-                label={t('today.protein')}
-                value={`${fmt.n(nutrition.protein.eaten)} / ${fmt.n(nutrition.protein.target)} ${t('unit.g')}`}
-                pct={nutrition.protein.target > 0 ? nutrition.protein.eaten / nutrition.protein.target : 0}
-                tint={TINT.kcal}
-              />
-              <Thin
-                label={t('today.calories')}
-                value={`${fmt.n(nutrition.calories.eaten)} / ${fmt.n(nutrition.calories.target)}`}
-                pct={nutrition.calories.target > 0 ? nutrition.calories.eaten / nutrition.calories.target : 0}
-                tint={TINT.active}
-              />
-            </button>
-          </div>
+            {stages.length > 0 ? (
+              <>
+                <span className="at-panel-stages" aria-hidden="true">
+                  {stages.map(stage => (
+                    <i key={stage.key} style={{ flexGrow: stage.min, background: stage.tint }} />
+                  ))}
+                </span>
+                <span className="at-panel-legend">
+                  {stages.map(stage => (
+                    <span key={stage.key}><i style={{ background: stage.tint }} />{stage.label} {hm(stage.min)}</span>
+                  ))}
+                </span>
+              </>
+            ) : (
+              <small className="at-panel-sub">{sleep > 0 ? t('wellness.sleepHint') : t('today.sleepNone')}</small>
+            )}
+          </button>
         </section>
       </div>
     </>

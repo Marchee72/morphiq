@@ -775,7 +775,7 @@
 /* The left cell of each row draws the line between the two. */
 .at-panel .at-panel-cell:nth-child(odd):not([data-wide='true']) { border-right: 1px solid var(--hair); }
 .at-panel-cell[data-wide='true'] { grid-column: 1 / -1; }
-.at-panel-cell:active, .at-panel-run:active, .at-panel-foodbars:active { background: var(--at-tonal-soft); }
+.at-panel-cell:active, .at-panel-run:active { background: var(--at-tonal-soft); }
 
 .at-panel-head {
   display: flex;
@@ -828,34 +828,21 @@
 
 .at-panel-cell .at-moment-spark { margin: 0; }
 
-.at-panel-food { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-.at-panel-foodhead { display: flex; align-items: center; justify-content: space-between; }
+.at-panel .at-panel-sleep { width: 100%; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.at-panel-sleep:active { background: var(--at-tonal-soft); }
 
-.at-panel .at-panel-add {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 32px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--d-tonal);
-  box-shadow: var(--d-soft);
-  font-size: 12.5px;
-  font-weight: 800;
-}
-
-.at-panel .at-panel-foodbars { display: flex; flex-direction: column; gap: 10px; margin: -4px -6px; padding: 4px 6px; border-radius: 12px; }
-
-.at-panel-thin { display: flex; flex-direction: column; gap: 4px; }
-.at-panel-thin > span { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; }
-.at-panel-thin > span > span { color: var(--muted); }
-.at-panel-thin i { display: block; height: 6px; border-radius: 3px; overflow: hidden; }
-.at-panel-thin u { display: block; height: 100%; border-radius: inherit; transform-origin: left center; animation: at-grow-x 0.7s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+/* The night as one bar, split by stage in proportion. */
+.at-panel-stages { display: flex; gap: 3px; height: 10px; border-radius: 5px; overflow: hidden; }
+.at-panel-stages i { min-width: 4px; transform-origin: left center; animation: at-grow-x 0.8s 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
 
 @keyframes at-grow-x { from { transform: scaleX(0); } }
 
+.at-panel-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.at-panel-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.at-panel-legend i { width: 8px; height: 8px; border-radius: 50%; }
+
 @media (prefers-reduced-motion: reduce) {
-  .at-panel-gauge path + path, .at-panel-bars i, .at-panel-thin u { animation: none; transition: none; }
+  .at-panel-gauge path + path, .at-panel-bars i, .at-panel-stages i { animation: none; transition: none; }
 }
 
 /* ---------- today: what you have trained ----------
@@ -961,56 +948,48 @@
   line-height: 1.4;
 }
 
-/* ---------- today: recent, as a timeline ----------
-   A rail on the left, a dot per session, the words beside it. The dot says
-   what kind of session it was: ember lifting, amber a run, lime a record. */
+/* ---------- today: recent, as a row of cards ----------
+   Slides sideways; the dot says what kind of session it was: ember lifting,
+   amber a run, lime a record. */
 
-.at-timeline {
+.at-recent {
   list-style: none;
-  margin: 0 18px 22px;
-  padding: 0 0 0 16px;
-  border-left: 2px solid var(--hair);
+  margin: 0 0 22px;
+  padding: 0 18px 4px;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 18px;
+  scrollbar-width: none;
 }
 
-.at-timeline li { position: relative; }
+.at-recent::-webkit-scrollbar { display: none; }
+.at-recent li { flex-shrink: 0; scroll-snap-align: start; }
 
-.at-timeline li::before {
-  content: '';
-  position: absolute;
-  left: -24px;
-  top: 12px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--ember);
-  box-shadow: 0 0 0 3px var(--sand);
-}
-
-.at-timeline li[data-kind='cardio']::before { background: var(--amber); }
-.at-timeline li[data-kind='pr']::before { background: var(--lime); }
-
-.at-timeline button {
-  width: 100%;
+.at-recent button {
+  width: 156px;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 8px 10px;
-  margin-left: -10px;
+  gap: 4px;
+  padding: 14px;
   border: 0;
-  border-radius: 14px;
-  background: none;
+  border-radius: 22px;
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
   color: var(--cocoa);
   text-align: left;
   cursor: pointer;
 }
 
-.at-timeline button:active { background: var(--at-tonal-soft); }
-.at-timeline small { font-size: 12px; font-weight: 700; color: var(--muted); }
-.at-timeline b { font-size: 15px; font-weight: 800; }
-.at-timeline span { font-size: 13px; color: var(--muted); }
+.at-recent button:active { transform: scale(0.97); }
+.at-recent small { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.at-recent small i { width: 8px; height: 8px; border-radius: 50%; background: var(--ember); }
+.at-recent li[data-kind='cardio'] small i { background: var(--amber); }
+.at-recent li[data-kind='pr'] small i { background: var(--lime); }
+.at-recent b { font-size: 15px; font-weight: 800; line-height: 1.2; }
+.at-recent span { font-size: 12px; color: var(--muted); line-height: 1.35; }
 
 /* ---------- coach note ---------- */
 
