@@ -50,6 +50,46 @@ function render() {
   return renderScreen('today', { data: 'empty', now: new Date() });
 }
 
+/**
+ * "Up next: chest" and "Train today" are the answer to a day not trained yet.
+ * Once the gym session is in, both read as an order to go again.
+ */
+describe('what to train, once the day is trained', () => {
+  beforeEach(async () => {
+    useStore.setState(initialState, true);
+    await Promise.all(db.tables.map(t => t.clear()));
+  });
+
+  const upNext = () => document.querySelector('.at-today-next, [class*="upnext"]')?.textContent ?? text();
+
+  it('still says what is up next on a day not trained yet', async () => {
+    await seedSession(new Date(Date.now() - 2 * DAY), 'Pull B', [{ name: 'Barbell Row', weight: 70 }]);
+    render();
+    await waitFor(() => expect(upNext()).toMatch(/Up next/));
+  });
+
+  it('stops saying what is up next once today has been trained', async () => {
+    await seedSession(new Date(), 'Push A', [{ name: 'Barbell Bench Press', weight: 80 }]);
+    render();
+    await waitFor(() => expect(card()?.getAttribute('data-trained')).toBe('true'));
+    expect(text()).not.toMatch(/Up next/);
+  });
+
+  it('leads the Train tab with a suggestion only while today is still to train', async () => {
+    // Chest, four days rested: due.
+    await seedSession(new Date(Date.now() - 4 * DAY), 'Push A', [{ name: 'Barbell Bench Press', weight: 80 }]);
+    const before = renderScreen('train', { data: 'empty', now: new Date() });
+    await waitFor(() => expect(document.querySelector('.at-hub-suggest')).toBeTruthy(), { timeout: 20000 });
+    before.unmount();
+
+    // Legs today. Chest is still due, so only "today is trained" can hide it.
+    await seedSession(new Date(), 'Legs', [{ name: 'Barbell Full Squat', weight: 100 }]);
+    renderScreen('train', { data: 'empty', now: new Date() });
+    await waitFor(() => expect(text()).toMatch(/Legs/), { timeout: 20000 });
+    expect(document.querySelector('.at-hub-suggest')).toBeNull();
+  });
+});
+
 describe("Today — what you have trained", () => {
   beforeEach(async () => {
     useStore.setState(initialState, true);

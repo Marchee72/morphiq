@@ -29,6 +29,7 @@ export const AtlasGymHub: React.FC = () => {
   const [offset, setOffset] = useState(0);
 
   const suggestion = suggestTraining(offset);
+  const liftedToday = training.today.sessions.length > training.today.cardioSessions.length;
   const names = suggestion?.groups.map(g => t(g.labelKey)) ?? [];
   const title = names.length > 1
     ? `${names.slice(0, -1).join(', ')} ${t('common.and')} ${names[names.length - 1].toLowerCase()}`
@@ -62,7 +63,9 @@ export const AtlasGymHub: React.FC = () => {
         </ol>
       </header>
 
-      {suggestion && (
+      {/* Not once today's gym session is in — "train today" over a day already
+          trained reads as an order to go again. A run alone does not count. */}
+      {suggestion && !liftedToday && (
         <section className="at-hub-suggest at-enter" aria-label={t('train.suggestKicker')}>
           <div className="at-today-glow" aria-hidden="true" />
           <small><Sparkles size={14} /> {t('train.suggestKicker')}</small>

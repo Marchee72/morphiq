@@ -116,6 +116,12 @@ export function buildWeeklyVolume(
 
 export interface WeeklyStatsVM {
   workouts: number;
+  /**
+   * Only the sessions with sets in them — what the volume figure is made of.
+   * A walk the watch recorded is a workout, but it adds nothing to tonnage, and
+   * counting it beside the tonnes read as though it had.
+   */
+  strengthWorkouts: number;
   minutes: number;
   calories: number;
   volumeKg: number;
@@ -132,6 +138,7 @@ export function buildWeeklyStats(
 
   return {
     workouts: recent.length,
+    strengthWorkouts: recent.filter(log => (setsByLog[log.id ?? ''] ?? []).some(isCountedSet)).length,
     minutes: recent.reduce((total, log) => total + (log.duration ?? 0), 0),
     calories: Math.round(recent.reduce((total, log) => total + (log.caloriesBurned ?? 0), 0)),
     volumeKg: recent.reduce((total, log) => total + totalVolume(setsByLog[log.id ?? ''] ?? []), 0),

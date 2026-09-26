@@ -466,8 +466,12 @@ export class MorphIQCoach implements ICoachAgentService {
     const provider = buildProviderFromEnv();
     if (apiKey) provider.apiKey = apiKey;
 
+    // Failures throw rather than coming back as text. Returned as a reply, an
+    // error was saved into the thread as though the coach had said it — in
+    // English, with the provider's raw message — and the screen could not tell
+    // it apart from an answer to show it as the failure it was.
     if (!provider.apiKey && !provider.baseUrl.includes('localhost')) {
-      return 'No API key configured. Set VITE_LLM_API_KEY in your .env file to enable AI Coaching.';
+      throw new Error('No API key configured. Set VITE_LLM_API_KEY in your .env file to enable AI Coaching.');
     }
 
     const coachPromptContext = buildCoachPrompt(context, '');
@@ -482,29 +486,23 @@ export class MorphIQCoach implements ICoachAgentService {
       messages.push({ role: 'user', content: userMessage });
     }
 
-    try {
-      // Without a data source there is nothing to look up, so the fixed prompt
-      // above is all the model gets — the same behaviour as before tools existed.
-      if (!context.dataSource) {
-        return await chatCompletion(provider, systemInstruction, messages.map(m => ({
-          role: m.role,
-          content: m.content ?? '',
-        })));
-      }
-
-      const source = context.dataSource;
-      return await chatCompletionWithTools(
-        provider,
-        systemInstruction,
-        messages,
-        COACH_TOOLS,
-        (name, args) => runCoachTool(name, args, source),
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('MorphIQ Coach LLM Error:', msg);
-      return `AI Coach Error: ${msg}`;
+    // Without a data source there is nothing to look up, so the fixed prompt
+    // above is all the model gets — the same behaviour as before tools existed.
+    if (!context.dataSource) {
+      return await chatCompletion(provider, systemInstruction, messages.map(m => ({
+        role: m.role,
+        content: m.content ?? '',
+      })));
     }
+
+    const source = context.dataSource;
+    return await chatCompletionWithTools(
+      provider,
+      systemInstruction,
+      messages,
+      COACH_TOOLS,
+      (name, args) => runCoachTool(name, args, source),
+    );
   }
 }
 

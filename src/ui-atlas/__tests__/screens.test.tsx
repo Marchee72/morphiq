@@ -89,6 +89,12 @@ describe('screens', () => {
       expect(screen.getAllByRole('button', { name: /take a new reading/i }).length).toBeGreaterThan(0);
     });
 
+    it('says it is loading, not that there is nothing, while the readings are on their way', () => {
+      renderScreen('body', { data: 'empty', overrides: { measurementsLoaded: false } });
+      expect(screen.getByText(/Loading your readings/i)).toBeInTheDocument();
+      expect(screen.queryByText(/No weigh-ins yet/i)).toBeNull();
+    });
+
     it('survives a history too short to compute a 30-day delta', () => {
       renderScreen('body', { data: 'sparse' });
       const text = visibleText();

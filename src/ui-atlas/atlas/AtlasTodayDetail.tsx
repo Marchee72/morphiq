@@ -165,7 +165,9 @@ export const AtlasTodayDetail: React.FC<{
     // Mid-session the interesting breakdown is this session's exercises; with
     // nothing running it is the week's sessions, which is what the card shows.
     const weekSince = now.getTime() - 7 * 86_400_000;
-    const weekSessions = training.history.filter(entry => entry.at.getTime() >= weekSince);
+    // Strength sessions only: a walk adds nothing to tonnage, so listing it
+    // here at 0.0 t was a row about something the figure does not contain.
+    const weekSessions = training.history.filter(entry => entry.at.getTime() >= weekSince && entry.sets > 0);
 
     return sheet(
       t('today.volumeDetail'),

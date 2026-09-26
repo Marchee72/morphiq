@@ -191,6 +191,8 @@ export function renderScreen(
     activeProfile: testProfile,
     profiles: [testProfile],
     activeTab: screen,
+    // The fixture's readings are loaded by the time the screen renders.
+    measurementsLoaded: true,
     activeSession: session
       ? {
           startTime: session.startedAt ?? new Date(NOW.getTime() - 35 * 60_000),

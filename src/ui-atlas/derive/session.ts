@@ -91,9 +91,12 @@ export function buildSessionExercises(
     const anchors = anchorsFor(entry.exerciseName);
     const previousBest = bestBeforeSession.get(key) ?? 0;
 
-    const count = Math.max(entry.targetSets || 0, logged.length);
+    // By set number, not position: writes address a set by its number, and a set
+    // added while planned ones are still unwritten lands past a gap. Read by
+    // position, set 4 showed up as set 2.
+    const count = Math.max(entry.targetSets || 0, logged.length, ...logged.map(s => s.setNumber));
     const sets: SessionSetVM[] = Array.from({ length: count }, (_, i) => {
-      const actual = logged[i];
+      const actual = logged.find(s => s.setNumber === i + 1);
       // The routine's suggested load, until a real one is logged over it —
       // mirroring how reps have always read `targetReps`. This is the whole of
       // "suggestion the lifter can override": the dial opens on it, and turning

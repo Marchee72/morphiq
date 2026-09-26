@@ -1895,7 +1895,10 @@
   pointer-events: none;
 }
 
-.at-train-actions > button { pointer-events: auto; }
+/* Every child, not just buttons: the slide-to-finish track is a div, and with
+   only `> button` re-enabled its knob inherited `none` and the drag went
+   through to the set list underneath. */
+.at-train-actions > * { pointer-events: auto; }
 
 /* Ending the exercise stands under logging into it rather than beside it:
    side by side, the two would be equal weights, and one of them is the button
@@ -2075,18 +2078,23 @@
   margin: 4px 18px 0;
   background: var(--d-card);
   border-radius: 999px;
-  padding: 13px 18px;
+  /* 52px tall, the same as `.at-input`: the 44px target is the input itself,
+     and padding stacked on top of it made the pill 70px — the thickest control
+     on any screen. The right side is tight for a button at the end. */
+  padding: 4px 4px 4px 18px;
   box-shadow: var(--d-card-hi);
 }
 
 .at-searchpill input {
   min-height: 44px;
   flex: 1;
+  min-width: 0;
   border: 0;
   background: none;
   outline: none;
   font-family: inherit;
-  font-size: 14px;
+  /* 16px, as every other input: below it iOS zooms the page on focus. */
+  font-size: 16px;
   font-weight: 500;
   color: var(--cocoa);
 }
@@ -2357,6 +2365,17 @@
 
 .at-bignum b small { font-size: 18px; color: var(--muted); }
 
+/* The change over 30 days, on its own line under the number. Inline beside it,
+   a longer one ("+23 % en 30 días") wrapped inside the 52px number's line box
+   and printed over the value. */
+.at-bignum > span {
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
 .at-delta-chip {
   display: inline-block;
   margin-top: 8px;
@@ -2483,6 +2502,178 @@
   margin-top: 7px;
   font-weight: 600;
 }
+
+/* ---------- coach: a header that stays, a thread that scrolls, a composer
+   fixed above the dock ---------- */
+
+.at-coach-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px 12px;
+  background: var(--sand);
+  border-bottom: 1px solid var(--hair);
+}
+
+.at-coach-avatar {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--d-grad);
+  box-shadow: var(--d-hi);
+  color: var(--at-on-clay);
+}
+
+.at-coach-head > div { flex: 1; min-width: 0; }
+.at-coach-head h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+
+/* Clearing asks in place of the title, where it was pressed. */
+.at-coach-clear { flex-shrink: 0; width: 44px; height: 44px; }
+.at-coach-confirm { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
+
+/* A question that went unanswered, said as such rather than left hanging. */
+.at-coach-error {
+  align-self: flex-start;
+  max-width: 86%;
+  margin-top: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 15px;
+  border-radius: 22px 22px 22px 8px;
+  background: var(--at-tonal-soft);
+  box-shadow: inset 0 0 0 1.5px var(--clay);
+  color: var(--cocoa);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.at-coach-error svg { flex-shrink: 0; margin-top: 1px; color: var(--clay); }
+.at-coach-error b { display: block; font-weight: 700; }
+.at-coach-head small { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+
+/* Clears the fixed composer and its prompts, so the last reply is never under them. */
+.at-coach-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px 150px;
+}
+
+.at-coach-day {
+  align-self: center;
+  margin: 6px 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.at-coach-day::first-letter { text-transform: uppercase; }
+
+.at-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  max-width: 86%;
+  margin-top: 6px;
+}
+
+.at-msg[data-from='user'] { align-self: flex-end; align-items: flex-end; }
+
+.at-coach-thread .at-bubble {
+  max-width: none;
+  margin: 0;
+  padding: 11px 15px;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: pre-line;
+}
+
+.at-msg .at-bubble-time { margin: 0; padding: 0 6px; font-size: 11px; }
+.at-coach-thread .at-routine { margin-top: 8px; }
+
+/* Three dots while the reply is on its way. */
+.at-typing { align-self: flex-start; display: flex; gap: 5px; margin-top: 6px; padding: 15px 16px; }
+.at-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: at-typing 1.2s infinite; }
+.at-typing i:nth-child(2) { animation-delay: 0.2s; }
+.at-typing i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes at-typing { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .at-typing i { animation: none; opacity: 0.6; } }
+
+/* Nothing asked yet: the starters are the screen. */
+.at-coach-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 32px 18px 120px;
+}
+
+.at-coach-empty h2 { margin: 0; font-size: 26px; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; }
+.at-coach-empty p { margin: 0 0 14px; font-size: 15px; line-height: 1.5; color: var(--muted); }
+
+.at-coach-starters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+.at-coach-starter {
+  min-height: 96px;
+  padding: 14px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.at-coach-starter small { font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.at-coach-starter b { font-size: 15px; font-weight: 700; line-height: 1.25; }
+
+/* Fixed like the Train action bar, and at the same height above the dock. */
+.at-coach-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 0 10px;
+  background: linear-gradient(to top, var(--sand) 78%, transparent);
+}
+
+.at-coach-prompts {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 16px;
+  scrollbar-width: none;
+}
+
+.at-coach-prompts::-webkit-scrollbar { display: none; }
+.at-coach-composer { margin: 0 16px; box-shadow: var(--d-card-hi), 0 6px 18px rgba(30, 15, 5, 0.08); }
+
+/* Typing: the dock and the suggestions step aside, and the composer sits on
+   the keyboard. `keyboard-open` is set on <body> by main.tsx. */
+body.keyboard-open .app[data-screen='coach'] .at-dock { display: none; }
+body.keyboard-open .at-coach-dock { bottom: 0; padding-top: 8px; }
+body.keyboard-open .at-coach-prompts { display: none; }
 
 .at-routine {
   background: var(--d-card);
@@ -2998,17 +3189,7 @@ button.at-routine-item { cursor: pointer; }
 }
 
 /* The undo pill grows out of the trash circle while it counts down. */
-.at-editor-tools .at-editor-undo {
-  width: auto;
-  min-width: 32px;
-  border-radius: 999px;
-  background: var(--d-danger);
-  color: #fff;
-}
-.at-editor-tools .at-editor-undo > span { padding: 0 9px; min-height: 32px; }
-
 .at-editor-discard { width: 100%; justify-content: center; }
-.at-editor-discard > span { width: 100%; justify-content: center; }
 
 .at-editor-tools button:disabled { opacity: 0.3; cursor: default; }
 
@@ -3081,6 +3262,211 @@ button.at-routine-item { cursor: pointer; }
   text-transform: uppercase;
   color: var(--muted);
 }
+
+/* Search and filters, pinned to the top of whatever scrolls them — the picker
+   itself, or `.app-scroll` on the Find tab. Opaque, so rows pass under it. */
+.at-browse-bar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding: 4px 0 8px;
+  background: var(--sand);
+}
+
+/* The picker draws under the status bar; the pinned bar stops below it, and
+   this covers the strip above so rows do not show through it. */
+.at-picker .at-browse-bar { top: env(safe-area-inset-top, 0px); }
+.at-picker .at-browse-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--sand);
+}
+
+/* One filter row: the equipment chip, fixed, a hairline, then the body parts,
+   which scroll on their own. */
+.at-picker-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0 0 18px;
+}
+
+.at-picker-filters > .at-chip { flex-shrink: 0; }
+.at-picker-filters .at-chiprail { flex: 1; min-width: 0; padding: 0 18px 0 0; }
+.at-chiprail-sep { flex-shrink: 0; width: 1.5px; height: 24px; background: var(--hair); }
+
+/* A chosen equipment reads as a filter in force, with its own way out. */
+.at-chip[data-solid='true'] {
+  background: var(--cocoa);
+  border-color: transparent;
+  color: var(--sand);
+}
+
+.at-rail-note { font-size: 12px; font-weight: 600; color: var(--muted); }
+
+/* "Your usual": favourites and recents, one tap from adding. */
+.at-usual {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 0 18px 4px;
+  scrollbar-width: none;
+}
+
+.at-usual::-webkit-scrollbar { display: none; }
+
+.at-usual-card {
+  flex-shrink: 0;
+  width: 132px;
+  padding: 8px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.at-usual-img,
+.at-pickrow-img {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--at-figure-skin);
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.at-usual-img { height: 76px; border-radius: 14px; }
+.at-usual-img img,
+.at-pickrow-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+.at-usual-card b {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  min-height: 2.4em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.at-usual-card small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* Rows rather than a grid: the whole name, and what you know about it beside it. */
+.at-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 12px 28px;
+}
+
+.at-pickrow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0 6px 6px;
+  border-radius: 20px;
+}
+
+.at-pickrow:has(.at-pickrow-tap:active) { background: var(--card); }
+
+.at-pickrow-img {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  cursor: pointer;
+}
+
+.at-pickrow-tap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 4px 6px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.at-pickrow-tap b { font-size: 15px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+.at-pickrow-tap span { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+
+.at-pickrow-best {
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--at-tonal);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 700;
+  color: var(--cocoa);
+}
+
+.at-pickrow-fav {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.at-pickrow-fav[data-on='true'] { color: var(--clay); }
+
+/* Equipment sheet: one tap picks and closes. */
+.at-picker-options { display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px; }
+
+.at-picker-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  background: none;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--cocoa);
+  text-align: left;
+  cursor: pointer;
+}
+
+.at-picker-option:active { background: var(--card); }
+.at-picker-option small { font-size: 13px; font-weight: 700; color: var(--muted); }
 
 .at-chip sup {
   font-size: 8.5px;
@@ -3594,6 +3980,104 @@ button.at-routine-item { cursor: pointer; }
 .at-rpe-summary b {
   font-size: 17px;
   font-weight: 750;
+}
+
+/* ---------- finish sheet: the numbers, the questions, then out ---------- */
+
+.at-finish-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.at-finish-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--d-card);
+  box-shadow: var(--d-card-hi);
+}
+
+.at-finish-stats b { font-size: 21px; font-weight: 800; letter-spacing: -0.01em; white-space: nowrap; }
+.at-finish-stats small { font-size: 12px; font-weight: 600; color: var(--muted); }
+
+.at-finish-effort,
+.at-finish-feel { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.at-finish-effort + .at-finish-feel { margin-top: 18px; }
+
+.at-finish-effort h4,
+.at-finish-feel h4 { margin: 0; font-size: 16px; font-weight: 800; }
+
+.at-finish-effort-head { display: flex; align-items: center; justify-content: space-between; }
+
+.at-finish-effort-head button {
+  min-height: 44px;
+  margin: -12px -8px -12px 0;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--clay);
+  cursor: pointer;
+}
+
+.at-finish-effort-row { display: flex; flex-direction: column; }
+
+.at-finish-effort-name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.at-finish-effort-name > span:first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.at-finish-effort-name > span:last-child { flex-shrink: 0; color: var(--muted); }
+.at-finish-effort-name b { font-size: 20px; font-weight: 800; color: var(--cocoa); }
+
+/* Five feelings in one row: icon over a short name. */
+.at-finish-feelings { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+
+.at-finish-feeling {
+  min-height: 72px;
+  padding: 8px 2px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--d-tonal);
+  box-shadow: var(--d-soft);
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.at-finish-feeling span { font-size: 11px; font-weight: 700; line-height: 1.15; text-align: center; color: var(--cocoa); }
+/* Ink and ground swap after dark, so the chosen one inverts in both modes. */
+.at-finish-feeling[data-on='true'] { background: var(--cocoa); box-shadow: none; color: var(--sand); }
+.at-finish-feeling[data-on='true'] span { color: var(--sand); }
+
+.at-finish-foot { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.at-finish-foot .at-btn { min-height: 54px; }
+
+.at-finish-back {
+  min-height: 44px;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
 }
 
 .at-setlist-foot {
@@ -4453,7 +4937,6 @@ button.at-routine-item { cursor: pointer; }
   font-weight: 650;
   color: var(--cocoa);
   font-variant-numeric: tabular-nums;
-  cursor: pointer;
 }
 
 .at-setrow-val i { font-style: normal; color: var(--at-placeholder); font-weight: 500; }
@@ -4496,6 +4979,10 @@ button.at-routine-item { cursor: pointer; }
   border-color: var(--at-tonal);
   color: var(--cocoa);
 }
+
+/* The done mark is status, not a control; the pencil beside it is the control. */
+span.at-setrow-tick { cursor: default; }
+.at-setrow-edit { color: var(--muted); }
 
 /* ---------- google sign-in ---------- */
 

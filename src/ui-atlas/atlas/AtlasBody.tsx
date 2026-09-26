@@ -13,7 +13,7 @@ import { RollingNumber } from '../kit/rolling-number';
 import type { MetricKey, MetricPointVM } from '../types';
 import { AtlasMetricChart } from './AtlasMetricChart';
 import { AtlasMetricDetail } from './AtlasMetricDetail';
-import { AtlasStates } from './AtlasStates';
+import { AtlasSkeleton, AtlasStates } from './AtlasStates';
 
 /**
  * The lanes of the trend chart, top to bottom, all in kg. Each gets its own
@@ -96,6 +96,7 @@ export const AtlasBody: React.FC = () => {
   const { body, profile } = useAppData();
   const actions = useAppActions();
   const { t, tp, fmt } = useT();
+  const measurementsLoaded = useStore(s => s.measurementsLoaded);
 
   const [detail, setDetail] = useState<MetricPointVM | null>(null);
   const [showMore, setShowMore] = useState(false);
@@ -116,6 +117,22 @@ export const AtlasBody: React.FC = () => {
       <Plus size={20} />
     </button>
   );
+
+  // Still on its way is not the same as none: saying "no readings yet" to
+  // someone with a year of them, for as long as the network takes, is wrong.
+  if (!body.hasData && !measurementsLoaded) {
+    return (
+      <>
+        <div className="at-greet" style={{ paddingBottom: 4 }}>
+          <div><h1>{t('body.title')}</h1></div>
+        </div>
+        <span className="at-syncing-pill" role="status">
+          <RefreshCw size={13} className="at-spin" /> {t('body.loading')}
+        </span>
+        <AtlasSkeleton shape="body" />
+      </>
+    );
+  }
 
   if (!body.hasData || !weight) {
     return (

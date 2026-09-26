@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppData, useAppActions } from '../data/useAppData';
 import { useCoachThread, useDismissedRoutines } from '../components/useCoachThread';
 import { useStore } from '../../presentation/state/store';
-import { AtlasStates } from './AtlasStates';
 import type { StaticKey } from '../../i18n/types';
 import type { RoutineTemplate } from '../../core/entities/RoutineTemplate';
 import { RoutineCopyButton } from '../components/RoutineCopyButton';
@@ -73,16 +72,36 @@ const RoutineCard: React.FC<{
   );
 };
 
-const PROMPTS: StaticKey[] = ['coach.prompt.week', 'coach.prompt.routine', 'coach.prompt.balance', 'coach.prompt.plateau'];
+/** The starters: what to ask, and the kind of answer it gets. */
+const PROMPTS: { key: StaticKey; kind: StaticKey }[] = [
+  { key: 'coach.prompt.week', kind: 'coach.kind.week' },
+  { key: 'coach.prompt.routine', kind: 'coach.kind.routine' },
+  { key: 'coach.prompt.balance', kind: 'coach.kind.balance' },
+  { key: 'coach.prompt.plateau', kind: 'coach.kind.plateau' },
+];
 
+const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+
+/**
+ * The coach, as a chat: a header that stays, a thread that scrolls, and the
+ * composer fixed above the dock.
+ *
+ * The composer used to sit at the end of the page, after the thread and a rail
+ * of suggestions — so it scrolled away with the conversation and had to be
+ * found again below every reply. Fixed, it is where the thumb already is; with
+ * the keyboard up the dock steps aside for it (`keyboard-open` in atlas.css).
+ */
 export const AtlasCoach: React.FC = () => {
   const { coach, body, training } = useAppData();
   const actions = useAppActions();
-  const { t, fmt } = useT();
+  const { t, tp, fmt } = useT();
 
   const turns = useCoachThread(coach.thread);
   const [dismissed, dismiss] = useDismissedRoutines();
   const [draft, setDraft] = useState('');
+  const failed = useStore(s => s.chatError);
+  /** Clearing wipes every message for good, so it asks first — in the header, where it was pressed. */
+  const [confirmClear, setConfirmClear] = useState(false);
 
   /**
    * Pins the thread to its newest message.
@@ -96,7 +115,7 @@ export const AtlasCoach: React.FC = () => {
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ block: 'end' });
-  }, [turns.length, coach.isLoading]);
+  }, [turns.length, coach.isLoading, failed]);
 
   const send = (text: string) => {
     const trimmed = text.trim();
@@ -107,27 +126,70 @@ export const AtlasCoach: React.FC = () => {
 
   return (
     <>
-      <div className="at-greet">
-        <div>
-          <small>
-            {t('coach.context', { sessions: training.history.length, weighIns: body.readingCount })}
-          </small>
-          <h1>{t('nav.coach')}</h1>
-        </div>
-        <button className="at-avatar" style={{ background: 'var(--sage)' }} aria-hidden="true">
-          <Sparkles size={18} />
-        </button>
-      </div>
+      <header className="at-coach-head">
+        {confirmClear ? (
+          <>
+            <b className="at-coach-confirm">{t('coach.clearConfirm')}</b>
+            <button className="at-btn at-btn-sm" data-ghost="true" onClick={() => setConfirmClear(false)}>
+              {t('common.cancel')}
+            </button>
+            <button
+              className="at-btn at-btn-sm"
+              data-danger="true"
+              onClick={() => { setConfirmClear(false); void useStore.getState().clearChat(); }}
+            >
+              {t('coach.clearYes')}
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="at-coach-avatar" aria-hidden="true"><Sparkles size={20} /></span>
+            <div>
+              <h1>{t('nav.coach')}</h1>
+              <small>{t('coach.context', {
+                sessions: tp('history.sessions', training.history.length),
+                weighIns: tp('coach.weighIns', body.readingCount),
+              })}</small>
+            </div>
+            {turns.length > 0 && (
+              <button
+                className="at-round-sm at-coach-clear"
+                onClick={() => setConfirmClear(true)}
+                disabled={coach.isLoading}
+                aria-label={t('coach.clear')}
+                title={t('coach.clear')}
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </>
+        )}
+      </header>
 
       {turns.length === 0 ? (
-        <AtlasStates icon={<Sparkles size={22} />} title={t('coach.empty')} body={t('coach.emptySub')} />
+        // Nothing asked yet: the starters are the screen, not a strip under it.
+        <div className="at-coach-empty">
+          <h2>{t('coach.empty')}</h2>
+          <p>{t('coach.emptySub')}</p>
+          <div className="at-coach-starters">
+            {PROMPTS.map(prompt => (
+              <button key={prompt.key} className="at-coach-starter" onClick={() => send(t(prompt.key))}>
+                <small>{t(prompt.kind)}</small>
+                <b>{t(prompt.key)}</b>
+              </button>
+            ))}
+          </div>
+        </div>
       ) : (
-        <div className="at-pad">
-          {turns.map(turn => (
+        <div className="at-coach-thread">
+          {turns.map((turn, i) => (
             <React.Fragment key={turn.key}>
+              {(i === 0 || !sameDay(turns[i - 1].at, turn.at)) && (
+                <div className="at-coach-day">{fmt.relativeDay(turn.at)}</div>
+              )}
               {turn.text && (
-                <div className="at-bubble" data-from={turn.from}>
-                  {turn.text}
+                <div className="at-msg" data-from={turn.from}>
+                  <div className="at-bubble" data-from={turn.from}>{turn.text}</div>
                   <span className="at-bubble-time">{fmt.clock(turn.at)}</span>
                 </div>
               )}
@@ -149,32 +211,50 @@ export const AtlasCoach: React.FC = () => {
             </React.Fragment>
           ))}
           {coach.isLoading && (
-            <div className="at-bubble" data-from="coach">{t('coach.thinking')}…</div>
+            <div className="at-bubble at-typing" data-from="coach" role="status" aria-label={t('coach.thinking')}>
+              <i /><i /><i />
+            </div>
+          )}
+          {failed && !coach.isLoading && (
+            <div className="at-coach-error" role="alert">
+              <AlertTriangle size={17} />
+              <span>
+                <b>{t('coach.error')}</b>
+                {t('coach.errorSub')}
+              </span>
+            </div>
           )}
           <div ref={endRef} />
         </div>
       )}
 
-      <div className="at-rail-head"><h3>{t('coach.ask')}</h3></div>
-      <div className="at-chiprail" style={{ flexWrap: 'wrap' }}>
-        {PROMPTS.map(key => (
-          <button key={key} className="at-chip" onClick={() => send(t(key))}>{t(key)}</button>
-        ))}
-      </div>
-
-      <div className="at-pad" style={{ paddingTop: 14, paddingBottom: 26 }}>
+      <div className="at-coach-dock">
+        {turns.length > 0 && (
+          <div className="at-coach-prompts">
+            {PROMPTS.map(prompt => (
+              <button key={prompt.key} className="at-chip" onClick={() => send(t(prompt.key))}>{t(prompt.key)}</button>
+            ))}
+          </div>
+        )}
         <form
-          className="at-searchpill"
+          className="at-searchpill at-coach-composer"
           onSubmit={e => { e.preventDefault(); send(draft); }}
         >
           <input
             value={draft}
             onChange={e => setDraft(e.target.value)}
+            // The keyboard takes half the screen; keep the newest reply above it.
+            onFocus={() => setTimeout(() => endRef.current?.scrollIntoView?.({ block: 'end' }), 300)}
             placeholder={t('coach.placeholder')}
             aria-label={t('coach.placeholder')}
           />
-          <button type="submit" className="at-round" disabled={coach.isLoading} aria-label={t('coach.send')}>
-            <Send size={15} />
+          <button
+            type="submit"
+            className="at-round"
+            disabled={coach.isLoading || !draft.trim()}
+            aria-label={t('coach.send')}
+          >
+            <Send size={17} />
           </button>
         </form>
       </div>

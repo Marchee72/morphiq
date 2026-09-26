@@ -54,9 +54,11 @@ describe('DeepSeekCoach', () => {
     vi.restoreAllMocks();
   });
 
-  it('should return API key warning if key is empty', async () => {
-    const response = await coach.generateResponse(mockContext, 'hello', '');
-    expect(response).toContain('No API key configured. Set VITE_LLM_API_KEY');
+  // Failures throw: returned as text they were saved into the thread as though
+  // the coach had said them.
+  it('fails rather than answering when no key is configured', async () => {
+    await expect(coach.generateResponse(mockContext, 'hello', ''))
+      .rejects.toThrow('No API key configured. Set VITE_LLM_API_KEY');
   });
 
   it('should format prompts correctly and call mock fetch', async () => {
@@ -98,7 +100,7 @@ describe('DeepSeekCoach', () => {
     expect(response).toBe('Mocked response from AI Coach: Keep training hard!');
   });
 
-  it('should return error message if fetch fails', async () => {
+  it('fails rather than answering when the provider does', async () => {
     const mockFetch = vi.fn().mockImplementation(() => {
       return Promise.resolve({
         ok: false,
@@ -113,7 +115,7 @@ describe('DeepSeekCoach', () => {
 
     vi.stubGlobal('fetch', mockFetch);
 
-    const response = await coach.generateResponse(mockContext, 'hello', 'test-api-key');
-    expect(response).toContain('AI Coach Error: Internal server error');
+    await expect(coach.generateResponse(mockContext, 'hello', 'test-api-key'))
+      .rejects.toThrow('Internal server error');
   });
 });

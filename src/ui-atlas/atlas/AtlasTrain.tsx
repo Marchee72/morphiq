@@ -90,7 +90,7 @@ export const AtlasTrain: React.FC = () => {
   /** When the last set was logged, which is what the rest timer counts from. */
   const [lastSetAt, setLastSetAt] = useState<Date | null>(null);
   const live = useLiveSession(cursor, setCursor);
-  useFocusOnAdd(sessionExercises, setCursor);
+  useFocusOnAdd(session?.startedAt.getTime(), sessionExercises, setCursor);
 
   const showSummary = useSessionSummary(s => s.show);
   const dismissSummary = useSessionSummary(s => s.dismiss);
@@ -251,6 +251,7 @@ export const AtlasTrain: React.FC = () => {
         onClose={() => setFinishingAt(null)}
         busy={finishing}
         totals={sessionTotals}
+        sessionTitle={session.title}
         elapsedSec={finishingAt
           ? Math.max(0, Math.floor((finishingAt.getTime() - session.startedAt.getTime()) / 1000))
           : 0}
@@ -446,7 +447,7 @@ export const AtlasTrain: React.FC = () => {
             </button>
           );
         })}
-        <button className="at-setpill" onClick={live.addSet} aria-label={t('train.addSet')}>
+        <button className="at-setpill" onClick={() => { setViewSet(null); live.addSet(); }} aria-label={t('train.addSet')}>
           <Plus size={13} />
         </button>
       </div>

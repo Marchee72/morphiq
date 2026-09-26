@@ -219,7 +219,12 @@ export function useLiveSession(
       reps: last?.reps ?? 10,
       isCompleted: false,
     });
-  }, [sessionExercises, cursor.exerciseIdx, writeSet]);
+    // After a finished exercise the cursor sits on its last, logged set, so the
+    // button went on offering to complete that set instead of the one just
+    // added. Land on the first set still to do — the new one when all are done.
+    const open = target.sets.findIndex(s => !s.done);
+    onCursorChange?.({ exerciseIdx: cursor.exerciseIdx, setIdx: open === -1 ? target.sets.length : open });
+  }, [sessionExercises, cursor.exerciseIdx, writeSet, onCursorChange]);
 
   const removeSet = useCallback((setIdx: number) => {
     const store = useStore.getState();

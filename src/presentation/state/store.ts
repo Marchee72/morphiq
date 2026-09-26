@@ -290,6 +290,12 @@ interface StoreState {
   profilesLoaded: boolean;
   activeProfile: UserProfile | null;
   measurements: Measurement[];
+  /**
+   * Whether `measurements` holds the active profile's readings yet. An empty
+   * list means "no readings" only once this is true — before it, Body is still
+   * loading and must not say there is nothing to show.
+   */
+  measurementsLoaded: boolean;
   foodLogs: FoodLog[];
   workoutLogs: WorkoutLog[];
   workoutHistory: WorkoutLog[];
@@ -322,6 +328,8 @@ interface StoreState {
   selectedDate: Date;
   apiKey: string;
   isAiLoading: boolean;
+  /** The last question to the coach went unanswered. Cleared by the next one. */
+  chatError: boolean;
   selectedWorkoutForCoach: WorkoutLog | null;
   activeCoachSubTab: 'chat' | 'routine' | 'history';
   activeTab: AppScreenId;
@@ -515,6 +523,7 @@ export const useStore = create<StoreState>((set, get) => ({
   profilesLoaded: false,
   activeProfile: null,
   measurements: [],
+  measurementsLoaded: false,
   foodLogs: [],
   workoutLogs: [],
   workoutHistory: [],
@@ -1139,6 +1148,7 @@ export const useStore = create<StoreState>((set, get) => ({
   selectedDate: new Date(),
   apiKey: (import.meta.env?.VITE_DEEPSEEK_API_KEY as string) || '',
   isAiLoading: false,
+  chatError: false,
 
   loadProfiles: async () => {
     try {
@@ -1165,7 +1175,7 @@ export const useStore = create<StoreState>((set, get) => ({
         // The stored session goes with the profile it belonged to — signing out
         // must not leave a workout waiting to be resumed under the next account.
         clearStoredSession();
-        set({ activeProfile: null, pendingResume: null, measurements: [], foodLogs: [], workoutLogs: [], workoutHistory: [], chatHistory: [], favoriteExerciseIds: [], activeWorkoutSets: {}, exerciseStats: {} });
+        set({ activeProfile: null, pendingResume: null, measurements: [], measurementsLoaded: false, foodLogs: [], workoutLogs: [], workoutHistory: [], chatHistory: [], favoriteExerciseIds: [], activeWorkoutSets: {}, exerciseStats: {} });
       }
     } catch (err) {
       // Settled even on failure. In server mode this is a network call, and an
@@ -1179,38 +1189,55 @@ export const useStore = create<StoreState>((set, get) => ({
   setActiveProfile: async (id: string) => {
     const profile = await profileRepo.get(id);
     if (profile) {
-      set({ activeProfile: profile });
-      
-      // Migration: Convert synced workouts duration from seconds to minutes if stored incorrectly (duration > 300)
-      try {
-        const allWorkoutsForMigration = await workoutRepo.getAll(id);
-        const workoutsToMigrate = allWorkoutsForMigration.filter(w => w.source === 'health-connect' && w.duration > 300);
-        if (workoutsToMigrate.length > 0) {
-          console.log(`MorphIQ Store: Migrating ${workoutsToMigrate.length} workout logs from seconds to minutes...`);
-          for (const w of workoutsToMigrate) {
-            w.duration = Math.round(w.duration / 60);
-            await workoutRepo.update(w);
+      set({ activeProfile: profile, measurementsLoaded: false });
+
+      /**
+       * Body waits on nothing but its readings. This used to be the second of a
+       * dozen reads made one after another — every one a network round trip in
+       * server mode — so Body said "no readings" for as long as the whole chain
+       * took, and only then showed them.
+       */
+      const readings = measurementRepo.getAll(id)
+        .then(history => set({ measurements: history }))
+        .finally(() => set({ measurementsLoaded: true }));
+
+      // Migration: Convert synced workouts duration from seconds to minutes if
+      // stored incorrectly (duration > 300). Reads every workout ever logged, so
+      // it runs once per profile rather than on every launch.
+      const migrated = `morphiq_duration_migrated_${id}`;
+      if (localStorage.getItem(migrated) !== 'true') {
+        try {
+          const allWorkoutsForMigration = await workoutRepo.getAll(id);
+          const workoutsToMigrate = allWorkoutsForMigration.filter(w => w.source === 'health-connect' && w.duration > 300);
+          if (workoutsToMigrate.length > 0) {
+            console.log(`MorphIQ Store: Migrating ${workoutsToMigrate.length} workout logs from seconds to minutes...`);
+            for (const w of workoutsToMigrate) {
+              w.duration = Math.round(w.duration / 60);
+              await workoutRepo.update(w);
+            }
           }
+          localStorage.setItem(migrated, 'true');
+        } catch (err) {
+          console.error('Failed to run workout duration migration:', err);
         }
-      } catch (err) {
-        console.error('Failed to run workout duration migration:', err);
       }
 
-      const history = await measurementRepo.getAll(id);
-      const foods = await foodRepo.getAll(id, get().selectedDate);
-      const workouts = await workoutRepo.getAll(id, get().selectedDate);
-      
       const end = new Date();
       const start = new Date();
       start.setDate(start.getDate() - 30);
-      const workoutHist = await workoutRepo.getRange(id, start, end);
-      
-      const chat = await messageRepo.getAll(id);
+
+      // Independent of each other, so side by side rather than in a queue.
+      const [foods, workouts, workoutHist, chat, pendingSets] = await Promise.all([
+        foodRepo.getAll(id, get().selectedDate),
+        workoutRepo.getAll(id, get().selectedDate),
+        workoutRepo.getRange(id, start, end),
+        messageRepo.getAll(id),
+        workoutSetRepo.getForWorkout('pending'),
+      ]);
 
       const workoutSets: Record<string, WorkoutSet[]> = {};
-      const pendingSets = await workoutSetRepo.getForWorkout('pending');
       workoutSets['pending'] = pendingSets;
-      
+
       let activeWorkout = null;
       if (pendingSets.length > 0) {
         activeWorkout = {
@@ -1224,19 +1251,14 @@ export const useStore = create<StoreState>((set, get) => ({
         };
       }
 
-      for (const w of workouts) {
-        if (w.id) {
-          workoutSets[w.id] = await workoutSetRepo.getForWorkout(w.id);
-        }
-      }
-      for (const w of workoutHist) {
-        if (w.id && !workoutSets[w.id]) {
-          workoutSets[w.id] = await workoutSetRepo.getForWorkout(w.id);
-        }
-      }
+      // One read per session, all at once. In a queue, thirty days of training
+      // was thirty round trips back to back before anything else could show.
+      const ids = [...new Set([...workouts, ...workoutHist].map(w => w.id).filter((wid): wid is string => Boolean(wid)))];
+      const sets = await Promise.all(ids.map(wid => workoutSetRepo.getForWorkout(wid)));
+      ids.forEach((wid, i) => { workoutSets[wid] = sets[i]; });
 
+      await readings;
       set({
-        measurements: history,
         foodLogs: foods,
         workoutLogs: workouts,
         workoutHistory: workoutHist,
@@ -1392,7 +1414,7 @@ export const useStore = create<StoreState>((set, get) => ({
     set(state => ({ chatHistory: [...state.chatHistory, userMsg] }));
 
     // 2. Fetch recent context for RAG
-    set({ isAiLoading: true });
+    set({ isAiLoading: true, chatError: false });
     
     try {
       const history = get().measurements;
@@ -1457,7 +1479,10 @@ export const useStore = create<StoreState>((set, get) => ({
       await messageRepo.add(aiMsg);
       set(state => ({ chatHistory: [...state.chatHistory, aiMsg] }));
     } catch (err: unknown) {
+      // Nothing goes into the thread: the question stays, unanswered, and the
+      // screen says so rather than leaving it hanging with no reply.
       console.error('Chat error:', err);
+      set({ chatError: true });
     } finally {
       set({ isAiLoading: false });
     }
@@ -1467,7 +1492,7 @@ export const useStore = create<StoreState>((set, get) => ({
     const profile = get().activeProfile;
     if (profile) {
       await messageRepo.clear(profile.id!);
-      set({ chatHistory: [] });
+      set({ chatHistory: [], chatError: false });
     }
   },
 
@@ -1500,11 +1525,10 @@ export const useStore = create<StoreState>((set, get) => ({
     start.setDate(start.getDate() - days);
     const logs = await workoutRepo.getRange(profile.id!, start, end);
     const workoutSets = { ...get().activeWorkoutSets };
-    for (const w of logs) {
-      if (w.id && !workoutSets[w.id]) {
-        workoutSets[w.id] = await workoutSetRepo.getForWorkout(w.id);
-      }
-    }
+    // Side by side, as in `setActiveProfile`: one round trip each, not a queue.
+    const missing = logs.map(w => w.id).filter((wid): wid is string => Boolean(wid) && !workoutSets[wid!]);
+    const fetched = await Promise.all(missing.map(wid => workoutSetRepo.getForWorkout(wid)));
+    missing.forEach((wid, i) => { workoutSets[wid] = fetched[i]; });
     set({ workoutHistory: logs, activeWorkoutSets: workoutSets });
   },
 

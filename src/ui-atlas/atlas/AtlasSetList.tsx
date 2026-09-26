@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Trophy } from 'lucide-react';
+import { Check, Pencil, Trophy } from 'lucide-react';
 import { useT } from '../../i18n';
 import { borgLabelKey } from '../derive/borg';
 import { snapWeight } from '../derive/weightLadder';
@@ -115,25 +115,24 @@ export const AtlasSetList: React.FC<{
           <div key={set.setNum} className="at-setrow" data-done={set.done} data-cur={i === currentIdx}>
             <span className="at-setrow-n">{set.setNum}</span>
 
+            {/* Read-only. A tap on the row or its tick used to open or flip
+                the set, and a thumb brushing the list mid-workout rewrote it —
+                the pencil is the one way in. */}
+            <span className="at-setrow-val">
+              {logged ? fmt.kgReps(set.weightKg, set.reps) : <i>—</i>}
+              {set.isPr && <Trophy size={11} />}
+            </span>
+
+            <span className="at-setrow-tick" data-on={set.done} aria-hidden="true">
+              <Check size={14} strokeWidth={3} />
+            </span>
+
             <button
-              className="at-setrow-val"
+              className="at-setrow-tick at-setrow-edit"
               onClick={() => onEditing(i)}
               aria-label={t('train.editSetValues', { n: set.setNum })}
             >
-              {logged ? fmt.kgReps(set.weightKg, set.reps) : <i>—</i>}
-              {set.isPr && <Trophy size={11} />}
-            </button>
-
-            {/* Ticking an empty row would record 0 kg × 0, so it asks for the
-                numbers instead of inventing them. */}
-            <button
-              className="at-setrow-tick"
-              data-on={set.done}
-              onClick={() => (logged ? onUpdate(i, { done: !set.done }) : onEditing(i))}
-              aria-label={t('train.markSetDone', { n: set.setNum })}
-              aria-pressed={set.done}
-            >
-              <Check size={14} strokeWidth={3} />
+              <Pencil size={13} />
             </button>
           </div>
         );

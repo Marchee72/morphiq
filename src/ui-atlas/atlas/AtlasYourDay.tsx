@@ -266,7 +266,7 @@ export const AtlasYourDay: React.FC<{
                   ))}
                 </span>
               </span>
-              <small className="at-panel-sub">{tp('history.sessions', training.weeklyStats.workouts)}</small>
+              <small className="at-panel-sub">{tp('history.sessions', training.weeklyStats.strengthWorkouts)}</small>
             </button>
 
             <button className="at-panel-cell" data-wide={!hasBodyFat} onClick={() => actions.openOverlay('history')}>

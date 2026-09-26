@@ -69,7 +69,15 @@ export const AtlasExerciseDetail: React.FC<{
           {session && !sessionExercises.some(ex => ex.exerciseId === exercise.id) && (
             <button
               className="at-btn"
-              onClick={() => { addExercise({ id: exercise.id, name: exercise.name }); onClose(); }}
+              // Adding is the end of the errand, wherever the sheet was opened
+              // from — the Library, or a preview inside the picker — so it ends
+              // on the session, with the picker closed behind it.
+              onClick={() => {
+                addExercise({ id: exercise.id, name: exercise.name });
+                onClose();
+                actions.closeOverlay();
+                actions.navigate('train');
+              }}
             >
               <Plus size={15} /> {t('detail.addToSession')}
             </button>

@@ -255,68 +255,33 @@ describe('Train', () => {
     const names = () =>
       (useStore.getState().activeSession?.routineExercises ?? []).map(e => e.exerciseName);
 
-    /** A second of the undo countdown, the way the component counts it. */
-    const second = () => act(() => { vi.advanceTimersByTime(1000); });
-
-    it('counts down with an undo before dropping an exercise with sets logged', async () => {
+    it('removes an exercise with sets logged on the tap, with no countdown', async () => {
       renderScreen('train', { data: 'rich', session: twoExercises });
       await openList();
-      vi.useFakeTimers();
-      try {
-        fireEvent.click(trashButtons()[0]);
-        // The count is the point: the undo names what goes.
-        expect(screen.getByRole('button', { name: /undo · 2 sets go/i })).toBeTruthy();
-        expect(names()).toContain('Barbell Bench Press');
-        for (let i = 0; i < 5; i++) second();
-        expect(names()).toEqual(['Barbell Row']);
-      } finally {
-        vi.useRealTimers();
-      }
+
+      fireEvent.click(trashButtons()[0]);
+
+      await waitFor(() => expect(names()).toEqual(['Barbell Row']));
+      expect(text()).not.toMatch(/undo/i);
+      expect(useStore.getState().activeSession?.sets ?? []).toHaveLength(0);
     });
 
-    it('keeps the exercise, and its sets, when undone in time', async () => {
-      renderScreen('train', { data: 'rich', session: twoExercises });
-      await openList();
-      vi.useFakeTimers();
-      try {
-        fireEvent.click(trashButtons()[0]);
-        second(); second();
-        fireEvent.click(screen.getByRole('button', { name: /undo · 2 sets go/i }));
-        for (let i = 0; i < 6; i++) second();
-      } finally {
-        vi.useRealTimers();
-      }
-      expect(trashButtons().length).toBe(2);
-      expect(names()).toContain('Barbell Bench Press');
-      expect(useStore.getState().activeSession?.sets).toHaveLength(2);
-    });
-
-    it('does not ask about an exercise with nothing logged against it', async () => {
-      // Friction over nothing is friction paid for nothing: the row goes on the tap.
+    it('removes an exercise with nothing logged on the tap too', async () => {
       renderScreen('train', { data: 'rich', session: twoExercises });
       await openList();
 
       fireEvent.click(trashButtons()[1]);
 
       await waitFor(() => expect(names()).toEqual(['Barbell Bench Press']));
-      expect(text()).not.toMatch(/undo/i);
     });
 
-    it('cancels the countdown when the panel is closed', async () => {
-      // Closing with the X reads as "cancel", so it has to mean it: the panel
-      // unmounts, and the countdown with it.
+    it('discards the session on the tap, with no countdown', async () => {
       renderScreen('train', { data: 'rich', session: twoExercises });
       await openList();
-      vi.useFakeTimers();
-      try {
-        fireEvent.click(trashButtons()[0]);
-        second();
-        fireEvent.click(screen.getByRole('button', { name: /^(close|cerrar)$/i }));
-        for (let i = 0; i < 8; i++) second();
-      } finally {
-        vi.useRealTimers();
-      }
-      expect(names()).toContain('Barbell Bench Press');
+
+      fireEvent.click(screen.getByRole('button', { name: /discard session/i }));
+
+      await waitFor(() => expect(useStore.getState().activeSession).toBeNull());
     });
 
     /**
@@ -588,8 +553,8 @@ describe('Train — perceived exertion', () => {
 
     // Neither exercise was ever closed, so both are still unrated and both are
     // offered — the last one especially, whose effort is freshest.
-    await waitFor(() => expect(text()).toMatch(/how hard was Barbell Bench Press/i));
-    expect(text()).toMatch(/how hard was Barbell Squat/i);
+    await waitFor(() => expect(screen.getByRole('slider', { name: /Barbell Bench Press/i })).toBeInTheDocument());
+    expect(screen.getByRole('slider', { name: /Barbell Squat/i })).toBeInTheDocument();
   });
 
   it('reports the session average once something has been rated', async () => {
@@ -624,6 +589,46 @@ describe('Train — perceived exertion', () => {
     await waitFor(() => expect(text()).toMatch(/finish this session/i));
     // An em-dash here would be answering a question nobody was asked.
     expect(text()).not.toMatch(/avg effort/i);
+  });
+
+  describe('an exercise left unrated at the finish', () => {
+    const unratedSession = {
+      exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 1 }],
+      sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+    };
+    const openFinish = async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: /edit session/i })[0]);
+      fireEvent.click(screen.getByRole('button', { name: /finish session/i }));
+      await waitFor(() => expect(text()).toMatch(/finish this session/i));
+    };
+    const writtenRpe = async () => (await db.workoutSets.toArray())[0]?.rpe;
+
+    it('asks with the effort slider, and saves what it shows', async () => {
+      renderScreen('train', { data: 'rich', session: unratedSession });
+      await openFinish();
+
+      const slider = screen.getByRole('slider', { name: /barbell bench press/i });
+      expect(slider).toHaveAttribute('aria-valuenow', '13');
+      fireEvent.keyDown(slider, { key: 'ArrowRight' });
+      fireEvent.keyDown(slider, { key: 'ArrowRight' });
+      fireEvent.click(screen.getByRole('button', { name: /finish and save/i }));
+
+      await waitFor(async () => expect(await writtenRpe()).toBe(15));
+      await waitFor(() => expect(useStore.getState().activeSession).toBeNull());
+    });
+
+    it('leaves it unrated when skipped', async () => {
+      renderScreen('train', { data: 'rich', session: unratedSession });
+      await openFinish();
+
+      fireEvent.click(screen.getByRole('button', { name: /^skip$/i }));
+      expect(screen.queryByRole('slider')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: /finish and save/i }));
+
+      await waitFor(async () => expect(await db.workoutSets.count()).toBe(1));
+      expect(await writtenRpe()).toBeUndefined();
+      await waitFor(() => expect(useStore.getState().activeSession).toBeNull());
+    });
   });
 
   it('carries the rating through to the saved sets', async () => {
@@ -869,7 +874,7 @@ describe('Train — the set list', () => {
     await waitFor(() => expect(text()).toMatch(/Complete set 2/i));
   });
 
-  it('marks a logged set undone from its row', async () => {
+  it('changes nothing when a row is tapped — only its edit button opens it', () => {
     renderScreen('train', {
       data: 'rich',
       session: {
@@ -878,23 +883,11 @@ describe('Train — the set list', () => {
       },
     });
 
-    fireEvent.click(within(rows()[0] as HTMLElement).getByRole('button', { name: /mark set 1 done/i }));
-    await waitFor(() => {
-      const sets = useStore.getState().activeSession?.sets ?? [];
-      expect(sets.find(s => s.setNumber === 1)?.isCompleted).toBe(false);
-    });
-  });
-
-  it('asks for numbers rather than recording an empty set as 0 x 0', async () => {
-    renderScreen('train', {
-      data: 'rich',
-      session: { exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 4 }], sets: [] },
-    });
-
-    fireEvent.click(within(rows()[2] as HTMLElement).getByRole('button', { name: /mark set 3 done/i }));
-    // Opens the editor instead of writing a meaningless set.
-    await waitFor(() => expect(screen.getByLabelText('Weight 3')).toBeInTheDocument());
-    expect(useStore.getState().activeSession?.sets ?? []).toHaveLength(0);
+    const row = rows()[0] as HTMLElement;
+    expect(within(row).getAllByRole('button')).toHaveLength(1);
+    for (const el of row.querySelectorAll('span')) fireEvent.click(el);
+    expect(screen.queryByLabelText('Weight 1')).toBeNull();
+    expect(useStore.getState().activeSession?.sets[0].isCompleted).toBe(true);
   });
 
   it('stays visible once the exercise is finished, for checking it over', () => {
@@ -1077,6 +1070,39 @@ describe('Train — where the cursor lands', () => {
     expect(text()).toMatch(/Complete set 2/i);
   });
 
+  it('puts the cursor on a set added after the exercise was finished', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 2 }],
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: false }],
+      },
+    });
+
+    fireEvent.click(logButton());
+    await waitFor(() => expect(text()).toMatch(/Complete set 2/i));
+    fireEvent.click(logButton());
+    fireEvent.click(await waitFor(() => screen.getByRole('button', { name: /add set 3/i })));
+    // Used to stay on set 2 and offer to complete it again.
+    await waitFor(() => expect(text()).toMatch(/Complete set 3/i));
+    expect(screen.getByRole('slider', { name: /weight/i })).toHaveAttribute('aria-valuenow', '80');
+  });
+
+  it('leaves the cursor on the set still to log when a set is added ahead of it', async () => {
+    renderScreen('train', {
+      data: 'rich',
+      session: {
+        exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 3 }],
+        sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+      },
+    });
+
+    const pills = document.querySelector('.at-setpills') as HTMLElement;
+    fireEvent.click(within(pills).getByRole('button', { name: /^add set$/i }));
+    await waitFor(() => expect(document.querySelectorAll('.at-setrow')).toHaveLength(4));
+    expect(text()).toMatch(/Complete set 2/i);
+  });
+
   it('unlocks the next set as soon as the one before it goes in', async () => {
     renderScreen('train', {
       data: 'rich',
@@ -1122,10 +1148,10 @@ describe('Train — the exercise list', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /^swap$/i })[0]);
     await waitFor(() => expect(document.querySelector('.at-picker')).toBeTruthy());
     await waitFor(
-      () => expect(document.querySelectorAll('.at-ex-tap').length).toBeGreaterThan(0),
+      () => expect(document.querySelectorAll('.at-pickrow-tap').length).toBeGreaterThan(0),
       { timeout: 20000 },
     );
-    fireEvent.click(document.querySelectorAll('.at-ex-tap')[0] as HTMLElement);
+    fireEvent.click(document.querySelectorAll('.at-pickrow-tap')[0] as HTMLElement);
 
     await waitFor(() => {
       const list = useStore.getState().activeSession?.routineExercises ?? [];

@@ -54,13 +54,13 @@ describe('exercise picker', () => {
   it('narrows results when a body part is chosen', async () => {
     await openPicker();
     await waitFor(
-      () => expect(document.querySelectorAll('.at-ex, .st-row').length).toBeGreaterThan(5),
+      () => expect(document.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5),
       { timeout: 20000 },
     );
 
     fireEvent.click(screen.getAllByRole('button', { name: /Chest/ })[0]);
     await waitFor(() => {
-      const rows = document.querySelectorAll('.at-ex, .st-row');
+      const rows = document.querySelectorAll('.at-pickrow');
       expect(rows.length).toBeGreaterThan(0);
     });
     // Everything visible should now be a chest exercise.
@@ -77,11 +77,11 @@ describe('exercise picker', () => {
   it('adds the chosen exercise to the running session', async () => {
     await openPicker();
     await waitFor(
-      () => expect(document.querySelectorAll('.at-ex-tap, .st-row-tap').length).toBeGreaterThan(0),
+      () => expect(document.querySelectorAll('.at-pickrow-tap').length).toBeGreaterThan(0),
       { timeout: 20000 },
     );
 
-    const first = document.querySelectorAll('.at-ex-tap, .st-row-tap')[0] as HTMLElement;
+    const first = document.querySelectorAll('.at-pickrow-tap')[0] as HTMLElement;
     const chosen = first.textContent ?? '';
     fireEvent.click(first);
 
@@ -99,22 +99,60 @@ describe('exercise picker', () => {
     await openPicker();
     useStore.setState({ activeTab: 'library' });
     await waitFor(
-      () => expect(document.querySelectorAll('.at-ex-tap, .st-row-tap').length).toBeGreaterThan(0),
+      () => expect(document.querySelectorAll('.at-pickrow-tap').length).toBeGreaterThan(0),
       { timeout: 20000 },
     );
 
-    fireEvent.click(document.querySelectorAll('.at-ex-tap, .st-row-tap')[0] as HTMLElement);
+    fireEvent.click(document.querySelectorAll('.at-pickrow-tap')[0] as HTMLElement);
     await waitFor(() => expect(useStore.getState().activeTab).toBe('train'));
+  });
+
+  it('filters by equipment from its sheet, and the chip takes it off again', async () => {
+    await openPicker();
+    await waitFor(() => expect(document.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5), { timeout: 20000 });
+
+    fireEvent.click(document.querySelector('.at-picker-filters .at-chip') as HTMLElement);
+    const option = await waitFor(() => screen.getByRole('button', { name: /^Barbell/ }));
+    fireEvent.click(option);
+
+    const chip = await waitFor(() => screen.getByRole('button', { name: /remove filter barbell/i }));
+    expect(text()).toMatch(/\d+ results?/);
+    fireEvent.click(chip);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /remove filter/i })).toBeNull());
+  });
+
+  it('puts the chosen body part first, where it can be seen and taken off', async () => {
+    await openPicker();
+    await waitFor(() => expect(document.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5), { timeout: 20000 });
+    const firstGroup = () => document.querySelector('.at-picker-filters .at-chiprail .at-chip')?.textContent ?? '';
+    expect(firstGroup()).toMatch(/^Chest/);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Core/ })[0]);
+    await waitFor(() => expect(firstGroup()).toMatch(/^Core/));
+    // Equipment sits outside the rail, so scrolling the body parts leaves it put.
+    expect(document.querySelector('.at-picker-filters .at-chiprail')?.textContent).not.toMatch(/Equipment/);
+  });
+
+  it('offers to drop the filters when a search under them finds nothing', async () => {
+    await openPicker();
+    await waitFor(() => expect(document.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5), { timeout: 20000 });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Chest/ })[0]);
+    fireEvent.change(screen.getByLabelText(/search by name/i), { target: { value: 'squat' } });
+    await waitFor(() => expect(text()).toMatch(/Nothing for “squat”/));
+
+    fireEvent.click(screen.getByRole('button', { name: /search without filters/i }));
+    await waitFor(() => expect(document.querySelectorAll('.at-pickrow').length).toBeGreaterThan(0));
   });
 
   it('can favourite straight from the picker', async () => {
     await openPicker();
     await waitFor(
-      () => expect(document.querySelectorAll('.at-ex-fav, .st-fav').length).toBeGreaterThan(0),
+      () => expect(document.querySelectorAll('.at-pickrow-fav').length).toBeGreaterThan(0),
       { timeout: 20000 },
     );
     const before = useStore.getState().favoriteExerciseIds.length;
-    fireEvent.click(document.querySelectorAll('.at-ex-fav, .st-fav')[0] as HTMLElement);
+    fireEvent.click(document.querySelectorAll('.at-pickrow-fav')[0] as HTMLElement);
     await waitFor(() => expect(useStore.getState().favoriteExerciseIds.length).not.toBe(before));
   });
 });
@@ -128,7 +166,7 @@ describe('Library search parity', () => {
   it('offers an equipment filter, as the picker does', async () => {
     const { container } = renderScreen('library');
     await waitFor(
-      () => expect(container.querySelectorAll('.at-ex, .st-row').length).toBeGreaterThan(5),
+      () => expect(container.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5),
       { timeout: 20000 },
     );
     // Equipment facets are rendered as their raw dataset names.
@@ -149,11 +187,12 @@ describe('Library — body-part filtering', () => {
     await Promise.all(db.tables.map(t => t.clear()));
   });
 
-  it('filters through the body map, which is SVG rather than buttons', async () => {
-    const { container } = renderScreen('library');
-    await waitFor(() => expect(container.querySelector('.at-map-region')).toBeTruthy(), { timeout: 20000 });
-    fireEvent.click(container.querySelectorAll('.at-map-region')[1]);
-    await waitFor(() => expect(text()).toContain('163'));
+  it('filters by body part with the same chips as the picker', async () => {
+    renderScreen('library');
+    await waitFor(() => expect(document.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5), { timeout: 20000 });
+    fireEvent.click(screen.getAllByRole('button', { name: /Chest/ })[0]);
+    await waitFor(() => expect(text()).toMatch(/163 results/));
+    expect(text().toLowerCase()).not.toContain('ankle circles');
   });
 
 });
@@ -171,12 +210,12 @@ describe('— full session flow', () => {
   it('picks an exercise, logs every set, then offers the next one', async () => {
     await openPicker();
     await waitFor(
-      () => expect(document.querySelectorAll('.at-ex-tap, .st-row-tap').length).toBeGreaterThan(0),
+      () => expect(document.querySelectorAll('.at-pickrow-tap').length).toBeGreaterThan(0),
       { timeout: 20000 },
     );
 
     // 1. Choose an exercise.
-    fireEvent.click(document.querySelectorAll('.at-ex-tap, .st-row-tap')[0] as HTMLElement);
+    fireEvent.click(document.querySelectorAll('.at-pickrow-tap')[0] as HTMLElement);
     await waitFor(() => {
       expect(useStore.getState().activeSession?.routineExercises ?? []).toHaveLength(1);
     });
@@ -207,18 +246,41 @@ describe('— full session flow', () => {
     expect(screen.getAllByRole('button', { name: /add exercise/i }).length).toBeGreaterThan(0);
   });
 
+  it('adding from the Library mid-session lands on that exercise in the session', async () => {
+    const session = {
+      exercises: [{ id: 'e1', exerciseName: 'Barbell Bench Press', targetSets: 3 }],
+      sets: [{ exerciseName: 'Barbell Bench Press', setNumber: 1, weight: 80, reps: 8, isCompleted: true }],
+    };
+    // Each tab is its own mount, as it is in the shell.
+    const train = renderScreen('train', { session });
+    await waitFor(() => expect(text()).toMatch(/1 (of|de) 1/));
+    train.unmount();
+
+    // Off to search, the way a lifter does between sets.
+    const library = renderScreen('library', { session });
+    await waitFor(() => expect(document.querySelectorAll('.at-pickrow-tap').length).toBeGreaterThan(0), { timeout: 20000 });
+    fireEvent.click(document.querySelectorAll('.at-pickrow-tap')[0] as HTMLElement);
+    fireEvent.click(await screen.findByRole('button', { name: /add to session/i }));
+    await waitFor(() => expect(useStore.getState().activeTab).toBe('train'));
+    library.unmount();
+
+    renderScreen('train', { session, overrides: { activeSession: useStore.getState().activeSession } });
+    // On the exercise just added, not back on the unfinished bench press.
+    await waitFor(() => expect(text()).toMatch(/2 (of|de) 2/));
+  });
+
   it('adding a second exercise moves focus onto it', async () => {
     await openPicker();
     await waitFor(
-      () => expect(document.querySelectorAll('.at-ex-tap, .st-row-tap').length).toBeGreaterThan(0),
+      () => expect(document.querySelectorAll('.at-pickrow-tap').length).toBeGreaterThan(0),
       { timeout: 20000 },
     );
-    fireEvent.click(document.querySelectorAll('.at-ex-tap, .st-row-tap')[0] as HTMLElement);
+    fireEvent.click(document.querySelectorAll('.at-pickrow-tap')[0] as HTMLElement);
     await waitFor(() => expect(text()).toMatch(/1 (of|de) 1/));
 
     fireEvent.click(screen.getAllByRole('button', { name: /add exercise/i })[0]);
     await waitFor(() => expect(document.querySelector('.at-picker, .st-picker')).toBeTruthy());
-    fireEvent.click(document.querySelectorAll('.at-ex-tap, .st-row-tap')[1] as HTMLElement);
+    fireEvent.click(document.querySelectorAll('.at-pickrow-tap')[1] as HTMLElement);
 
     // Focus follows the new exercise rather than staying on the finished one.
     await waitFor(() => expect(text()).toMatch(/2 (of|de) 2/));

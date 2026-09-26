@@ -1,7 +1,12 @@
 import 'fake-indexeddb/auto'
 import '@testing-library/jest-dom'
 import { MotionGlobalConfig } from 'motion/react'
-import { vi } from 'vitest'
+import { afterEach, vi } from 'vitest'
+import { forgetSeenExercises } from '../ui-atlas/components/useFocusOnAdd'
+
+// Every fixture session starts at the same instant, so what one test's Train
+// screen saw would otherwise read as the next test's session.
+afterEach(forgetSeenExercises)
 
 // Animations resolve instantly: jsdom has no frames to run them on, and a test
 // asserting on the end state should not have to wait for a spring to settle.

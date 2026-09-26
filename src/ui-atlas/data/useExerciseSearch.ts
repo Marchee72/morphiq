@@ -34,6 +34,8 @@ export interface ExerciseSearch {
   /** How many matched before the cap, so the UI can say "60 of 214". */
   matchCount: number;
   favourites: CatalogItemVM[];
+  /** Everything ever logged, most recent first. */
+  recent: CatalogItemVM[];
   countForGroup: (group: MuscleGroupId) => number;
   /** Equipment options for the current muscle-group filter, busiest first. */
   equipmentFacets: EquipmentFacet[];
@@ -61,15 +63,20 @@ export function useExerciseSearch(): ExerciseSearch {
       .filter(exercise => matchesGroup(exercise, group));
   }, [catalog, query, equipment, group]);
 
-  const favourites = useMemo(() => {
-    if (!catalog.ready) return [];
-    // Favourites ignore the muscle/equipment filters: the point of the shelf is
-    // that what you always do is one tap away, whatever else you were browsing.
-    return catalog
-      .search('')
-      .map(catalog.toItem)
-      .filter(item => item.favorite);
-  }, [catalog]);
+  // Favourites and recents ignore the muscle/equipment filters: the point of the
+  // shelf is that what you always do is one tap away, whatever else you were
+  // browsing.
+  const everything = useMemo(
+    () => (catalog.ready ? catalog.search('').map(catalog.toItem) : []),
+    [catalog],
+  );
+  const favourites = useMemo(() => everything.filter(item => item.favorite), [everything]);
+  const recent = useMemo(
+    () => everything
+      .filter(item => item.lastUsedAt)
+      .sort((a, b) => b.lastUsedAt!.getTime() - a.lastUsedAt!.getTime()),
+    [everything],
+  );
 
   const visible = useMemo(() => {
     const mapped = matches.map(catalog.toItem);
@@ -121,6 +128,7 @@ export function useExerciseSearch(): ExerciseSearch {
     results: visible.slice(0, SEARCH_LIMIT),
     matchCount: visible.length,
     favourites,
+    recent,
     countForGroup,
     equipmentFacets,
   };

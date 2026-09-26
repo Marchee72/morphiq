@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AtlasSyncBanner } from '../atlas/AtlasSyncBanner';
+import { NOTICE_MS } from '../atlas/AtlasNotice';
 import { AtlasResumeBanner } from '../atlas/AtlasResumeBanner';
 import { AtlasResumeSheet } from '../atlas/AtlasResumeSheet';
 import { AppActionsProvider } from '../data/AppActionsProvider';
@@ -133,6 +134,37 @@ describe('AtlasSyncBanner', () => {
       expect(screen.getByText(/All saved|Todo guardado/i)).toBeTruthy();
       act(() => { vi.advanceTimersByTime(2300); });
       expect(container.firstChild).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves on its own, and comes back only when it has something new to say', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    setSyncState({ online: false });
+    const { rerender } = render(<AtlasSyncBanner />);
+    act(() => { vi.advanceTimersByTime(NOTICE_MS + 100); });
+    // The exit lets go of the node on an animation frame, not a timer.
+    vi.useRealTimers();
+    await waitFor(() => expect(screen.queryByText(/Offline|Sin conexion/i)).toBeNull());
+
+    // Still offline: nothing new, so it stays gone.
+    rerender(<AtlasSyncBanner />);
+    expect(screen.queryByText(/Offline|Sin conexion/i)).toBeNull();
+
+    setSyncState({ failed: 1 });
+    rerender(<AtlasSyncBanner />);
+    expect(screen.getByText(/could not be saved|no se pudieron guardar/i)).toBeTruthy();
+  });
+
+  it('does not leave while it is asking whether to discard', () => {
+    vi.useFakeTimers();
+    try {
+      setSyncState({ online: true, failed: 2 });
+      render(<AtlasSyncBanner />);
+      fireEvent.click(screen.getByRole('button', { name: /^(Discard|Descartar)$/i }));
+      act(() => { vi.advanceTimersByTime(NOTICE_MS * 3); });
+      expect(screen.getByRole('button', { name: /^(Cancel|Cancelar)$/i })).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }

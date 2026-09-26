@@ -156,7 +156,15 @@ describe('buildWeeklyStats', () => {
 
   it('is all zeros with no recent training', () => {
     expect(buildWeeklyStats([log('w1', 30)], {}, NOW)).toEqual({
-      workouts: 0, minutes: 0, calories: 0, volumeKg: 0,
+      workouts: 0, strengthWorkouts: 0, minutes: 0, calories: 0, volumeKg: 0,
     });
+  });
+
+  it('counts only sessions with sets beside the volume — a walk adds no tonnage', () => {
+    const logs = [log('w1', 1), log('walk', 2, { type: 'Walking', source: 'health-connect' })];
+    const stats = buildWeeklyStats(logs, { w1: [set('a')] }, NOW);
+    expect(stats.workouts).toBe(2);
+    expect(stats.strengthWorkouts).toBe(1);
+    expect(stats.volumeKg).toBe(600);
   });
 });

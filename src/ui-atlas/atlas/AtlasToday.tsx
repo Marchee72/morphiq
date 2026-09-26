@@ -75,6 +75,7 @@ export const AtlasToday: React.FC = () => {
    * in the session list above them.
    */
   const cardioOnly = trainedToday && doneToday.cardioSessions.length === doneToday.sessions.length;
+  const liftedToday = trainedToday && !cardioOnly;
 
   return (
     <>
@@ -95,7 +96,9 @@ export const AtlasToday: React.FC = () => {
           ? (sessionExercises.length === 0 ? t('today.pickFirst') : t('today.continueSession'))
           : t('today.startSession')}
         onCta={() => (session ? actions.navigate('train') : actions.beginSession())}
-        upNext={focus ? t(focus.labelKey) : undefined}
+        // "Up next: chest" after the day's gym session reads as an order to go
+        // again. A run alone does not count — the gym is still ahead of you.
+        upNext={focus && !liftedToday ? t(focus.labelKey) : undefined}
         onDay={date => setDetail({ kind: 'day', date })}
       />
 

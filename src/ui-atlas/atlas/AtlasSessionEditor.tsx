@@ -2,11 +2,9 @@ import React from 'react';
 import { ArrowDown, ArrowUp, Flag, Plus, Repeat, Trash2, X } from 'lucide-react';
 import { useT } from '../../i18n';
 import { useAppActions } from '../data/useAppData';
-import { normalizeName } from '../derive/records';
 import { ExerciseThumb } from '../components/ExerciseThumb';
 import { useDismissOnBack } from '../components/useDismissOnBack';
 import type { LiveSession } from '../data/useLiveSession';
-import { UndoAction } from '../kit/time-undo-action';
 
 interface SessionListProps {
   onClose: () => void;
@@ -20,9 +18,7 @@ interface SessionListProps {
  * The panel, mounted only while it is open.
  *
  * The gate is a wrapper rather than an `if (!open) return null` inside, because
- * that early return keeps the component mounted and its state alive. Here that
- * state is a running undo countdown: closing the panel with the X unmounts it,
- * which cancels the countdown — the X reads as "cancel", so it means it.
+ * that early return keeps the component mounted and its state alive.
  */
 export const AtlasSessionEditor: React.FC<SessionListProps & { open: boolean }> = ({ open, ...rest }) =>
   open ? <SessionList {...rest} /> : null;
@@ -41,7 +37,7 @@ export const AtlasSessionEditor: React.FC<SessionListProps & { open: boolean }> 
  * times an hour.
  */
 const SessionList: React.FC<SessionListProps> = ({ onClose, live, currentIdx, onGoTo, onFinish }) => {
-  const { t, tp } = useT();
+  const { t } = useT();
   const actions = useAppActions();
   useDismissOnBack(true, onClose, 'editor');
 
@@ -80,22 +76,7 @@ const SessionList: React.FC<SessionListProps> = ({ onClose, live, currentIdx, on
       </div>
 
       <div className="at-pad">
-        {live.exercises.map((exercise, i) => {
-          const logged = exercise.sets.filter(s => s.done).length;
-          /**
-           * Whether removing this row actually costs anything.
-           *
-           * Sets belong to an exercise *name*, not to a row — `dropSetsFor` and
-           * `buildSessionExercises` both key that way — so with the same
-           * exercise on two rows the sets stay with the row that remains and
-           * this removal loses nothing. Asking anyway would put a scary count
-           * on a free action.
-           */
-          const twin = live.exercises.some(
-            (other, j) => j !== i && normalizeName(other.name) === normalizeName(exercise.name),
-          );
-          const losesSets = logged > 0 && !twin;
-          return (
+        {live.exercises.map((exercise, i) => (
           <div key={exercise.key} className="at-card at-editor-row" data-cur={i === currentIdx}>
             <button
               className="at-editor-jump"
@@ -143,36 +124,20 @@ const SessionList: React.FC<SessionListProps> = ({ onClose, live, currentIdx, on
               >
                 <Repeat size={15} />
               </button>
-              {/* Nothing to lose, nothing to ask: an exercise with no logged
-                  sets goes on the tap. One that takes sets with it counts down
-                  five seconds with an undo instead of asking — removed by key,
-                  so moving a row mid-countdown cannot delete a different one. */}
-              {losesSets ? (
-                <UndoAction
-                  className="at-editor-undo"
-                  label={<Trash2 size={15} />}
-                  ariaLabel={t('train.remove')}
-                  undoLabel={tp('train.undoRemove', logged)}
-                  seconds={5}
-                  onCommit={() => {
-                    const at = live.exercises.findIndex(e => e.key === exercise.key);
-                    if (at !== -1) live.removeExercise(at);
-                  }}
-                />
-              ) : (
-                <button
-                  onClick={() => live.removeExercise(i)}
-                  title={t('train.remove')}
-                  aria-label={t('train.remove')}
-                  data-danger="true"
-                >
-                  <Trash2 size={15} />
-                </button>
-              )}
+              {/* Straight away, sets and all. It used to count down five
+                  seconds with an undo, which in practice was five seconds of
+                  waiting on something already decided. */}
+              <button
+                onClick={() => live.removeExercise(i)}
+                title={t('train.remove')}
+                aria-label={t('train.remove')}
+                data-danger="true"
+              >
+                <Trash2 size={15} />
+              </button>
             </div>
           </div>
-          );
-        })}
+        ))}
 
         <button
           className="at-btn"
@@ -192,16 +157,16 @@ const SessionList: React.FC<SessionListProps> = ({ onClose, live, currentIdx, on
             <Flag size={15} /> {t('train.finish')}
           </button>
 
-          {/* Ten seconds to take it back instead of a question: the undo is
-              right where the finger is. */}
-          <UndoAction
-            className="at-editor-discard"
-            icon={<Trash2 size={15} />}
-            label={t('train.discard')}
-            undoLabel={t('train.undoDiscard')}
-            seconds={10}
-            onCommit={() => { onClose(); live.discard(); }}
-          />
+          {/* Straight away, like removing an exercise: no countdown to sit
+              through. It sits apart from Finish and is styled as the danger it
+              is, which is what keeps it from being the one pressed by mistake. */}
+          <button
+            className="at-btn at-editor-discard"
+            data-danger="true"
+            onClick={() => { onClose(); void live.discard(); }}
+          >
+            <Trash2 size={15} /> {t('train.discard')}
+          </button>
         </div>
       </div>
       </div>

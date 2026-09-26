@@ -28,6 +28,29 @@ describe('Zustand store state management', () => {
     });
   });
 
+  it('keeps a failed coach reply out of the thread and flags it instead', async () => {
+    // Stubbed so nothing reaches a real provider, whatever key the env holds.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+    try {
+      await useStore.getState().createProfile({
+        name: 'Coach Test', gender: 'male', birthDate: new Date('1990-01-01'), height: 180,
+      });
+      await useStore.getState().sendChatMessage('How was my week?');
+
+      const { chatHistory, chatError, isAiLoading } = useStore.getState();
+      // The question stays; no error text poses as the coach's answer.
+      expect(chatHistory.map(m => m.sender)).toEqual(['user']);
+      expect(chatError).toBe(true);
+      expect(isAiLoading).toBe(false);
+
+      await useStore.getState().clearChat();
+      expect(useStore.getState().chatHistory).toHaveLength(0);
+      expect(useStore.getState().chatError).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('should toggle theme and store preference', () => {
     const store = useStore.getState();
     expect(store.theme).toBe('system');
@@ -538,6 +561,10 @@ describe('Zustand store state management', () => {
     expect(savedLog).toBeDefined();
     expect(savedLog!.duration).toBe(3600);
 
+    // A profile from before the migration ran once per profile: `createProfile`
+    // already loaded this one — with nothing to migrate — and marked it done.
+    localStorage.removeItem(`morphiq_duration_migrated_${profileId}`);
+
     // Call setActiveProfile to trigger the migration
     await store.setActiveProfile(profileId);
 
@@ -551,6 +578,21 @@ describe('Zustand store state management', () => {
     const storeLog = finalStore.workoutLogs.find(w => w.id === logId);
     expect(storeLog).toBeDefined();
     expect(storeLog!.duration).toBe(60);
+    expect(finalStore.measurementsLoaded).toBe(true);
+
+    // It reads every workout ever logged, so it runs once per profile, not on
+    // every launch: a second load leaves a new seconds-valued row alone.
+    const later = await db.workoutLogs.add({
+      profileId,
+      timestamp: new Date(),
+      type: 'Running',
+      duration: 1800,
+      description: 'Samsung Health Synced Workout',
+      source: 'health-connect',
+      externalId: 'test_sec_migration_456',
+    });
+    await store.setActiveProfile(profileId);
+    expect((await db.workoutLogs.get(later))!.duration).toBe(1800);
   });
 
   it('should link pending routine sets to a new workout and clear pending sets from store', async () => {

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { AlertTriangle, Check, CloudOff, RefreshCw, RotateCw, Trash2, WifiOff } from 'lucide-react';
 import { useT } from '../../i18n';
 import { discardRefused, getSyncState, retryNow, subscribeSyncState } from '../../data/offline';
+import { AtlasNotice } from './AtlasNotice';
 
 /** How long "All saved" stays up once a queue or a failure has cleared. */
 const SAVED_MS = 2200;
@@ -25,7 +26,9 @@ const SAVED_MS = 2200;
  *   or refused has gone through — and then nothing.
  *
  * Silent when there is nothing to say. A permanent "you are online" strip would
- * be noise on every screen forever.
+ * be noise on every screen forever — and so, it turned out, was a permanent
+ * "offline" one: every state swipes away and leaves on its own (`AtlasNotice`),
+ * and comes back only when what it has to say changes.
  */
 export const AtlasSyncBanner: React.FC = () => {
   const { t, tp } = useT();
@@ -54,7 +57,7 @@ export const AtlasSyncBanner: React.FC = () => {
   if (state.failed > 0 && !state.flushing) {
     if (confirming) {
       return (
-        <div className="at-top-banner at-sync-banner" data-warn role="alertdialog" aria-label={t('sync.failedTitle')}>
+        <AtlasNotice id={`failed:${state.failed}`} hold className="at-sync-banner" data-warn role="alertdialog" aria-label={t('sync.failedTitle')}>
           <div className="at-top-banner-main">
             <div className="at-top-banner-icon"><Trash2 size={18} /></div>
             <div className="at-top-banner-text">
@@ -71,11 +74,11 @@ export const AtlasSyncBanner: React.FC = () => {
               {t('sync.discard')}
             </button>
           </div>
-        </div>
+        </AtlasNotice>
       );
     }
     return (
-      <div className="at-top-banner at-sync-banner" data-warn role="status">
+      <AtlasNotice id={`failed:${state.failed}`} className="at-sync-banner" data-warn role="status">
         <div className="at-top-banner-main">
           <div className="at-top-banner-icon"><AlertTriangle size={18} /></div>
           <div className="at-top-banner-text">
@@ -95,13 +98,13 @@ export const AtlasSyncBanner: React.FC = () => {
             <Trash2 size={16} />
           </button>
         </div>
-      </div>
+      </AtlasNotice>
     );
   }
 
   if (state.pending > 0 || (state.failed > 0 && state.flushing)) {
     return (
-      <div className="at-top-banner at-sync-banner" role="status">
+      <AtlasNotice id="pending" className="at-sync-banner" role="status">
         <div className="at-top-banner-main">
           <div className="at-top-banner-icon">
             {state.flushing ? <RefreshCw size={18} className="at-spin" /> : <CloudOff size={18} />}
@@ -117,13 +120,13 @@ export const AtlasSyncBanner: React.FC = () => {
           )}
         </div>
         {state.flushing && <div className="at-top-banner-bar" aria-hidden="true"><i /></div>}
-      </div>
+      </AtlasNotice>
     );
   }
 
   if (!state.online) {
     return (
-      <div className="at-top-banner at-sync-banner" role="status">
+      <AtlasNotice id="offline" className="at-sync-banner" role="status">
         <div className="at-top-banner-main">
           <div className="at-top-banner-icon"><WifiOff size={18} /></div>
           <div className="at-top-banner-text">
@@ -131,13 +134,13 @@ export const AtlasSyncBanner: React.FC = () => {
             <small>{t('sync.offlineSub')}</small>
           </div>
         </div>
-      </div>
+      </AtlasNotice>
     );
   }
 
   if (saved) {
     return (
-      <div className="at-top-banner at-sync-banner" data-saved role="status">
+      <AtlasNotice id="saved" className="at-sync-banner" data-saved role="status">
         <div className="at-top-banner-main">
           <div className="at-top-banner-icon"><Check size={18} strokeWidth={3} /></div>
           <div className="at-top-banner-text">
@@ -145,7 +148,7 @@ export const AtlasSyncBanner: React.FC = () => {
             <small>{t('sync.savedSub')}</small>
           </div>
         </div>
-      </div>
+      </AtlasNotice>
     );
   }
 

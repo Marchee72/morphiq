@@ -17,7 +17,7 @@ describe('Library', () => {
   it('lists real exercises once the catalogue arrives', async () => {
     const { container } = renderScreen('library');
     await waitFor(
-      () => expect(container.querySelectorAll('.st-row, .at-ex').length).toBeGreaterThan(5),
+      () => expect(container.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5),
       { timeout: 20000 },
     );
   });
@@ -25,7 +25,7 @@ describe('Library', () => {
   it('narrows to matches when searching', async () => {
     const { container } = renderScreen('library');
     await waitFor(
-      () => expect(container.querySelectorAll('.st-row, .at-ex').length).toBeGreaterThan(5),
+      () => expect(container.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5),
       { timeout: 20000 },
     );
 
@@ -38,12 +38,12 @@ describe('Library', () => {
     // beside it does — so nothing in a 1,324-entry catalogue ever opened.
     const { container } = renderScreen('library');
     await waitFor(
-      () => expect(container.querySelectorAll('.at-ex').length).toBeGreaterThan(5),
+      () => expect(container.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5),
       { timeout: 20000 },
     );
 
     const before = useStore.getState().favoriteExerciseIds.length;
-    fireEvent.click(container.querySelectorAll('.at-ex-tap')[0] as HTMLElement);
+    fireEvent.click(container.querySelectorAll('.at-pickrow-tap')[0] as HTMLElement);
 
     await waitFor(() => expect(document.querySelector('.at-sheet')).toBeTruthy());
     expect(useStore.getState().favoriteExerciseIds).toHaveLength(before);
@@ -52,13 +52,13 @@ describe('Library', () => {
   it('shows what you lifted on this exercise, session by session', async () => {
     const { container } = renderScreen('library', { data: 'rich' });
     await waitFor(
-      () => expect(container.querySelectorAll('.at-ex').length).toBeGreaterThan(5),
+      () => expect(container.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5),
       { timeout: 20000 },
     );
 
     fireEvent.change(screen.getByLabelText(/search by name/i), { target: { value: 'barbell bench press' } });
-    await waitFor(() => expect(container.querySelectorAll('.at-ex').length).toBeGreaterThan(0));
-    fireEvent.click(container.querySelectorAll('.at-ex-tap')[0] as HTMLElement);
+    await waitFor(() => expect(container.querySelectorAll('.at-pickrow').length).toBeGreaterThan(0));
+    fireEvent.click(container.querySelectorAll('.at-pickrow-tap')[0] as HTMLElement);
 
     await waitFor(() => expect(text()).toMatch(/previous sessions/i));
     // The rich fixture logs four sets of 82.5 x 8.
@@ -68,7 +68,7 @@ describe('Library', () => {
   it('says so plainly when nothing matches', async () => {
     const { container } = renderScreen('library');
     await waitFor(
-      () => expect(container.querySelectorAll('.st-row, .at-ex').length).toBeGreaterThan(5),
+      () => expect(container.querySelectorAll('.at-pickrow').length).toBeGreaterThan(5),
       { timeout: 20000 },
     );
 
@@ -87,7 +87,56 @@ describe('Coach', () => {
 
   it('invites a first question when the thread is empty', () => {
     renderScreen('coach');
-    expect(screen.getByText(/Nothing asked yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ask it anything about your training/i)).toBeInTheDocument();
+    // The starters are the screen, and each one asks.
+    expect(document.querySelectorAll('.at-coach-starter')).toHaveLength(4);
+  });
+
+  it('says so when the coach could not answer', () => {
+    renderScreen('coach', {
+      overrides: {
+        chatError: true,
+        chatHistory: [{ id: '1', profileId: 'p1', timestamp: new Date(), sender: 'user', content: 'How was my week?' }],
+      },
+    });
+    expect(screen.getByRole('alert').textContent).toMatch(/could not answer/i);
+  });
+
+  it('clears the conversation, but only once asked twice', async () => {
+    renderScreen('coach', {
+      overrides: {
+        chatHistory: [{ id: '1', profileId: 'p1', timestamp: new Date(), sender: 'user', content: 'How was my week?' }],
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /clear conversation/i }));
+    // One tap only asks; the thread is still there.
+    expect(text()).toContain('How was my week?');
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    expect(text()).toContain('How was my week?');
+
+    fireEvent.click(screen.getByRole('button', { name: /clear conversation/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^clear$/i }));
+    // Back to the starters — one of which asks the same question, so the
+    // check is on messages rather than on the words.
+    await waitFor(() => expect(document.querySelectorAll('.at-msg')).toHaveLength(0));
+    expect(document.querySelectorAll('.at-coach-starter')).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: /clear conversation/i })).toBeNull();
+  });
+
+  it('keeps the composer out of the thread, so scrolling the thread leaves it put', () => {
+    renderScreen('coach', {
+      overrides: {
+        chatHistory: [
+          { id: '1', profileId: 'p1', timestamp: new Date(), sender: 'user', content: 'How was my week?' },
+          { id: '2', profileId: 'p1', timestamp: new Date(), sender: 'assistant', content: 'Chest volume is low.' },
+        ],
+      },
+    });
+    const composer = screen.getByRole('textbox', { name: /ask the coach/i });
+    expect(composer.closest('.at-coach-dock')).toBeTruthy();
+    expect(composer.closest('.at-coach-thread')).toBeNull();
+    // Nothing typed, nothing to send.
+    expect(screen.getByRole('button', { name: /^send$/i })).toBeDisabled();
   });
 
   it('renders both sides of a real thread', () => {

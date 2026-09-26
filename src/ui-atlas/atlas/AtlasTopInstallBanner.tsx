@@ -4,6 +4,7 @@ import { useT } from '../../i18n';
 import {
   canOfferInstall, canPrompt, isIos, onInstallabilityChange, promptInstall,
 } from '../../data/pwa/install';
+import { AtlasNotice } from './AtlasNotice';
 
 /**
  * Top-level install banner for web visitors.
@@ -48,7 +49,7 @@ export const AtlasTopInstallBanner: React.FC = () => {
   };
 
   return (
-    <div className="at-top-banner">
+    <AtlasNotice id="install" hold={showIosSteps} onDismiss={handleDismiss}>
       <div className="at-top-banner-main">
         <div className="at-top-banner-icon">
           <Smartphone size={18} />
@@ -82,6 +83,6 @@ export const AtlasTopInstallBanner: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </AtlasNotice>
   );
 };

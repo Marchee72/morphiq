@@ -17,12 +17,13 @@ const text = () => document.body.textContent?.replace(/\s+/g, ' ') ?? '';
 async function openDetail(): Promise<void> {
   renderScreen('library', { data: 'rich', now: TEST_NOW });
 
-  // The library opens on a body map, not a list — the catalogue is 1,324
-  // entries. Search is how you reach a named exercise.
+  // The catalogue is 1,324 entries; search is how you reach a named exercise.
   const box = await screen.findByRole('textbox', undefined, { timeout: 20000 });
   fireEvent.change(box, { target: { value: 'barbell bench press' } });
 
-  const card = await screen.findByRole(
+  // The row's picture and its text are both named for the exercise, and in the
+  // Library both open it.
+  const [card] = await screen.findAllByRole(
     'button',
     { name: /barbell bench press/i },
     { timeout: 20000 },

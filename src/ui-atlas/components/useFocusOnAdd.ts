@@ -1,5 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { SessionCursor } from '../types';
+
+/**
+ * What the Train screen last saw, per session. It unmounts on every tab change,
+ * so an exercise added from the Library arrived at a fresh mount that took it
+ * for part of the furniture and opened on the first unfinished exercise instead.
+ */
+let remembered: { session: number; keys: string[] } | null = null;
+
+/** Tests share one session start time, so the memory has to be wiped between them. */
+export function forgetSeenExercises(): void {
+  remembered = null;
+}
 
 /**
  * Moves the cursor onto an exercise the moment it is added to the session.
@@ -18,11 +30,17 @@ import type { SessionCursor } from '../types';
  * list before growing it, on nothing at all.
  */
 export function useFocusOnAdd(
+  session: number | undefined,
   exercises: { key: string }[],
   setCursor: (cursor: SessionCursor) => void,
 ): void {
   const keys = exercises.map(ex => ex.key);
-  const [seen, setSeen] = useState<string[]>(keys);
+  const [seen, setSeen] = useState<string[]>(() =>
+    (session !== undefined && remembered?.session === session ? remembered.keys : keys));
+
+  useEffect(() => {
+    if (session !== undefined) remembered = { session, keys: seen };
+  }, [session, seen]);
 
   if (seen.length === keys.length && keys.every((key, i) => key === seen[i])) return;
 
